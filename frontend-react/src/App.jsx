@@ -4,6 +4,7 @@ import { useAuth } from "./context/AuthContext.jsx";
 import DashboardLayout from "./components/DashboardLayout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
+import AdminDatabasePage from "./pages/AdminDatabasePage.jsx";
 import AdminReportsPage from "./pages/AdminReportsPage.jsx";
 import AdminUsersPage from "./pages/AdminUsersPage.jsx";
 import CustomerDashboard from "./pages/CustomerDashboard.jsx";
@@ -58,6 +59,7 @@ export default function App() {
         <Route index element={<AdminDashboard />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="users" element={<AdminUsersPage />} />
+        <Route path="database" element={<AdminDatabasePage />} />
       </Route>
 
       <Route

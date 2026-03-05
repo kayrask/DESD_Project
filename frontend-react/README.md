@@ -11,4 +11,4 @@ Open: `http://127.0.0.1:5173`
 
 ## Notes
 - Uses root `.env` via `vite.config.js -> envDir: ".."`
-- Requires backend on `http://127.0.0.1:8000`
+- Requires backend on `http://127.0.0.1:8003`

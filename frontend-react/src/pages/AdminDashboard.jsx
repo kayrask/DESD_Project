@@ -26,6 +26,7 @@ export default function AdminDashboard() {
       <div className="grid">
         <Link className="tile" to="/admin/reports">Commission Reports</Link>
         <Link className="tile" to="/admin/users">Users</Link>
+        <Link className="tile" to="/admin/database">Database Contents</Link>
       </div>
     </section>
   );

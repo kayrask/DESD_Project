@@ -20,19 +20,28 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(initial?.token || null);
 
   const login = async (email, password) => {
-    const response = await loginRequest({ email, password });
-    if (!response.ok) {
-      return { ok: false, message: response.data?.detail || "Login failed" };
-    }
+    console.log("Attempting login for:", email);
+    try {
+      const response = await loginRequest({ email, password });
+      console.log("Login response:", response);
+      if (!response.ok) {
+        console.error("Login failed:", response.data);
+        return { ok: false, message: response.data?.detail || "Login failed" };
+      }
 
-    const session = {
-      user: response.data.user,
-      token: response.data.access_token,
-    };
-    setUser(session.user);
-    setToken(session.token);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    return { ok: true, user: session.user };
+      const session = {
+        user: response.data.user,
+        token: response.data.access_token,
+      };
+      console.log("Login successful, setting session:", session);
+      setUser(session.user);
+      setToken(session.token);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      return { ok: true, user: session.user };
+    } catch (error) {
+      console.error("Login error:", error);
+      return { ok: false, message: "Network error" };
+    }
   };
 
   const logout = () => {
