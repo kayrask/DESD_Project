@@ -17,6 +17,10 @@ import ProducerOrdersPage from "./pages/ProducerOrdersPage.jsx";
 import ProducerPaymentsPage from "./pages/ProducerPaymentsPage.jsx";
 import ProducerProductsPage from "./pages/ProducerProductsPage.jsx";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
+import ProductListPage from "./pages/ProductListPage.jsx";
+import ProductDetailPage from "./pages/ProductDetailPage.jsx";
+import CartPage from "./pages/CartPage.jsx";
+import CheckoutPage from "./pages/CheckoutPage.jsx";
 
 function HomeRedirect() {
   const { user } = useAuth();
@@ -30,6 +34,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomeRedirect />} />
+      <Route path="/products" element={<ProductListPage />} />
+      <Route path="/products/:id" element={<ProductDetailPage />} />
+      <Route path="/cart" element={<CartPage />} />
+      <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/401" element={<UnauthorizedPage />} />
       <Route path="/403" element={<ForbiddenPage />} />

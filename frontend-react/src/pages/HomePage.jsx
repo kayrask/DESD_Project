@@ -6,7 +6,9 @@ export default function HomePage() {
     <div className="centered">
       <section className="card home-card">
         <h1>DESD Sprint 1 Portal</h1>
-        <p className="note">Role-based authentication and dashboard shell demo.</p>
+        <p className="note">
+          Role-based authentication, dashboard shells, and customer-facing browse/checkout demo.
+        </p>
 
         <div className="grid" style={{ marginTop: "12px" }}>
           <article className="tile">
@@ -23,9 +25,22 @@ export default function HomePage() {
           </article>
         </div>
 
-        <Link className="btn primary" to="/login" style={{ display: "inline-block", textDecoration: "none" }}>
-          Go to Login
-        </Link>
+        <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+          <Link
+            className="btn secondary"
+            to="/products"
+            style={{ display: "inline-block", textDecoration: "none", flex: 1, textAlign: "center" }}
+          >
+            Browse products
+          </Link>
+          <Link
+            className="btn primary"
+            to="/login"
+            style={{ display: "inline-block", textDecoration: "none", flex: 1, textAlign: "center" }}
+          >
+            Go to Login
+          </Link>
+        </div>
       </section>
     </div>
   );
