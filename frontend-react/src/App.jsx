@@ -22,6 +22,10 @@ import ProductListPage from "./pages/ProductListPage.jsx";
 import ProductDetailPage from "./pages/ProductDetailPage.jsx";
 import CartPage from "./pages/CartPage.jsx";
 import CheckoutPage from "./pages/CheckoutPage.jsx";
+import MarketplaceInfoPage from "./pages/MarketplaceInfoPage.jsx";
+import ForProducersPage from "./pages/ForProducersPage.jsx";
+import HowItWorksPage from "./pages/HowItWorksPage.jsx";
+import SustainabilityPage from "./pages/SustainabilityPage.jsx";
 
 function HomeRedirect() {
   const { user } = useAuth();
@@ -35,6 +39,11 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomeRedirect />} />
+      <Route path="/marketplace" element={<MarketplaceInfoPage />} />
+      <Route path="/for-producers" element={<ForProducersPage />} />
+      <Route path="/how-it-works" element={<HowItWorksPage />} />
+      <Route path="/sustainability" element={<SustainabilityPage />} />
+
       <Route path="/products" element={<ProductListPage />} />
       <Route path="/products/:id" element={<ProductDetailPage />} />
       <Route path="/cart" element={<CartPage />} />
