@@ -14,6 +14,7 @@ Backend reads root `.env` at project root.
 
 Required keys:
 ```env
+FRONTEND_URLS=http://localhost:5173,http://127.0.0.1:5173,http://frontend:5173
 FRONTEND_URL=http://127.0.0.1:5173
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_ANON_KEY=YOUR_ANON_KEY

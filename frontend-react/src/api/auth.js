@@ -13,3 +13,13 @@ export function registerRequest(userData) {
     body: JSON.stringify(userData),
   });
 }
+
+export function logoutRequest(token) {
+  return apiFetch(
+    "/auth/logout",
+    {
+      method: "POST",
+    },
+    token
+  );
+}

@@ -1,6 +1,7 @@
 import React from "react";
 import { createContext, useContext, useMemo, useState } from "react";
-import { loginRequest } from "../api/auth";
+import { loginRequest, logoutRequest } from "../api/auth";
+import { getApiMessage } from "../api/client";
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = "desd_react_session";
@@ -20,34 +21,43 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(initial?.token || null);
 
   const login = async (email, password) => {
-    console.log("Attempting login for:", email);
     try {
       const response = await loginRequest({ email, password });
-      console.log("Login response:", response);
       if (!response.ok) {
-        console.error("Login failed:", response.data);
-        return { ok: false, message: response.data?.detail || "Login failed" };
+        return { ok: false, message: getApiMessage(response.data, "Login failed") };
       }
 
       const session = {
         user: response.data.user,
         token: response.data.access_token,
       };
-      console.log("Login successful, setting session:", session);
       setUser(session.user);
       setToken(session.token);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
       return { ok: true, user: session.user };
-    } catch (error) {
-      console.error("Login error:", error);
+    } catch {
       return { ok: false, message: "Network error" };
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    let message = "Logged out successfully";
+    if (token) {
+      try {
+        const response = await logoutRequest(token);
+        if (response.ok) {
+          message = getApiMessage(response.data, message);
+        } else {
+          message = getApiMessage(response.data, message);
+        }
+      } catch {
+        message = "Logged out locally (network issue)";
+      }
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem(STORAGE_KEY);
+    return { ok: true, message };
   };
 
   const value = useMemo(() => ({ user, token, login, logout }), [user, token]);
