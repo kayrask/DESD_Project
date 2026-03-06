@@ -14,8 +14,9 @@ This repo has two apps:
 Create/edit root `.env`:
 
 ```env
+FRONTEND_URLS=http://localhost:5173,http://127.0.0.1:5173,http://frontend:5173
 FRONTEND_URL=http://127.0.0.1:5173
-VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://localhost:8000
 VITE_ENABLE_MOCK_AUTH_FALLBACK=false
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_ANON_KEY=YOUR_ANON_KEY

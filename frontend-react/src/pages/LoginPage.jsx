@@ -1,14 +1,18 @@
 import React from "react";
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import Toast from "../components/Toast.jsx";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const location = useLocation();
   const [error, setError] = useState("");
+  const feedbackMessage = location.state?.message || "";
+  const feedbackTone = location.state?.tone || "info";
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -30,6 +34,7 @@ export default function LoginPage() {
       <section className="card auth-card">
         <h2>Sign in</h2>
         <p className="note">Sign in to your account to continue</p>
+        <Toast message={feedbackMessage} tone={feedbackTone} />
 
         <form onSubmit={onSubmit}>
           <label>Email</label>

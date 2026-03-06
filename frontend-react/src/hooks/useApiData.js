@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getApiMessage } from "../api/client";
 
 export default function useApiData(fetcher, deps = []) {
   const [data, setData] = useState(null);
@@ -15,7 +16,7 @@ export default function useApiData(fetcher, deps = []) {
         if (!active) return;
         if (!res.ok) {
           setData(null);
-          setError(res.data?.detail || `Request failed (${res.status})`);
+          setError(getApiMessage(res.data, `Request failed (${res.status})`));
           return;
         }
         setData(res.data);
