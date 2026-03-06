@@ -15,6 +15,15 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState({ message: "", tone: "info" });
   const [loading, setLoading] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+
+  // Password validation checks
+  const passwordChecks = {
+    minLength: form.password.length >= 8,
+    hasUpper: /[A-Z]/.test(form.password),
+    hasLower: /[a-z]/.test(form.password),
+    hasNumber: /\d/.test(form.password)
+  };
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -32,8 +41,10 @@ export default function RegisterPage() {
       return;
     }
 
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters");
+    // Validate password strength
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(form.password)) {
+      setError("Password must contain at least 8 characters, including upper, lower, and number.");
       return;
     }
 
@@ -114,9 +125,27 @@ export default function RegisterPage() {
             type="password"
             value={form.password}
             onChange={handleChange}
-            placeholder="At least 6 characters"
+            onFocus={() => setPasswordFocused(true)}
+            placeholder="Create a strong password"
             required
           />
+          
+          {(passwordFocused || form.password) && (
+            <div style={{ marginTop: "8px", fontSize: "0.85rem" }}>
+              <p style={{ margin: "4px 0", color: passwordChecks.minLength ? "#166534" : "#6b7280" }}>
+                {passwordChecks.minLength ? "✓" : "○"} At least 8 characters
+              </p>
+              <p style={{ margin: "4px 0", color: passwordChecks.hasUpper ? "#166534" : "#6b7280" }}>
+                {passwordChecks.hasUpper ? "✓" : "○"} One uppercase letter (A-Z)
+              </p>
+              <p style={{ margin: "4px 0", color: passwordChecks.hasLower ? "#166534" : "#6b7280" }}>
+                {passwordChecks.hasLower ? "✓" : "○"} One lowercase letter (a-z)
+              </p>
+              <p style={{ margin: "4px 0", color: passwordChecks.hasNumber ? "#166534" : "#6b7280" }}>
+                {passwordChecks.hasNumber ? "✓" : "○"} One number (0-9)
+              </p>
+            </div>
+          )}
 
           <label htmlFor="confirmPassword">Confirm Password</label>
           <input

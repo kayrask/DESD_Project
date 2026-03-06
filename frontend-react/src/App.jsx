@@ -44,14 +44,44 @@ export default function App() {
       <Route path="/how-it-works" element={<HowItWorksPage />} />
       <Route path="/sustainability" element={<SustainabilityPage />} />
 
-      <Route path="/products" element={<ProductListPage />} />
-      <Route path="/products/:id" element={<ProductDetailPage />} />
-      <Route path="/cart" element={<CartPage />} />
-      <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/401" element={<UnauthorizedPage />} />
       <Route path="/403" element={<ForbiddenPage />} />
+
+      {/* Protected Customer Routes */}
+      <Route
+        path="/products"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+            <ProductListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/products/:id"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+            <ProductDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cart"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+            <CartPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/checkout"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+            <CheckoutPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/producer"
