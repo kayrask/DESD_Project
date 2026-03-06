@@ -11,3 +11,8 @@ export const getAdminUsers = (token) => apiFetch("/dashboards/admin/users", {}, 
 export const getAdminDatabase = (token) => apiFetch("/dashboards/admin/database", {}, token);
 
 export const getCustomerSummary = (token) => apiFetch("/dashboards/customer", {}, token);
+export const createOrder = (orderData) => 
+  apiFetch("/orders/", {
+    method: "POST",
+    body: JSON.stringify(orderData),
+  });

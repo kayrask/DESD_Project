@@ -11,6 +11,7 @@ import CustomerDashboard from "./pages/CustomerDashboard.jsx";
 import ForbiddenPage from "./pages/ForbiddenPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
+import RegisterPage from "./pages/RegisterPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import ProducerDashboard from "./pages/ProducerDashboard.jsx";
 import ProducerOrdersPage from "./pages/ProducerOrdersPage.jsx";
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/cart" element={<CartPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/401" element={<UnauthorizedPage />} />
       <Route path="/403" element={<ForbiddenPage />} />
 
