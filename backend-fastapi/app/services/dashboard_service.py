@@ -1,88 +1,95 @@
-from sqlalchemy.orm import Session
-from app.database import SessionLocal
-from app.models.models import User, Product, Order
+from datetime import date
+
 from app.repositories.auth_repo import find_user_by_email
+from app.supabase_client import get_supabase
 
 
 def producer_summary(user: dict) -> dict:
-    db: Session = SessionLocal()
-    try:
-        producer = db.query(User).filter(User.email == user["email"]).first()
-        if not producer:
-            return {"orders_today": 0, "low_stock_products": 0, "quick_links": ["products", "orders", "payments"]}
+    producer = find_user_by_email(user["email"])
+    if not producer:
+        return {"orders_today": 0, "low_stock_products": 0, "quick_links": ["products", "orders", "payments"]}
 
-        # Count orders today (simplified, assuming today is 2026-03-05 or something)
-        orders_today = db.query(Order).filter(Order.producer_id == producer.id, Order.delivery_date == "2026-03-05").count()
+    client = get_supabase()
+    today = date.today().isoformat()
 
-        # Low stock: stock < 10
-        low_stock = db.query(Product).filter(Product.producer_id == producer.id, Product.stock < 10).count()
+    orders_resp = client.table("orders").select("id").eq("producer_id", producer["id"]).eq("delivery_date", today).execute()
+    products_resp = client.table("products").select("id").eq("producer_id", producer["id"]).lt("stock", 10).execute()
 
-        return {
-            "orders_today": orders_today,
-            "low_stock_products": low_stock,
-            "quick_links": ["products", "orders", "payments"],
-        }
-    finally:
-        db.close()
+    return {
+        "orders_today": len(orders_resp.data or []),
+        "low_stock_products": len(products_resp.data or []),
+        "quick_links": ["products", "orders", "payments"],
+    }
 
 
 def producer_products(user: dict) -> dict:
-    db: Session = SessionLocal()
-    try:
-        producer = db.query(User).filter(User.email == user["email"]).first()
-        if not producer:
-            return {"items": []}
+    producer = find_user_by_email(user["email"])
+    if not producer:
+        return {"items": []}
 
-        products = db.query(Product).filter(Product.producer_id == producer.id).all()
-        items = [
-            {
-                "name": p.name,
-                "category": p.category,
-                "price": f"${p.price:.2f}/kg" if "kg" in p.name.lower() else f"${p.price:.2f}/bunch",
-                "stock": p.stock,
-                "status": p.status
-            }
-            for p in products
-        ]
-        return {"items": items}
-    finally:
-        db.close()
+    client = get_supabase()
+    resp = (
+        client.table("products")
+        .select("name,category,price,stock,status")
+        .eq("producer_id", producer["id"])
+        .order("name")
+        .execute()
+    )
+    rows = resp.data or []
+
+    items = [
+        {
+            "name": row.get("name"),
+            "category": row.get("category"),
+            "price": f"${float(row.get('price') or 0):.2f}",
+            "stock": row.get("stock", 0),
+            "status": row.get("status", "Unknown"),
+        }
+        for row in rows
+    ]
+    return {"items": items}
 
 
 def producer_orders(user: dict) -> dict:
-    db: Session = SessionLocal()
-    try:
-        producer = db.query(User).filter(User.email == user["email"]).first()
-        if not producer:
-            return {"items": []}
+    producer = find_user_by_email(user["email"])
+    if not producer:
+        return {"items": []}
 
-        orders = db.query(Order).filter(Order.producer_id == producer.id).all()
-        items = [
-            {
-                "order_id": o.order_id,
-                "customer": o.customer_name,
-                "delivery": str(o.delivery_date),
-                "status": o.status
-            }
-            for o in orders
-        ]
-        return {"items": items}
-    finally:
-        db.close()
+    client = get_supabase()
+    resp = (
+        client.table("orders")
+        .select("order_id,customer_name,delivery_date,status")
+        .eq("producer_id", producer["id"])
+        .order("delivery_date")
+        .execute()
+    )
+    rows = resp.data or []
+
+    items = [
+        {
+            "order_id": row.get("order_id"),
+            "customer": row.get("customer_name"),
+            "delivery": row.get("delivery_date"),
+            "status": row.get("status", "Pending"),
+        }
+        for row in rows
+    ]
+    return {"items": items}
 
 
 def producer_payments(user: dict) -> dict:
-    # Simplified, hardcoded for now
+    # Placeholder shell for Sprint 1.
     return {"this_week": 2140.0, "pending": 610.0, "commission": 214.0}
 
 
 def admin_summary(user: dict) -> dict:
-    # Simplified
-    return {"commission_today": 482.0, "active_users": 120, "open_flags": 3}
+    client = get_supabase()
+    users = client.table("users").select("id").execute().data or []
+    return {"commission_today": 482.0, "active_users": len(users), "open_flags": 3}
 
 
 def admin_reports(user: dict) -> dict:
-    # Simplified
+    # Placeholder shell for Sprint 1.
     return {
         "rows": [
             {"date": "2026-03-01", "orders": 24, "gross": 4820.0, "commission": 482.0},
@@ -92,31 +99,40 @@ def admin_reports(user: dict) -> dict:
 
 
 def admin_users(user: dict) -> dict:
-    db: Session = SessionLocal()
-    try:
-        users = db.query(User).all()
-        items = [
-            {"email": u.email, "role": u.role.capitalize(), "status": u.status.capitalize()}
-            for u in users
-        ]
-        return {"items": items}
-    finally:
-        db.close()
+    client = get_supabase()
+    resp = client.table("users").select("email,role,status").order("email").execute()
+    rows = resp.data or []
+    items = [
+        {
+            "email": row.get("email"),
+            "role": str(row.get("role", "")).capitalize(),
+            "status": str(row.get("status", "active")).capitalize(),
+        }
+        for row in rows
+    ]
+    return {"items": items}
 
 
 def admin_database(user: dict) -> dict:
-    db: Session = SessionLocal()
-    try:
-        users = db.query(User).all()
-        products = db.query(Product).all()
-        orders = db.query(Order).all()
-        return {
-            "users": [{"id": u.id, "email": u.email, "role": u.role, "full_name": u.full_name, "status": u.status} for u in users],
-            "products": [{"id": p.id, "name": p.name, "category": p.category, "price": p.price, "stock": p.stock, "status": p.status, "producer_id": p.producer_id} for p in products],
-            "orders": [{"id": o.id, "order_id": o.order_id, "customer_name": o.customer_name, "delivery_date": str(o.delivery_date), "status": o.status, "producer_id": o.producer_id} for o in orders]
-        }
-    finally:
-        db.close()
+    client = get_supabase()
+    users = client.table("users").select("id,email,role,full_name,status").order("id").execute().data or []
+    products = (
+        client.table("products")
+        .select("id,name,category,price,stock,status,producer_id")
+        .order("id")
+        .execute()
+        .data
+        or []
+    )
+    orders = (
+        client.table("orders")
+        .select("id,order_id,customer_name,delivery_date,status,producer_id")
+        .order("id")
+        .execute()
+        .data
+        or []
+    )
+    return {"users": users, "products": products, "orders": orders}
 
 
 def customer_summary(user: dict) -> dict:
