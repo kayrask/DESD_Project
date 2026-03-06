@@ -64,8 +64,36 @@ label { display: block; margin: 8px 0 4px; color: var(--text-muted); }
   padding: 10px 12px;
   margin: 10px 0;
 }
+.toast-enter {
+  animation: toast-in 0.22s ease-out both;
+}
+.toast-exit {
+  animation: toast-out 0.32s ease-in both;
+}
 .toast-info { background: #eff6ff; color: #1e3a8a; }
 .toast-danger { background: #fef2f2; color: #991b1b; }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
 .tile { border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; color: var(--text); padding: 12px; text-decoration: none; }
 

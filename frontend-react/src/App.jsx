@@ -1,6 +1,5 @@
 import React from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
-import { useAuth } from "./context/AuthContext.jsx";
+import { Route, Routes } from "react-router-dom";
 import DashboardLayout from "./components/DashboardLayout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -27,18 +26,10 @@ import ForProducersPage from "./pages/ForProducersPage.jsx";
 import HowItWorksPage from "./pages/HowItWorksPage.jsx";
 import SustainabilityPage from "./pages/SustainabilityPage.jsx";
 
-function HomeRedirect() {
-  const { user } = useAuth();
-  if (!user) return <HomePage />;
-  if (user.role === "producer") return <Navigate to="/producer" replace />;
-  if (user.role === "admin") return <Navigate to="/admin" replace />;
-  return <Navigate to="/customer" replace />;
-}
-
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomeRedirect />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/marketplace" element={<MarketplaceInfoPage />} />
       <Route path="/for-producers" element={<ForProducersPage />} />
       <Route path="/how-it-works" element={<HowItWorksPage />} />

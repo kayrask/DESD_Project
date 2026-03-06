@@ -48,7 +48,7 @@ export default function DashboardLayout() {
             className="btn secondary"
             onClick={async () => {
               const result = await logout();
-              navigate("/login", {
+              navigate("/", {
                 replace: true,
                 state: { message: result.message, tone: "info" },
               });

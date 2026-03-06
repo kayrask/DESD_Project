@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const navItems = [
   { to: "/marketplace", label: "Marketplace" },
@@ -10,6 +11,11 @@ const navItems = [
 
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const displayName = user?.full_name || user?.email?.split("@")[0] || "";
+  const dashboardPath =
+    user?.role === "producer" ? "/producer" : user?.role === "admin" ? "/admin" : "/customer";
 
   return (
     <header className="brfn-header">
@@ -27,8 +33,30 @@ export default function Header() {
         </nav>
 
         <div className="brfn-header-actions">
-          <Link className="brfn-btn brfn-btn-secondary" to="/login">Sign In</Link>
-          <Link className="brfn-btn brfn-btn-primary" to="/register">Get Started</Link>
+          {user ? (
+            <>
+              <span className="brfn-user-greeting">Hi, {displayName}</span>
+              <Link className="brfn-btn brfn-btn-primary" to={dashboardPath}>Dashboard</Link>
+              <button
+                className="brfn-btn brfn-btn-secondary"
+                type="button"
+                onClick={async () => {
+                  const result = await logout();
+                  navigate("/", {
+                    replace: true,
+                    state: { message: result.message, tone: "info" },
+                  });
+                }}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link className="brfn-btn brfn-btn-secondary" to="/login">Sign In</Link>
+              <Link className="brfn-btn brfn-btn-primary" to="/register">Get Started</Link>
+            </>
+          )}
           <button
             className="brfn-menu-btn"
             type="button"
@@ -50,9 +78,31 @@ export default function Header() {
               {item.label}
             </Link>
           ))}
-          <Link className="brfn-btn brfn-btn-primary" to="/register" onClick={() => setOpen(false)}>
-            Get Started
-          </Link>
+          {user ? (
+            <>
+              <Link className="brfn-btn brfn-btn-primary" to={dashboardPath} onClick={() => setOpen(false)}>
+                Dashboard
+              </Link>
+              <button
+                className="brfn-btn brfn-btn-secondary"
+                type="button"
+                onClick={async () => {
+                  setOpen(false);
+                  const result = await logout();
+                  navigate("/", {
+                    replace: true,
+                    state: { message: result.message, tone: "info" },
+                  });
+                }}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <Link className="brfn-btn brfn-btn-primary" to="/register" onClick={() => setOpen(false)}>
+              Get Started
+            </Link>
+          )}
         </nav>
       ) : null}
     </header>

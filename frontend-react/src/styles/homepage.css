@@ -23,6 +23,15 @@
   gap: 68px;
 }
 
+.brfn-session-banner {
+  border: 1px solid #d5cab4;
+  border-radius: 12px;
+  background: #f4ecdf;
+  color: #2d4638;
+  padding: 12px 14px;
+  font-weight: 620;
+}
+
 .brfn-header {
   position: sticky;
   top: 0;
@@ -80,6 +89,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.brfn-user-greeting {
+  font-size: 0.9rem;
+  font-weight: 620;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .brfn-btn {
