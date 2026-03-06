@@ -24,9 +24,10 @@ export default function LoginPage() {
       return;
     }
 
-    if (result.user.role === "producer") navigate("/producer", { replace: true });
-    else if (result.user.role === "admin") navigate("/admin", { replace: true });
-    else navigate("/customer", { replace: true });
+    navigate("/", {
+      replace: true,
+      state: { message: "Signed in successfully", tone: "info" },
+    });
   }
 
   return (
