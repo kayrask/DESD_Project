@@ -27,6 +27,19 @@ create table if not exists public.orders (
   producer_id bigint not null references public.users(id)
 );
 
+-- Checkout orders table
+create table if not exists public.checkout_orders (
+  id bigint generated always as identity primary key,
+  full_name text not null,
+  email text not null,
+  address text not null,
+  city text not null,
+  postal_code text not null,
+  payment_method text not null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+
 -- Future-ready tables (Sprint 2/3)
 create table if not exists public.producer_settlements (
   id bigint generated always as identity primary key,

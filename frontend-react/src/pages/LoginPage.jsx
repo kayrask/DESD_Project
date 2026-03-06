@@ -1,13 +1,13 @@
 import React from "react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("producer@desd.local");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   async function onSubmit(event) {
@@ -29,12 +29,7 @@ export default function LoginPage() {
     <div className="centered">
       <section className="card auth-card">
         <h2>Sign in</h2>
-        <p className="note">Sprint 1 auth + role routing demo</p>
-        <ul className="note">
-          <li>producer@desd.local / password123</li>
-          <li>admin@desd.local / password123</li>
-          <li>customer@desd.local / password123</li>
-        </ul>
+        <p className="note">Sign in to your account to continue</p>
 
         <form onSubmit={onSubmit}>
           <label>Email</label>
@@ -46,6 +41,13 @@ export default function LoginPage() {
           <button className="btn primary" type="submit">Login</button>
           {error ? <p className="error">{error}</p> : null}
         </form>
+
+        <p className="note" style={{ marginTop: "20px", textAlign: "center" }}>
+          Don't have an account?{" "}
+          <Link to="/register" style={{ color: "var(--primary)", fontWeight: 600 }}>
+            Register here
+          </Link>
+        </p>
       </section>
     </div>
   );

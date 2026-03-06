@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Toast from "../components/Toast.jsx";
+import { createOrder } from "../api/dashboards.js";
 
 export default function CheckoutPage() {
   const [form, setForm] = useState({
@@ -42,8 +43,8 @@ export default function CheckoutPage() {
     }
     if (!form.postalCode.trim()) {
       nextErrors.postalCode = "Postal code is required.";
-    } else if (!/^[0-9]{4,10}$/.test(form.postalCode)) {
-      nextErrors.postalCode = "Postal code should be 4–10 digits.";
+    } else if (!/^[a-zA-Z0-9\s\-]{4,10}$/.test(form.postalCode)) {
+      nextErrors.postalCode = "Postal code should be 4–10 characters (letters, digits, spaces and dashes allowed).";
     }
     if (!form.acceptTerms) {
       nextErrors.acceptTerms = "You must confirm the demo terms.";
@@ -52,7 +53,7 @@ export default function CheckoutPage() {
     return nextErrors;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
@@ -65,11 +66,28 @@ export default function CheckoutPage() {
       return;
     }
 
-    setSubmitted(true);
-    setToast({
-      message: "Checkout submitted successfully (demo only, no payment captured).",
-      tone: "info",
-    });
+    try {
+      // Submit order to backend
+      const response = await createOrder({
+        fullName: form.fullName,
+        email: form.email,
+        address: form.address,
+        city: form.city,
+        postalCode: form.postalCode.replace(/[\s\-]/g, ""),
+        paymentMethod: form.paymentMethod,
+      });
+
+      setSubmitted(true);
+      setToast({
+        message: "Order submitted successfully! Order ID: " + response.id,
+        tone: "info",
+      });
+    } catch (error) {
+      setToast({
+        message: "Error submitting order: " + (error.message || "Unknown error"),
+        tone: "danger",
+      });
+    }
   }
 
   return (
