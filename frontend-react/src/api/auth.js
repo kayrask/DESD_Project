@@ -6,3 +6,10 @@ export function loginRequest(credentials) {
     body: JSON.stringify(credentials),
   });
 }
+
+export function registerRequest(userData) {
+  return apiFetch("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(userData),
+  });
+}
