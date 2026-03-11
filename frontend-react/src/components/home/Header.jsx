@@ -21,7 +21,11 @@ export default function Header() {
     <header className="brfn-header">
       <div className="brfn-header-inner">
         <Link className="brfn-logo" to="/" aria-label="Bristol Regional Food Network home">
-          Bristol Regional Food Network
+          <span className="brfn-logo-mark" aria-hidden="true">BR</span>
+          <span className="brfn-logo-text">
+            <strong>BRFN Market</strong>
+            <small>Bristol Regional Food Network</small>
+          </span>
         </Link>
 
         <nav className="brfn-nav" aria-label="Main navigation">

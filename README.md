@@ -1,7 +1,7 @@
 # DESD Group Project - Sprint 1 Setup
 
 This repo has two apps:
-- `backend-fastapi` (FastAPI API + Supabase)
+- `backend-fastapi` (Django/DRF API + Supabase)
 - `frontend-react` (React + Vite)
 
 ## 1) Requirements
@@ -39,7 +39,7 @@ cd "/Users/kayra/Developer/DESD Group Project/backend-fastapi"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+python manage.py runserver 0.0.0.0:8000
 ```
 
 Backend URL: `http://127.0.0.1:8000`
@@ -54,6 +54,6 @@ npm run dev -- --host 127.0.0.1 --port 5173
 Frontend URL: `http://127.0.0.1:5173`
 
 ## 6) Demo Users (seeded by SQL)
-- `producer@desd.local / password123`
-- `admin@desd.local / password123`
-- `customer@desd.local / password123`
+- `producer@desd.local / Password123`
+- `admin@desd.local / Password123`
+- `customer@desd.local / Password123`
