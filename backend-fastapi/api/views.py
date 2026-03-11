@@ -10,12 +10,17 @@ from app.services.dashboard_service import (
     admin_reports,
     admin_summary,
     admin_users,
+    create_producer_product,
     customer_summary,
+    producer_order_detail,
     producer_orders,
     producer_payments,
     producer_products,
     producer_summary,
+    update_producer_order_status,
+    update_producer_product,
 )
+from app.services.ai_service import recommend_products
 from app.supabase_client import get_supabase
 
 
@@ -160,6 +165,42 @@ def dashboards_producer_orders(request):
         return _error_response(exc.error, exc.message, exc.status_code)
 
 
+@csrf_exempt
+@api_view(["POST"])
+def producer_products_create(request):
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+    try:
+        require_role(user, ["producer"])
+        product = create_producer_product(user, request.data)
+        return Response({"message": "Product created", "data": product}, status=status.HTTP_201_CREATED)
+    except ApiAuthError as exc:
+        return _error_response(exc.error, exc.message, exc.status_code)
+    except (ValueError, LookupError, PermissionError) as exc:
+        return _error_response("validation_error", str(exc), status.HTTP_400_BAD_REQUEST)
+
+
+@csrf_exempt
+@api_view(["PATCH"])
+def producer_products_update(request, product_id: int):
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+    try:
+        require_role(user, ["producer"])
+        product = update_producer_product(user, product_id, request.data)
+        return Response({"message": "Product updated", "data": product})
+    except ApiAuthError as exc:
+        return _error_response(exc.error, exc.message, exc.status_code)
+    except LookupError as exc:
+        return _error_response("not_found", str(exc), status.HTTP_404_NOT_FOUND)
+    except PermissionError as exc:
+        return _error_response("forbidden", str(exc), status.HTTP_403_FORBIDDEN)
+    except ValueError as exc:
+        return _error_response("validation_error", str(exc), status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(["GET"])
 def dashboards_producer_payments(request):
     user = _require_user(request)
@@ -170,6 +211,39 @@ def dashboards_producer_payments(request):
         return Response(producer_payments(user))
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
+
+
+@api_view(["GET"])
+def producer_order_get(request, order_id: str):
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+    try:
+        require_role(user, ["producer"])
+        return Response(producer_order_detail(user, order_id))
+    except ApiAuthError as exc:
+        return _error_response(exc.error, exc.message, exc.status_code)
+    except LookupError as exc:
+        return _error_response("not_found", str(exc), status.HTTP_404_NOT_FOUND)
+
+
+@csrf_exempt
+@api_view(["PATCH"])
+def producer_order_status_update(request, order_id: str):
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+    next_status = str(request.data.get("status", ""))
+    try:
+        require_role(user, ["producer"])
+        result = update_producer_order_status(user, order_id, next_status)
+        return Response({"message": "Order status updated", "data": result})
+    except ApiAuthError as exc:
+        return _error_response(exc.error, exc.message, exc.status_code)
+    except LookupError as exc:
+        return _error_response("not_found", str(exc), status.HTTP_404_NOT_FOUND)
+    except ValueError as exc:
+        return _error_response("validation_error", str(exc), status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET"])
@@ -191,7 +265,9 @@ def dashboards_admin_reports(request):
         return user
     try:
         require_role(user, ["admin"])
-        return Response(admin_reports(user))
+        date_from = request.GET.get("from")
+        date_to = request.GET.get("to")
+        return Response(admin_reports(user, date_from=date_from, date_to=date_to))
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -280,5 +356,20 @@ def orders_get(request, order_id: int):
         if response.data:
             return Response(response.data[0])
         return _error_response("http_error", "Order not found", status.HTTP_404_NOT_FOUND)
+    except Exception as exc:
+        return _error_response("http_error", str(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+def ai_recommendations(request):
+    raw_limit = request.GET.get("limit", "6")
+    category = request.GET.get("category")
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        return _error_response("validation_error", "limit must be a number", status.HTTP_400_BAD_REQUEST)
+
+    try:
+        return Response(recommend_products(limit=limit, category=category))
     except Exception as exc:
         return _error_response("http_error", str(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
