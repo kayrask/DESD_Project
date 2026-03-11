@@ -13,7 +13,7 @@ export default function AdminUsersPage() {
   return (
     <section className="card">
       <h2>Users</h2>
-      <p className="note">Admin user management shell.</p>
+      <p className="note">Role and account status overview.</p>
       {loading ? <p className="note">Loading users...</p> : null}
       <Toast message={error} tone="danger" />
       {!loading && !error && rows.length === 0 ? <p className="note">No users found.</p> : null}

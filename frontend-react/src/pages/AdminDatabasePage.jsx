@@ -19,6 +19,7 @@ export default function AdminDatabasePage() {
       {data && (
         <>
           <h3>Users</h3>
+          {data.users.length === 0 ? <p className="note">No user records.</p> : null}
           <table>
             <thead>
               <tr><th>ID</th><th>Email</th><th>Role</th><th>Full Name</th><th>Status</th></tr>
@@ -37,6 +38,7 @@ export default function AdminDatabasePage() {
           </table>
 
           <h3>Products</h3>
+          {data.products.length === 0 ? <p className="note">No product records.</p> : null}
           <table>
             <thead>
               <tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Producer ID</th></tr>
@@ -57,6 +59,7 @@ export default function AdminDatabasePage() {
           </table>
 
           <h3>Orders</h3>
+          {data.orders.length === 0 ? <p className="note">No order records.</p> : null}
           <table>
             <thead>
               <tr><th>ID</th><th>Order ID</th><th>Customer</th><th>Delivery Date</th><th>Status</th><th>Producer ID</th></tr>

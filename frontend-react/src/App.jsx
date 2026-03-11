@@ -14,6 +14,7 @@ import RegisterPage from "./pages/RegisterPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import ProducerDashboard from "./pages/ProducerDashboard.jsx";
 import ProducerOrdersPage from "./pages/ProducerOrdersPage.jsx";
+import ProducerOrderDetailPage from "./pages/ProducerOrderDetailPage.jsx";
 import ProducerPaymentsPage from "./pages/ProducerPaymentsPage.jsx";
 import ProducerProductsPage from "./pages/ProducerProductsPage.jsx";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
@@ -85,6 +86,7 @@ export default function App() {
         <Route index element={<ProducerDashboard />} />
         <Route path="products" element={<ProducerProductsPage />} />
         <Route path="orders" element={<ProducerOrdersPage />} />
+        <Route path="orders/:orderId" element={<ProducerOrderDetailPage />} />
         <Route path="payments" element={<ProducerPaymentsPage />} />
       </Route>
 

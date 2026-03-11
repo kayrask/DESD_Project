@@ -13,7 +13,7 @@ export default function AdminDashboard() {
   return (
     <section className="card">
       <h2>Admin Dashboard</h2>
-      <p>Sprint 1 admin shell with integration status.</p>
+      <p className="note">Operational summary with quick links to reports, users, and database checks.</p>
       {loading ? <p className="note">Loading admin metrics...</p> : null}
       <Toast message={error} tone="danger" />
       {data ? (
