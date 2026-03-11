@@ -26,7 +26,7 @@ export default function LoginPage() {
 
     navigate("/", {
       replace: true,
-      state: { message: "Signed in successfully", tone: "info" },
+      state: { message: `Signed in as ${result.user.full_name || result.user.email}`, tone: "info" },
     });
   }
 

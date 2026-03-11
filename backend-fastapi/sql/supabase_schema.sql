@@ -73,10 +73,69 @@ create table if not exists public.customer_favorites (
 -- Optional demo seed rows
 insert into public.users (email, password_hash, role, full_name, status)
 values
-  ('producer@desd.local', 'password123', 'producer', 'Producer User', 'active'),
-  ('admin@desd.local', 'password123', 'admin', 'Admin User', 'active'),
-  ('customer@desd.local', 'password123', 'customer', 'Customer User', 'active')
+  ('producer@desd.local', 'Password123', 'producer', 'Producer User', 'active'),
+  ('admin@desd.local', 'Password123', 'admin', 'Admin User', 'active'),
+  ('customer@desd.local', 'Password123', 'customer', 'Customer User', 'active'),
+  ('suspended@desd.local', 'Password123', 'customer', 'Suspended User', 'suspended')
 on conflict (email) do nothing;
+
+insert into public.products (name, category, price, stock, status, producer_id)
+select
+  'Heirloom Tomatoes',
+  'Vegetable',
+  4.50,
+  52,
+  'Available',
+  u.id
+from public.users u
+where u.email = 'producer@desd.local'
+  and not exists (
+    select 1 from public.products p
+    where p.name = 'Heirloom Tomatoes' and p.producer_id = u.id
+  );
+
+insert into public.products (name, category, price, stock, status, producer_id)
+select
+  'Winter Kale',
+  'Leafy Greens',
+  3.20,
+  0,
+  'Out of Stock',
+  u.id
+from public.users u
+where u.email = 'producer@desd.local'
+  and not exists (
+    select 1 from public.products p
+    where p.name = 'Winter Kale' and p.producer_id = u.id
+  );
+
+insert into public.orders (order_id, customer_name, delivery_date, status, producer_id)
+select
+  'D-1023',
+  'John Smith',
+  '2026-03-06',
+  'Pending',
+  u.id
+from public.users u
+where u.email = 'producer@desd.local'
+  and not exists (
+    select 1 from public.orders o
+    where o.order_id = 'D-1023'
+  );
+
+insert into public.orders (order_id, customer_name, delivery_date, status, producer_id)
+select
+  'D-1019',
+  'Jane Doe',
+  '2026-03-05',
+  'Confirmed',
+  u.id
+from public.users u
+where u.email = 'producer@desd.local'
+  and not exists (
+    select 1 from public.orders o
+    where o.order_id = 'D-1019'
+  );
 
 insert into public.commission_reports (report_date, total_orders, gross_amount, commission_amount)
 values

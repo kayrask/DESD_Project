@@ -5,7 +5,13 @@ export default function Footer() {
   return (
     <footer className="brfn-footer">
       <div className="brfn-footer-inner">
-        <p className="brfn-footer-brand">Bristol Regional Food Network</p>
+        <p className="brfn-footer-brand">
+          <span className="brfn-logo-mark" aria-hidden="true">BR</span>
+          <span className="brfn-logo-text">
+            <strong>BRFN Market</strong>
+            <small>Bristol Regional Food Network</small>
+          </span>
+        </p>
         <nav aria-label="Footer links">
           <Link to="/marketplace">Marketplace</Link>
           <Link to="/for-producers">For Producers</Link>

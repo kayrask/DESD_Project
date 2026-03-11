@@ -1,12 +1,12 @@
-# Backend FastAPI (Supabase)
+# Backend Django API (Supabase)
 
 ## Libraries (requirements.txt)
-- `fastapi==0.115.6`
-- `uvicorn==0.32.1`
+- `Django==5.1.5`
+- `djangorestframework==3.15.2`
+- `django-cors-headers==4.6.0`
 - `python-dotenv==1.0.1`
 - `passlib==1.7.4`
 - `bcrypt==4.2.1`
-- `python-jose[cryptography]==3.3.0`
 - `supabase==2.11.0`
 
 ## Environment
@@ -25,29 +25,20 @@ SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 Run this once in Supabase SQL Editor:
 - `backend-fastapi/sql/supabase_schema.sql`
 
-Core tables used now:
-- `users`
-- `products`
-- `orders`
-
-Future-ready tables included in schema:
-- `producer_settlements`
-- `commission_reports`
-- `customer_favorites`
-
 ## Run
 ```bash
 cd "/Users/kayra/Developer/DESD Group Project/backend-fastapi"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+python manage.py runserver 0.0.0.0:8000
 ```
 
 ## Main Endpoints
 - `GET /health`
 - `POST /auth/login`
 - `POST /auth/register`
+- `POST /auth/logout`
 - `GET /dashboards/me`
 - `GET /dashboards/producer`
 - `GET /dashboards/producer/products`
@@ -58,3 +49,5 @@ uvicorn app.main:app --reload --port 8000
 - `GET /dashboards/admin/users`
 - `GET /dashboards/admin/database`
 - `GET /dashboards/customer`
+- `POST /orders/`
+- `GET /orders/{id}`
