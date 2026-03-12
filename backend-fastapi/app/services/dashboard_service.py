@@ -4,6 +4,13 @@ from app.repositories.auth_repo import find_user_by_email
 from app.supabase_client import get_supabase
 
 
+def _safe_float(value) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def producer_summary(user: dict) -> dict:
     producer = find_user_by_email(user["email"])
     if not producer:
@@ -42,7 +49,7 @@ def producer_products(user: dict) -> dict:
             "id": row.get("id"),
             "name": row.get("name"),
             "category": row.get("category"),
-            "price": float(row.get("price") or 0),
+            "price": _safe_float(row.get("price")),
             "stock": row.get("stock", 0),
             "status": row.get("status", "Unknown"),
         }
@@ -101,6 +108,12 @@ def create_producer_product(user: dict, payload: dict) -> dict:
         raise ValueError("Price must be zero or greater")
     if stock < 0:
         raise ValueError("Stock must be zero or greater")
+
+    # Auto-align status with stock to prevent inconsistent inventory states.
+    if stock == 0:
+        status = "Out of Stock"
+    elif status.lower() == "out of stock":
+        status = "Available"
 
     client = get_supabase()
     response = (
@@ -175,6 +188,13 @@ def update_producer_product(user: dict, product_id: int, payload: dict) -> dict:
     if not updates:
         raise ValueError("No valid fields provided for update")
 
+    # Keep status in sync with stock whenever stock is updated.
+    if "stock" in updates:
+        if updates["stock"] == 0:
+            updates["status"] = "Out of Stock"
+        elif str(updates.get("status", "")).strip().lower() == "out of stock":
+            updates["status"] = "Available"
+
     response = (
         client.table("products")
         .update(updates)
@@ -206,12 +226,54 @@ def producer_order_detail(user: dict, order_id: str) -> dict:
     if not rows:
         raise LookupError("Order not found")
     row = rows[0]
+
+    items = []
+    items_available = False
+    try:
+        # Optional relation for Sprint 2+: if order_items exists, include order contents.
+        items_resp = (
+            client.table("order_items")
+            .select("id,quantity,unit_price,product_id,products(name)")
+            .eq("order_id", row.get("id"))
+            .order("id")
+            .execute()
+        )
+        item_rows = items_resp.data or []
+        items_available = True
+        for item in item_rows:
+            product_name = "Product"
+            product_data = item.get("products")
+            if isinstance(product_data, dict):
+                product_name = product_data.get("name") or product_name
+            elif isinstance(product_data, list) and product_data:
+                product_name = product_data[0].get("name") or product_name
+
+            quantity = int(item.get("quantity") or 0)
+            unit_price = _safe_float(item.get("unit_price"))
+            items.append(
+                {
+                    "id": item.get("id"),
+                    "product_id": item.get("product_id"),
+                    "name": product_name,
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "line_total": round(quantity * unit_price, 2),
+                }
+            )
+    except Exception:
+        # Keep endpoint stable if order_items table isn't present yet.
+        items = []
+        items_available = False
+
     return {
         "id": row.get("id"),
         "order_id": row.get("order_id"),
         "customer": row.get("customer_name"),
         "delivery": row.get("delivery_date"),
         "status": row.get("status", "Pending"),
+        "items_available": items_available,
+        "items": items,
+        "order_total": round(sum(item["line_total"] for item in items), 2),
     }
 
 
@@ -337,3 +399,24 @@ def admin_database(user: dict) -> dict:
 
 def customer_summary(user: dict) -> dict:
     return {"upcoming_deliveries": 2, "saved_producers": 4}
+
+
+def marketplace_producers() -> dict:
+    client = get_supabase()
+    response = (
+        client.table("users")
+        .select("id,full_name,email,status")
+        .eq("role", "producer")
+        .order("full_name")
+        .execute()
+    )
+    rows = response.data or []
+    items = [
+        {
+            "id": row.get("id"),
+            "name": row.get("full_name") or (row.get("email", "").split("@")[0] if row.get("email") else "Producer"),
+            "status": row.get("status", "active"),
+        }
+        for row in rows
+    ]
+    return {"items": items}

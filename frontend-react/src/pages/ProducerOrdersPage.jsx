@@ -6,6 +6,13 @@ import StatusPill from "../components/StatusPill.jsx";
 import Toast from "../components/Toast.jsx";
 import { useAuth } from "../context/AuthContext";
 
+const nextStatusOptions = {
+  pending: ["Confirmed"],
+  confirmed: ["Ready"],
+  ready: ["Delivered"],
+  delivered: [],
+};
+
 export default function ProducerOrdersPage() {
   const { token } = useAuth();
   const [rows, setRows] = useState([]);
@@ -13,6 +20,11 @@ export default function ProducerOrdersPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [statusDrafts, setStatusDrafts] = useState({});
+
+  const getAllowedOptions = (currentStatus) => {
+    const key = String(currentStatus || "").toLowerCase();
+    return nextStatusOptions[key] || [];
+  };
 
   const loadOrders = async () => {
     setLoading(true);
@@ -26,7 +38,10 @@ export default function ProducerOrdersPage() {
       setRows(items);
       setStatusDrafts(
         items.reduce((acc, item) => {
-          acc[item.order_id] = item.status || "Pending";
+          const allowed = getAllowedOptions(item.status);
+          if (allowed.length > 0) {
+            acc[item.order_id] = allowed[0];
+          }
           return acc;
         }, {}),
       );
@@ -73,24 +88,35 @@ export default function ProducerOrdersPage() {
               <td><StatusPill value={r.status} /></td>
               <td style={{ minWidth: 220 }}>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <select
-                    className="input"
-                    value={statusDrafts[r.order_id] || r.status}
-                    onChange={(e) =>
-                      setStatusDrafts((prev) => ({
-                        ...prev,
-                        [r.order_id]: e.target.value,
-                      }))
-                    }
-                  >
-                    <option>Pending</option>
-                    <option>Confirmed</option>
-                    <option>Ready</option>
-                    <option>Delivered</option>
-                  </select>
-                  <button type="button" className="btn secondary" onClick={() => handleStatusUpdate(r.order_id)}>
-                    Save
-                  </button>
+                  {getAllowedOptions(r.status).length > 0 ? (
+                    <>
+                      <select
+                        className="input"
+                        value={
+                          getAllowedOptions(r.status).includes(statusDrafts[r.order_id])
+                            ? statusDrafts[r.order_id]
+                            : getAllowedOptions(r.status)[0]
+                        }
+                        onChange={(e) =>
+                          setStatusDrafts((prev) => ({
+                            ...prev,
+                            [r.order_id]: e.target.value,
+                          }))
+                        }
+                      >
+                        {getAllowedOptions(r.status).map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" className="btn secondary" onClick={() => handleStatusUpdate(r.order_id)}>
+                        Save
+                      </button>
+                    </>
+                  ) : (
+                    <span className="note">Final status reached</span>
+                  )}
                 </div>
               </td>
               <td>

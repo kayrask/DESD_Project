@@ -26,10 +26,44 @@ export default function ProducerOrderDetailPage() {
           <p><strong>Customer:</strong> {data.customer}</p>
           <p><strong>Delivery Date:</strong> {data.delivery}</p>
           <p><strong>Status:</strong> <StatusPill value={data.status} /></p>
+
+          <h3 style={{ marginTop: 18 }}>Order Items</h3>
+          {Array.isArray(data.items) && data.items.length > 0 ? (
+            <>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map((item) => (
+                    <tr key={item.id ?? `${item.product_id}-${item.name}`}>
+                      <td>{item.name}</td>
+                      <td>{item.quantity}</td>
+                      <td>${Number(item.unit_price || 0).toFixed(2)}</td>
+                      <td>${Number(item.line_total || 0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ marginTop: 10 }}>
+                <strong>Order Total:</strong> ${Number(data.order_total || 0).toFixed(2)}
+              </p>
+            </>
+          ) : (
+            <p className="note">
+              {data.items_available
+                ? "No item rows found for this order yet."
+                : "Order item breakdown is not available in the current database schema."}
+            </p>
+          )}
         </div>
       ) : null}
       <Link className="btn secondary" to="/producer/orders">Back to Orders</Link>
     </section>
   );
 }
-
