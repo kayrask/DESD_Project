@@ -18,6 +18,7 @@ urlpatterns = [
     path("producer/orders/<str:order_id>/status", views.producer_order_status_update),
     path("dashboards/admin", views.dashboards_admin),
     path("dashboards/admin/reports", views.dashboards_admin_reports),
+    path("admin/commission", views.admin_commission),
     path("dashboards/admin/users", views.dashboards_admin_users),
     path("dashboards/admin/database", views.dashboards_admin_database),
     path("dashboards/customer", views.dashboards_customer),

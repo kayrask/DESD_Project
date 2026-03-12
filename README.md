@@ -57,3 +57,19 @@ Frontend URL: `http://127.0.0.1:5173`
 - `producer@desd.local / Password123`
 - `admin@desd.local / Password123`
 - `customer@desd.local / Password123`
+
+## 7) Before Demo Checklist
+- Run backend and frontend successfully.
+- Confirm Supabase schema + seed rows are applied.
+- Verify role login works for producer/admin/customer.
+- Verify producer flow:
+  - `/producer/products` create/edit
+  - `/producer/orders` status transitions
+  - `/producer/orders/:orderId` detail page
+- Verify admin flow:
+  - `/admin/reports` date range filter
+  - totals summary updates
+  - CSV export works
+- Verify security:
+  - wrong role access returns `403`
+  - unauthenticated protected route returns `401`

@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -267,7 +269,37 @@ def dashboards_admin_reports(request):
         require_role(user, ["admin"])
         date_from = request.GET.get("from")
         date_to = request.GET.get("to")
+        if date_from:
+            date.fromisoformat(date_from)
+        if date_to:
+            date.fromisoformat(date_to)
+        if date_from and date_to and date_from > date_to:
+            return _error_response("validation_error", "from date must be before to date", status.HTTP_400_BAD_REQUEST)
         return Response(admin_reports(user, date_from=date_from, date_to=date_to))
+    except ValueError:
+        return _error_response("validation_error", "Dates must use YYYY-MM-DD", status.HTTP_400_BAD_REQUEST)
+    except ApiAuthError as exc:
+        return _error_response(exc.error, exc.message, exc.status_code)
+
+
+@api_view(["GET"])
+def admin_commission(request):
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+    try:
+        require_role(user, ["admin"])
+        date_from = request.GET.get("from")
+        date_to = request.GET.get("to")
+        if date_from:
+            date.fromisoformat(date_from)
+        if date_to:
+            date.fromisoformat(date_to)
+        if date_from and date_to and date_from > date_to:
+            return _error_response("validation_error", "from date must be before to date", status.HTTP_400_BAD_REQUEST)
+        return Response(admin_reports(user, date_from=date_from, date_to=date_to))
+    except ValueError:
+        return _error_response("validation_error", "Dates must use YYYY-MM-DD", status.HTTP_400_BAD_REQUEST)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 

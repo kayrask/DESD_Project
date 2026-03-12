@@ -11,7 +11,7 @@ export const getAdminReports = (token, filters = {}) => {
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
   const queryString = params.toString();
-  return apiFetch(`/dashboards/admin/reports${queryString ? `?${queryString}` : ""}`, {}, token);
+  return apiFetch(`/admin/commission${queryString ? `?${queryString}` : ""}`, {}, token);
 };
 export const getAdminUsers = (token) => apiFetch("/dashboards/admin/users", {}, token);
 export const getAdminDatabase = (token) => apiFetch("/dashboards/admin/database", {}, token);

@@ -163,6 +163,16 @@
   background: #284f3b;
 }
 
+.brfn-btn-primary:visited {
+  color: #f7f8f4;
+}
+
+.brfn-btn-primary:active {
+  background: #234433;
+  border-color: #1f3a2c;
+  color: #f7f8f4;
+}
+
 .brfn-btn-secondary {
   background: #f3ecdf;
   border-color: #d7ccb6;
@@ -172,6 +182,44 @@
 .brfn-btn-secondary:hover,
 .brfn-btn-secondary:focus-visible {
   background: #ece3d3;
+}
+
+.brfn-btn-secondary:visited {
+  color: var(--text);
+}
+
+.brfn-btn-secondary:active {
+  background: #e4dac8;
+  border-color: #cabca2;
+  color: var(--text);
+}
+
+/* Keep logged-in header CTA readable across all link states (Safari/WebKit safe) */
+.brfn-header-actions a.brfn-btn-primary,
+.brfn-header-actions a.brfn-btn-primary:link,
+.brfn-header-actions a.brfn-btn-primary:visited,
+.brfn-header-actions a.brfn-btn-primary:hover,
+.brfn-header-actions a.brfn-btn-primary:focus,
+.brfn-header-actions a.brfn-btn-primary:focus-visible,
+.brfn-header-actions a.brfn-btn-primary:active,
+.brfn-mobile-nav a.brfn-btn-primary,
+.brfn-mobile-nav a.brfn-btn-primary:link,
+.brfn-mobile-nav a.brfn-btn-primary:visited,
+.brfn-mobile-nav a.brfn-btn-primary:hover,
+.brfn-mobile-nav a.brfn-btn-primary:focus,
+.brfn-mobile-nav a.brfn-btn-primary:focus-visible,
+.brfn-mobile-nav a.brfn-btn-primary:active {
+  background: var(--accent);
+  border-color: #234433;
+  color: #f7f8f4;
+  -webkit-text-fill-color: #f7f8f4;
+}
+
+.brfn-header-actions a.brfn-btn-primary:hover,
+.brfn-header-actions a.brfn-btn-primary:focus-visible,
+.brfn-mobile-nav a.brfn-btn-primary:hover,
+.brfn-mobile-nav a.brfn-btn-primary:focus-visible {
+  background: #284f3b;
 }
 
 .brfn-menu-btn {
