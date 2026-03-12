@@ -142,7 +142,23 @@ export default function ProducerProductsPage() {
             min="0"
             placeholder="Stock"
             value={createForm.stock}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, stock: e.target.value }))}
+            onChange={(e) =>
+              setCreateForm((prev) => {
+                const nextStock = e.target.value;
+                const stockNum = Number(nextStock);
+                return {
+                  ...prev,
+                  stock: nextStock,
+                  status: Number.isNaN(stockNum)
+                    ? prev.status
+                    : stockNum === 0
+                      ? "Out of Stock"
+                      : prev.status === "Out of Stock"
+                        ? "Available"
+                        : prev.status,
+                };
+              })
+            }
             required
           />
         </div>
@@ -172,7 +188,35 @@ export default function ProducerProductsPage() {
               <td>{editingId === r.id ? <input className="input" value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} /> : r.name}</td>
               <td>{editingId === r.id ? <input className="input" value={editForm.category} onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))} /> : r.category}</td>
               <td>{editingId === r.id ? <input className="input" type="number" min="0" step="0.01" value={editForm.price} onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))} /> : `$${Number(r.price || 0).toFixed(2)}`}</td>
-              <td>{editingId === r.id ? <input className="input" type="number" min="0" value={editForm.stock} onChange={(e) => setEditForm((prev) => ({ ...prev, stock: e.target.value }))} /> : r.stock}</td>
+              <td>
+                {editingId === r.id ? (
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    value={editForm.stock}
+                    onChange={(e) =>
+                      setEditForm((prev) => {
+                        const nextStock = e.target.value;
+                        const stockNum = Number(nextStock);
+                        return {
+                          ...prev,
+                          stock: nextStock,
+                          status: Number.isNaN(stockNum)
+                            ? prev.status
+                            : stockNum === 0
+                              ? "Out of Stock"
+                              : prev.status === "Out of Stock"
+                                ? "Available"
+                                : prev.status,
+                        };
+                      })
+                    }
+                  />
+                ) : (
+                  r.stock
+                )}
+              </td>
               <td>
                 {editingId === r.id ? (
                   <select className="input" value={editForm.status} onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}>
