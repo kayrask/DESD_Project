@@ -13,9 +13,10 @@ export default function Header() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const displayName = user?.full_name || user?.email?.split("@")[0] || "";
-  const dashboardPath =
-    user?.role === "producer" ? "/producer" : user?.role === "admin" ? "/admin" : "/customer";
+  const actionPath =
+    user?.role === "producer" ? "/producer" : user?.role === "admin" ? "/admin" : "/cart";
+  const actionLabel =
+    user?.role === "producer" ? "Producer Dashboard" : user?.role === "admin" ? "Admin Dashboard" : "Cart";
 
   return (
     <header className="brfn-header">
@@ -39,8 +40,7 @@ export default function Header() {
         <div className="brfn-header-actions">
           {user ? (
             <>
-              <span className="brfn-user-greeting">Hi, {displayName}</span>
-              <Link className="brfn-btn brfn-btn-primary" to={dashboardPath}>Dashboard</Link>
+              <Link className="brfn-btn brfn-btn-primary" to={actionPath}>{actionLabel}</Link>
               <button
                 className="brfn-btn brfn-btn-secondary"
                 type="button"
@@ -84,8 +84,8 @@ export default function Header() {
           ))}
           {user ? (
             <>
-              <Link className="brfn-btn brfn-btn-primary" to={dashboardPath} onClick={() => setOpen(false)}>
-                Dashboard
+              <Link className="brfn-btn brfn-btn-primary" to={actionPath} onClick={() => setOpen(false)}>
+                {actionLabel}
               </Link>
               <button
                 className="brfn-btn brfn-btn-secondary"

@@ -61,6 +61,31 @@ export default function AdminReportsPage() {
     await loadReports(resetFilters);
   };
 
+  const handleExportCsv = () => {
+    if (!rows.length) return;
+    const header = ["Date", "Orders", "Gross", "Commission"];
+    const lines = rows.map((row) => [
+      row.date ?? "",
+      Number(row.orders ?? 0),
+      Number(row.gross ?? 0).toFixed(2),
+      Number(row.commission ?? 0).toFixed(2),
+    ]);
+    const csv = [header, ...lines]
+      .map((line) => line.map((field) => `"${String(field).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const suffix = filters.from || filters.to ? `${filters.from || "start"}_${filters.to || "end"}` : "all";
+    link.href = url;
+    link.download = `commission_report_${suffix}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <section className="card">
       <h2>Commission Reports</h2>
@@ -97,8 +122,15 @@ export default function AdminReportsPage() {
           <button type="button" className="btn secondary" onClick={handleReset} disabled={loading}>
             Reset
           </button>
+          <button type="button" className="btn secondary" onClick={handleExportCsv} disabled={loading || rows.length === 0}>
+            Export CSV
+          </button>
         </div>
       </form>
+
+      <p className="note" style={{ marginTop: -2 }}>
+        Range: {filters.from || "Start"} to {filters.to || "Today"}
+      </p>
 
       <div className="grid" style={{ marginBottom: 14 }}>
         <article className="tile">
@@ -138,4 +170,3 @@ export default function AdminReportsPage() {
     </section>
   );
 }
-
