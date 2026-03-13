@@ -5,8 +5,27 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from api.models import CheckoutOrder
+from api.serializers import (
+    AdminDatabaseSerializer,
+    AdminReportsResponseSerializer,
+    AdminSummarySerializer,
+    AdminUsersResponseSerializer,
+    CheckoutOrderCreateSerializer,
+    CheckoutOrderSerializer,
+    CustomerSummarySerializer,
+    ProductCreateSerializer,
+    ProductSerializer,
+    ProducerOrdersResponseSerializer,
+    ProducerPaymentsSerializer,
+    ProducerProductsResponseSerializer,
+    ProducerSummarySerializer,
+    UserRegistrationSerializer,
+    UserSerializer,
+)
 from app.core.security import ApiAuthError, issue_token, require_role, revoke_token, user_from_token
-from app.repositories.auth_repo import find_user_by_email, register_user, verify_password
+from app.repositories.auth_repo import find_user_by_email, verify_password
+from app.services.ai_service import recommend_products
 from app.services.dashboard_service import (
     admin_database,
     admin_reports,
@@ -22,8 +41,6 @@ from app.services.dashboard_service import (
     update_producer_order_status,
     update_producer_product,
 )
-from app.services.ai_service import recommend_products
-from app.supabase_client import get_supabase
 
 
 def _error_response(error: str, message: str, code: int) -> Response:
@@ -41,18 +58,12 @@ def _require_user(request) -> dict | Response:
         return _error_response(exc.error, exc.message, exc.status_code)
 
 
-def _validate_password(password: str) -> bool:
-    has_min_length = len(password) >= 8
-    has_upper = any(char.isupper() for char in password)
-    has_lower = any(char.islower() for char in password)
-    has_digit = any(char.isdigit() for char in password)
-    return has_min_length and has_upper and has_lower and has_digit
-
-
 @api_view(["GET"])
 def health(_request):
     return Response({"status": "ok"})
 
+
+# ── Authentication ────────────────────────────────────────────────────────────
 
 @csrf_exempt
 @api_view(["POST"])
@@ -61,56 +72,35 @@ def auth_login(request):
     password = str(request.data.get("password", ""))
 
     if not email or not password:
-        return _error_response("validation_error", "Invalid request data", status.HTTP_400_BAD_REQUEST)
+        return _error_response("validation_error", "Email and password are required.", status.HTTP_400_BAD_REQUEST)
 
     user = find_user_by_email(email)
-    if not user or not verify_password(password, user.get("password_hash", "")):
-        return _error_response("unauthenticated", "Invalid email or password", status.HTTP_401_UNAUTHORIZED)
+    if not user or not verify_password(password, user):
+        return _error_response("unauthenticated", "Invalid email or password.", status.HTTP_401_UNAUTHORIZED)
 
-    payload = {
-        "email": user.get("email"),
-        "role": user.get("role"),
-        "full_name": user.get("full_name"),
-    }
-    token = issue_token(payload)
-    return Response({"access_token": token, "token_type": "bearer", "user": payload})
+    token = issue_token(user)
+    return Response({
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserSerializer(user).data,
+    })
 
 
 @csrf_exempt
 @api_view(["POST"])
 def auth_register(request):
-    email = str(request.data.get("email", "")).strip()
-    password = str(request.data.get("password", ""))
-    role = str(request.data.get("role", "")).strip().lower()
-    full_name = str(request.data.get("full_name", "")).strip()
+    serializer = UserRegistrationSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"error": "validation_error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not email or not password or not role or not full_name:
-        return _error_response("validation_error", "Invalid request data", status.HTTP_400_BAD_REQUEST)
+    if find_user_by_email(serializer.validated_data["email"]):
+        return _error_response("validation_error", "User already exists.", status.HTTP_400_BAD_REQUEST)
 
-    if role not in {"customer", "producer", "admin"}:
-        return _error_response("validation_error", "Invalid role", status.HTTP_400_BAD_REQUEST)
-
-    if not _validate_password(password):
-        return _error_response(
-            "validation_error",
-            "Password must contain at least 8 characters, including upper, lower, and number.",
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-        user = register_user(email, password, role, full_name)
-        return Response(
-            {
-                "message": "User registered successfully",
-                "user": {
-                    "email": user.get("email"),
-                    "role": user.get("role"),
-                    "full_name": user.get("full_name"),
-                },
-            }
-        )
-    except ValueError as exc:
-        return _error_response("validation_error", str(exc), status.HTTP_400_BAD_REQUEST)
+    user = serializer.save()
+    return Response(
+        {"message": "User registered successfully.", "user": UserSerializer(user).data},
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @csrf_exempt
@@ -118,10 +108,12 @@ def auth_register(request):
 def auth_logout(request):
     try:
         revoke_token(_auth_header(request))
-        return Response({"message": "Logged out successfully"})
+        return Response({"message": "Logged out successfully."})
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
+
+# ── Dashboard — shared ────────────────────────────────────────────────────────
 
 @api_view(["GET"])
 def dashboards_me(request):
@@ -131,6 +123,8 @@ def dashboards_me(request):
     return Response(user)
 
 
+# ── Dashboard — Producer ──────────────────────────────────────────────────────
+
 @api_view(["GET"])
 def dashboards_producer(request):
     user = _require_user(request)
@@ -138,7 +132,7 @@ def dashboards_producer(request):
         return user
     try:
         require_role(user, ["producer"])
-        return Response(producer_summary(user))
+        return Response(ProducerSummarySerializer(producer_summary(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -150,7 +144,7 @@ def dashboards_producer_products(request):
         return user
     try:
         require_role(user, ["producer"])
-        return Response(producer_products(user))
+        return Response(ProducerProductsResponseSerializer(producer_products(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -162,7 +156,7 @@ def dashboards_producer_orders(request):
         return user
     try:
         require_role(user, ["producer"])
-        return Response(producer_orders(user))
+        return Response(ProducerOrdersResponseSerializer(producer_orders(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -175,10 +169,16 @@ def producer_products_create(request):
         return user
     try:
         require_role(user, ["producer"])
-        product = create_producer_product(user, request.data)
-        return Response({"message": "Product created", "data": product}, status=status.HTTP_201_CREATED)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
+
+    serializer = ProductCreateSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"error": "validation_error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        product = create_producer_product(user, serializer.validated_data)
+        return Response({"message": "Product created.", "data": product}, status=status.HTTP_201_CREATED)
     except (ValueError, LookupError, PermissionError) as exc:
         return _error_response("validation_error", str(exc), status.HTTP_400_BAD_REQUEST)
 
@@ -191,10 +191,16 @@ def producer_products_update(request, product_id: int):
         return user
     try:
         require_role(user, ["producer"])
-        product = update_producer_product(user, product_id, request.data)
-        return Response({"message": "Product updated", "data": product})
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
+
+    serializer = ProductSerializer(data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response({"error": "validation_error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        product = update_producer_product(user, product_id, request.data)
+        return Response({"message": "Product updated.", "data": product})
     except LookupError as exc:
         return _error_response("not_found", str(exc), status.HTTP_404_NOT_FOUND)
     except PermissionError as exc:
@@ -210,7 +216,7 @@ def dashboards_producer_payments(request):
         return user
     try:
         require_role(user, ["producer"])
-        return Response(producer_payments(user))
+        return Response(ProducerPaymentsSerializer(producer_payments(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -239,7 +245,7 @@ def producer_order_status_update(request, order_id: str):
     try:
         require_role(user, ["producer"])
         result = update_producer_order_status(user, order_id, next_status)
-        return Response({"message": "Order status updated", "data": result})
+        return Response({"message": "Order status updated.", "data": result})
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
     except LookupError as exc:
@@ -248,6 +254,8 @@ def producer_order_status_update(request, order_id: str):
         return _error_response("validation_error", str(exc), status.HTTP_400_BAD_REQUEST)
 
 
+# ── Dashboard — Admin ─────────────────────────────────────────────────────────
+
 @api_view(["GET"])
 def dashboards_admin(request):
     user = _require_user(request)
@@ -255,7 +263,7 @@ def dashboards_admin(request):
         return user
     try:
         require_role(user, ["admin"])
-        return Response(admin_summary(user))
+        return Response(AdminSummarySerializer(admin_summary(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -274,10 +282,10 @@ def dashboards_admin_reports(request):
         if date_to:
             date.fromisoformat(date_to)
         if date_from and date_to and date_from > date_to:
-            return _error_response("validation_error", "from date must be before to date", status.HTTP_400_BAD_REQUEST)
-        return Response(admin_reports(user, date_from=date_from, date_to=date_to))
+            return _error_response("validation_error", "from must be before to.", status.HTTP_400_BAD_REQUEST)
+        return Response(AdminReportsResponseSerializer(admin_reports(user, date_from=date_from, date_to=date_to)).data)
     except ValueError:
-        return _error_response("validation_error", "Dates must use YYYY-MM-DD", status.HTTP_400_BAD_REQUEST)
+        return _error_response("validation_error", "Dates must use YYYY-MM-DD.", status.HTTP_400_BAD_REQUEST)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -296,10 +304,10 @@ def admin_commission(request):
         if date_to:
             date.fromisoformat(date_to)
         if date_from and date_to and date_from > date_to:
-            return _error_response("validation_error", "from date must be before to date", status.HTTP_400_BAD_REQUEST)
-        return Response(admin_reports(user, date_from=date_from, date_to=date_to))
+            return _error_response("validation_error", "from must be before to.", status.HTTP_400_BAD_REQUEST)
+        return Response(AdminReportsResponseSerializer(admin_reports(user, date_from=date_from, date_to=date_to)).data)
     except ValueError:
-        return _error_response("validation_error", "Dates must use YYYY-MM-DD", status.HTTP_400_BAD_REQUEST)
+        return _error_response("validation_error", "Dates must use YYYY-MM-DD.", status.HTTP_400_BAD_REQUEST)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -311,7 +319,7 @@ def dashboards_admin_users(request):
         return user
     try:
         require_role(user, ["admin"])
-        return Response(admin_users(user))
+        return Response(AdminUsersResponseSerializer(admin_users(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -323,10 +331,12 @@ def dashboards_admin_database(request):
         return user
     try:
         require_role(user, ["admin"])
-        return Response(admin_database(user))
+        return Response(AdminDatabaseSerializer(admin_database(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
+
+# ── Dashboard — Customer ──────────────────────────────────────────────────────
 
 @api_view(["GET"])
 def dashboards_customer(request):
@@ -335,62 +345,44 @@ def dashboards_customer(request):
         return user
     try:
         require_role(user, ["customer"])
-        return Response(customer_summary(user))
+        return Response(CustomerSummarySerializer(customer_summary(user)).data)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
 
+# ── Orders (Checkout) ─────────────────────────────────────────────────────────
+
 @csrf_exempt
 @api_view(["POST"])
 def orders_create(request):
-    required = ["fullName", "email", "address", "city", "postalCode", "paymentMethod"]
-    missing = [field for field in required if not request.data.get(field)]
-    if missing:
-        return _error_response("validation_error", "Invalid request data", status.HTTP_400_BAD_REQUEST)
+    serializer = CheckoutOrderCreateSerializer(data={
+        "full_name": request.data.get("fullName"),
+        "email": request.data.get("email"),
+        "address": request.data.get("address"),
+        "city": request.data.get("city"),
+        "postal_code": request.data.get("postalCode"),
+        "payment_method": request.data.get("paymentMethod"),
+    })
+    if not serializer.is_valid():
+        return Response({"error": "validation_error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        supabase = get_supabase()
-        response = (
-            supabase.table("checkout_orders")
-            .insert(
-                {
-                    "full_name": request.data.get("fullName"),
-                    "email": request.data.get("email"),
-                    "address": request.data.get("address"),
-                    "city": request.data.get("city"),
-                    "postal_code": request.data.get("postalCode"),
-                    "payment_method": request.data.get("paymentMethod"),
-                    "status": "pending",
-                }
-            )
-            .execute()
-        )
-
-        if response.data:
-            return Response(
-                {
-                    "id": response.data[0].get("id"),
-                    "message": "Order created successfully",
-                    "data": response.data[0],
-                },
-                status=status.HTTP_201_CREATED,
-            )
-        return _error_response("validation_error", "Failed to create order", status.HTTP_400_BAD_REQUEST)
-    except Exception as exc:
-        return _error_response("http_error", str(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
+    order = serializer.save()
+    return Response(
+        {"id": order.id, "message": "Order created successfully.", "data": CheckoutOrderSerializer(order).data},
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["GET"])
 def orders_get(request, order_id: int):
     try:
-        supabase = get_supabase()
-        response = supabase.table("checkout_orders").select("*").eq("id", order_id).execute()
-        if response.data:
-            return Response(response.data[0])
-        return _error_response("http_error", "Order not found", status.HTTP_404_NOT_FOUND)
-    except Exception as exc:
-        return _error_response("http_error", str(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
+        order = CheckoutOrder.objects.get(id=order_id)
+        return Response(CheckoutOrderSerializer(order).data)
+    except CheckoutOrder.DoesNotExist:
+        return _error_response("not_found", "Order not found.", status.HTTP_404_NOT_FOUND)
 
+
+# ── AI Recommendations ────────────────────────────────────────────────────────
 
 @api_view(["GET"])
 def ai_recommendations(request):
@@ -399,7 +391,7 @@ def ai_recommendations(request):
     try:
         limit = int(raw_limit)
     except ValueError:
-        return _error_response("validation_error", "limit must be a number", status.HTTP_400_BAD_REQUEST)
+        return _error_response("validation_error", "limit must be a number.", status.HTTP_400_BAD_REQUEST)
 
     try:
         return Response(recommend_products(limit=limit, category=category))

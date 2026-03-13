@@ -1,7 +1,6 @@
 from datetime import date
 
-from app.repositories.auth_repo import find_user_by_email
-from app.supabase_client import get_supabase
+from api.models import CommissionReport, Order, Product, User
 
 
 def _safe_float(value) -> float:
@@ -11,84 +10,72 @@ def _safe_float(value) -> float:
         return 0.0
 
 
+def _get_producer(email: str) -> User:
+    try:
+        return User.objects.get(email=email, role="producer")
+    except User.DoesNotExist:
+        raise LookupError("Producer account not found")
+
+
+# ── Producer ────────────────────────────────────────────────────────────────
+
 def producer_summary(user: dict) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
+    try:
+        producer = _get_producer(user["email"])
+    except LookupError:
         return {"orders_today": 0, "low_stock_products": 0, "quick_links": ["products", "orders", "payments"]}
 
-    client = get_supabase()
-    today = date.today().isoformat()
-
-    orders_resp = client.table("orders").select("id").eq("producer_id", producer["id"]).eq("delivery_date", today).execute()
-    products_resp = client.table("products").select("id").eq("producer_id", producer["id"]).lt("stock", 10).execute()
+    today = date.today()
+    orders_today = Order.objects.filter(producer=producer, delivery_date=today).count()
+    low_stock = Product.objects.filter(producer=producer, stock__lt=10).count()
 
     return {
-        "orders_today": len(orders_resp.data or []),
-        "low_stock_products": len(products_resp.data or []),
+        "orders_today": orders_today,
+        "low_stock_products": low_stock,
         "quick_links": ["products", "orders", "payments"],
     }
 
 
 def producer_products(user: dict) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
+    try:
+        producer = _get_producer(user["email"])
+    except LookupError:
         return {"items": []}
-
-    client = get_supabase()
-    resp = (
-        client.table("products")
-        .select("id,name,category,price,stock,status")
-        .eq("producer_id", producer["id"])
-        .order("name")
-        .execute()
-    )
-    rows = resp.data or []
 
     items = [
         {
-            "id": row.get("id"),
-            "name": row.get("name"),
-            "category": row.get("category"),
-            "price": _safe_float(row.get("price")),
-            "stock": row.get("stock", 0),
-            "status": row.get("status", "Unknown"),
+            "id": p.id,
+            "name": p.name,
+            "category": p.category,
+            "price": _safe_float(p.price),
+            "stock": p.stock,
+            "status": p.status,
         }
-        for row in rows
+        for p in Product.objects.filter(producer=producer).order_by("name")
     ]
     return {"items": items}
 
 
 def producer_orders(user: dict) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
+    try:
+        producer = _get_producer(user["email"])
+    except LookupError:
         return {"items": []}
-
-    client = get_supabase()
-    resp = (
-        client.table("orders")
-        .select("order_id,customer_name,delivery_date,status")
-        .eq("producer_id", producer["id"])
-        .order("delivery_date")
-        .execute()
-    )
-    rows = resp.data or []
 
     items = [
         {
-            "order_id": row.get("order_id"),
-            "customer": row.get("customer_name"),
-            "delivery": row.get("delivery_date"),
-            "status": row.get("status", "Pending"),
+            "order_id": o.order_id,
+            "customer": o.customer_name,
+            "delivery": o.delivery_date.isoformat() if o.delivery_date else None,
+            "status": o.status,
         }
-        for row in rows
+        for o in Order.objects.filter(producer=producer).order_by("delivery_date")
     ]
     return {"items": items}
 
 
 def create_producer_product(user: dict, payload: dict) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
-        raise LookupError("Producer account not found")
+    producer = _get_producer(user["email"])
 
     name = str(payload.get("name", "")).strip()
     category = str(payload.get("category", "")).strip()
@@ -109,63 +96,50 @@ def create_producer_product(user: dict, payload: dict) -> dict:
     if stock < 0:
         raise ValueError("Stock must be zero or greater")
 
-    # Auto-align status with stock to prevent inconsistent inventory states.
     if stock == 0:
         status = "Out of Stock"
     elif status.lower() == "out of stock":
         status = "Available"
 
-    client = get_supabase()
-    response = (
-        client.table("products")
-        .insert(
-            {
-                "name": name,
-                "category": category,
-                "price": round(price, 2),
-                "stock": stock,
-                "status": status,
-                "producer_id": producer["id"],
-            }
-        )
-        .execute()
+    product = Product.objects.create(
+        name=name,
+        category=category,
+        price=round(price, 2),
+        stock=stock,
+        status=status,
+        producer=producer,
     )
-    rows = response.data or []
-    if not rows:
-        raise ValueError("Failed to create product")
-    return rows[0]
+    return {
+        "id": product.id,
+        "name": product.name,
+        "category": product.category,
+        "price": _safe_float(product.price),
+        "stock": product.stock,
+        "status": product.status,
+    }
 
 
 def update_producer_product(user: dict, product_id: int, payload: dict) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
-        raise LookupError("Producer account not found")
+    producer = _get_producer(user["email"])
 
-    client = get_supabase()
-    existing_resp = (
-        client.table("products")
-        .select("id,producer_id")
-        .eq("id", product_id)
-        .limit(1)
-        .execute()
-    )
-    existing_rows = existing_resp.data or []
-    if not existing_rows:
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
         raise LookupError("Product not found")
-    if existing_rows[0].get("producer_id") != producer["id"]:
+
+    if product.producer_id != producer.id:
         raise PermissionError("You can only edit your own products")
 
-    updates = {}
     if "name" in payload:
         name = str(payload.get("name", "")).strip()
         if not name:
             raise ValueError("Name cannot be empty")
-        updates["name"] = name
+        product.name = name
     if "category" in payload:
         category = str(payload.get("category", "")).strip()
         if not category:
             raise ValueError("Category cannot be empty")
-        updates["category"] = category
+        product.category = category
     if "price" in payload:
         try:
             price = float(payload.get("price"))
@@ -173,7 +147,7 @@ def update_producer_product(user: dict, product_id: int, payload: dict) -> dict:
             raise ValueError("Price must be numeric")
         if price < 0:
             raise ValueError("Price must be zero or greater")
-        updates["price"] = round(price, 2)
+        product.price = round(price, 2)
     if "stock" in payload:
         try:
             stock = int(payload.get("stock"))
@@ -181,106 +155,63 @@ def update_producer_product(user: dict, product_id: int, payload: dict) -> dict:
             raise ValueError("Stock must be an integer")
         if stock < 0:
             raise ValueError("Stock must be zero or greater")
-        updates["stock"] = stock
+        product.stock = stock
     if "status" in payload:
-        updates["status"] = str(payload.get("status", "")).strip() or "Available"
+        product.status = str(payload.get("status", "")).strip() or "Available"
 
-    if not updates:
-        raise ValueError("No valid fields provided for update")
+    # Keep status in sync with stock.
+    if "stock" in payload:
+        if product.stock == 0:
+            product.status = "Out of Stock"
+        elif product.status.lower() == "out of stock":
+            product.status = "Available"
 
-    # Keep status in sync with stock whenever stock is updated.
-    if "stock" in updates:
-        if updates["stock"] == 0:
-            updates["status"] = "Out of Stock"
-        elif str(updates.get("status", "")).strip().lower() == "out of stock":
-            updates["status"] = "Available"
-
-    response = (
-        client.table("products")
-        .update(updates)
-        .eq("id", product_id)
-        .eq("producer_id", producer["id"])
-        .execute()
-    )
-    rows = response.data or []
-    if not rows:
-        raise ValueError("Failed to update product")
-    return rows[0]
+    product.save()
+    return {
+        "id": product.id,
+        "name": product.name,
+        "category": product.category,
+        "price": _safe_float(product.price),
+        "stock": product.stock,
+        "status": product.status,
+    }
 
 
 def producer_order_detail(user: dict, order_id: str) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
-        raise LookupError("Producer account not found")
+    producer = _get_producer(user["email"])
 
-    client = get_supabase()
-    response = (
-        client.table("orders")
-        .select("id,order_id,customer_name,delivery_date,status,producer_id")
-        .eq("order_id", order_id)
-        .eq("producer_id", producer["id"])
-        .limit(1)
-        .execute()
-    )
-    rows = response.data or []
-    if not rows:
+    try:
+        order = Order.objects.get(order_id=order_id, producer=producer)
+    except Order.DoesNotExist:
         raise LookupError("Order not found")
-    row = rows[0]
 
     items = []
-    items_available = False
-    try:
-        # Optional relation for Sprint 2+: if order_items exists, include order contents.
-        items_resp = (
-            client.table("order_items")
-            .select("id,quantity,unit_price,product_id,products(name)")
-            .eq("order_id", row.get("id"))
-            .order("id")
-            .execute()
-        )
-        item_rows = items_resp.data or []
-        items_available = True
-        for item in item_rows:
-            product_name = "Product"
-            product_data = item.get("products")
-            if isinstance(product_data, dict):
-                product_name = product_data.get("name") or product_name
-            elif isinstance(product_data, list) and product_data:
-                product_name = product_data[0].get("name") or product_name
-
-            quantity = int(item.get("quantity") or 0)
-            unit_price = _safe_float(item.get("unit_price"))
-            items.append(
-                {
-                    "id": item.get("id"),
-                    "product_id": item.get("product_id"),
-                    "name": product_name,
-                    "quantity": quantity,
-                    "unit_price": unit_price,
-                    "line_total": round(quantity * unit_price, 2),
-                }
-            )
-    except Exception:
-        # Keep endpoint stable if order_items table isn't present yet.
-        items = []
-        items_available = False
+    for item in order.items.select_related("product").order_by("id"):
+        quantity = item.quantity
+        unit_price = _safe_float(item.unit_price)
+        items.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "name": item.product.name,
+            "quantity": quantity,
+            "unit_price": unit_price,
+            "line_total": round(quantity * unit_price, 2),
+        })
 
     return {
-        "id": row.get("id"),
-        "order_id": row.get("order_id"),
-        "customer": row.get("customer_name"),
-        "delivery": row.get("delivery_date"),
-        "status": row.get("status", "Pending"),
-        "items_available": items_available,
+        "id": order.id,
+        "order_id": order.order_id,
+        "customer": order.customer_name,
+        "delivery": order.delivery_date.isoformat() if order.delivery_date else None,
+        "status": order.status,
+        "items_available": len(items) > 0,
         "items": items,
-        "order_total": round(sum(item["line_total"] for item in items), 2),
+        "order_total": round(sum(i["line_total"] for i in items), 2),
     }
 
 
 def update_producer_order_status(user: dict, order_id: str, new_status: str) -> dict:
-    producer = find_user_by_email(user["email"])
-    if not producer:
-        raise LookupError("Producer account not found")
+    producer = _get_producer(user["email"])
 
     allowed_transitions = {
         "pending": ["confirmed"],
@@ -288,135 +219,99 @@ def update_producer_order_status(user: dict, order_id: str, new_status: str) -> 
         "ready": ["delivered"],
         "delivered": [],
     }
-    normalized_status = (new_status or "").strip().lower()
-    if normalized_status not in {"pending", "confirmed", "ready", "delivered"}:
+
+    normalized = (new_status or "").strip().lower()
+    if normalized not in {"pending", "confirmed", "ready", "delivered"}:
         raise ValueError("Invalid status")
 
-    client = get_supabase()
-    current_resp = (
-        client.table("orders")
-        .select("id,status,producer_id")
-        .eq("order_id", order_id)
-        .eq("producer_id", producer["id"])
-        .limit(1)
-        .execute()
-    )
-    current_rows = current_resp.data or []
-    if not current_rows:
+    try:
+        order = Order.objects.get(order_id=order_id, producer=producer)
+    except Order.DoesNotExist:
         raise LookupError("Order not found")
 
-    current = str(current_rows[0].get("status", "Pending")).strip().lower()
-    if normalized_status not in allowed_transitions.get(current, []):
-        raise ValueError(f"Invalid status transition from {current} to {normalized_status}")
+    current = order.status.strip().lower()
+    if normalized not in allowed_transitions.get(current, []):
+        raise ValueError(f"Invalid status transition from {current} to {normalized}")
 
-    response = (
-        client.table("orders")
-        .update({"status": normalized_status.capitalize()})
-        .eq("order_id", order_id)
-        .eq("producer_id", producer["id"])
-        .execute()
-    )
-    rows = response.data or []
-    if not rows:
-        raise ValueError("Failed to update order status")
-    row = rows[0]
-    return {
-        "order_id": row.get("order_id"),
-        "status": row.get("status"),
-    }
+    order.status = normalized.capitalize()
+    order.save()
+    return {"order_id": order.order_id, "status": order.status}
 
 
 def producer_payments(user: dict) -> dict:
-    # Placeholder shell for Sprint 1.
     return {"this_week": 2140.0, "pending": 610.0, "commission": 214.0}
 
 
+# ── Admin ────────────────────────────────────────────────────────────────────
+
 def admin_summary(user: dict) -> dict:
-    client = get_supabase()
-    users = client.table("users").select("id").execute().data or []
-    return {"commission_today": 482.0, "active_users": len(users), "open_flags": 3}
+    active_users = User.objects.filter(status="active").count()
+    return {"commission_today": 482.0, "active_users": active_users, "open_flags": 3}
 
 
 def admin_reports(user: dict, date_from: str | None = None, date_to: str | None = None) -> dict:
-    client = get_supabase()
-    query = client.table("commission_reports").select("report_date,total_orders,gross_amount,commission_amount").order(
-        "report_date", desc=True
-    )
+    qs = CommissionReport.objects.all()
     if date_from:
-        query = query.gte("report_date", date_from)
+        qs = qs.filter(report_date__gte=date_from)
     if date_to:
-        query = query.lte("report_date", date_to)
+        qs = qs.filter(report_date__lte=date_to)
 
-    rows = query.execute().data or []
-    normalized_rows = [
+    rows = [
         {
-            "date": row.get("report_date"),
-            "orders": int(row.get("total_orders") or 0),
-            "gross": float(row.get("gross_amount") or 0),
-            "commission": float(row.get("commission_amount") or 0),
+            "date": str(r.report_date),
+            "orders": r.total_orders,
+            "gross": float(r.gross_amount),
+            "commission": float(r.commission_amount),
         }
-        for row in rows
+        for r in qs
     ]
-    return {"rows": normalized_rows}
+    return {"rows": rows}
 
 
 def admin_users(user: dict) -> dict:
-    client = get_supabase()
-    resp = client.table("users").select("email,role,status").order("email").execute()
-    rows = resp.data or []
     items = [
         {
-            "email": row.get("email"),
-            "role": str(row.get("role", "")).capitalize(),
-            "status": str(row.get("status", "active")).capitalize(),
+            "email": u.email,
+            "role": u.role.capitalize(),
+            "status": u.status.capitalize(),
         }
-        for row in rows
+        for u in User.objects.all().order_by("email")
     ]
     return {"items": items}
 
 
 def admin_database(user: dict) -> dict:
-    client = get_supabase()
-    users = client.table("users").select("id,email,role,full_name,status").order("id").execute().data or []
-    products = (
-        client.table("products")
-        .select("id,name,category,price,stock,status,producer_id")
-        .order("id")
-        .execute()
-        .data
-        or []
+    users = list(User.objects.values("id", "email", "role", "full_name", "status").order_by("id"))
+    products = list(
+        Product.objects.values("id", "name", "category", "price", "stock", "status", "producer_id").order_by("id")
     )
-    orders = (
-        client.table("orders")
-        .select("id,order_id,customer_name,delivery_date,status,producer_id")
-        .order("id")
-        .execute()
-        .data
-        or []
+    orders = list(
+        Order.objects.values("id", "order_id", "customer_name", "delivery_date", "status", "producer_id").order_by("id")
     )
+    # Convert Decimal/date to JSON-serialisable types
+    for p in products:
+        p["price"] = float(p["price"])
+    for o in orders:
+        if o["delivery_date"]:
+            o["delivery_date"] = str(o["delivery_date"])
     return {"users": users, "products": products, "orders": orders}
 
+
+# ── Customer ─────────────────────────────────────────────────────────────────
 
 def customer_summary(user: dict) -> dict:
     return {"upcoming_deliveries": 2, "saved_producers": 4}
 
 
+# ── Marketplace ───────────────────────────────────────────────────────────────
+
 def marketplace_producers() -> dict:
-    client = get_supabase()
-    response = (
-        client.table("users")
-        .select("id,full_name,email,status")
-        .eq("role", "producer")
-        .order("full_name")
-        .execute()
-    )
-    rows = response.data or []
     items = [
         {
-            "id": row.get("id"),
-            "name": row.get("full_name") or (row.get("email", "").split("@")[0] if row.get("email") else "Producer"),
-            "status": row.get("status", "active"),
+            "id": u.id,
+            "name": u.full_name or u.email.split("@")[0],
+            "status": u.status,
         }
-        for row in rows
+        for u in User.objects.filter(role="producer").order_by("full_name")
     ]
     return {"items": items}
