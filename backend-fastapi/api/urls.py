@@ -1,8 +1,9 @@
 from django.urls import path
 
-from api import views
+from api import views, views_web
 
-urlpatterns = [
+# ── REST API endpoints (DRF) ──────────────────────────────────────────────────
+api_patterns = [
     path("health", views.health),
     path("auth/login", views.auth_login),
     path("auth/register", views.auth_register),
@@ -26,3 +27,47 @@ urlpatterns = [
     path("orders/<int:order_id>", views.orders_get),
     path("ai/recommendations", views.ai_recommendations),
 ]
+
+# ── Web (template) URL patterns ───────────────────────────────────────────────
+web_patterns = [
+    # Public pages
+    path("", views_web.HomeView.as_view(), name="home"),
+    path("marketplace/", views_web.MarketplaceView.as_view(), name="marketplace"),
+    path("for-producers/", views_web.ForProducersView.as_view(), name="for_producers"),
+    path("how-it-works/", views_web.HowItWorksView.as_view(), name="how_it_works"),
+    path("sustainability/", views_web.SustainabilityView.as_view(), name="sustainability"),
+
+    # Authentication
+    path("login/", views_web.LoginPageView.as_view(), name="login"),
+    path("logout/", views_web.LogoutView.as_view(), name="logout"),
+    path("register/", views_web.RegisterPageView.as_view(), name="register"),
+
+    # Customer
+    path("customer/", views_web.CustomerDashboardView.as_view(), name="customer_dashboard"),
+    path("products/", views_web.ProductListView.as_view(), name="product_list"),
+    path("cart/", views_web.CartView.as_view(), name="cart"),
+    path("cart/add/<int:product_id>/", views_web.AddToCartView.as_view(), name="cart_add"),
+    path("cart/remove/<int:product_id>/", views_web.RemoveFromCartView.as_view(), name="cart_remove"),
+    path("checkout/", views_web.CheckoutView.as_view(), name="checkout"),
+
+    # Producer
+    path("producer/", views_web.ProducerDashboardView.as_view(), name="producer_dashboard"),
+    path("producer/products/", views_web.ProducerProductsView.as_view(), name="producer_products"),
+    path("producer/products/<int:pk>/edit/", views_web.ProducerProductEditView.as_view(), name="producer_product_edit"),
+    path("producer/orders/", views_web.ProducerOrdersView.as_view(), name="producer_orders"),
+    path("producer/orders/<str:order_id>/", views_web.ProducerOrderDetailView.as_view(), name="producer_order_detail"),
+    path("producer/orders/<str:order_id>/status/", views_web.ProducerOrderStatusUpdateView.as_view(), name="producer_order_status"),
+    path("producer/payments/", views_web.ProducerPaymentsView.as_view(), name="producer_payments"),
+
+    # Admin panel (note: /admin/ is taken by Django admin)
+    path("admin-panel/", views_web.AdminDashboardView.as_view(), name="admin_dashboard"),
+    path("admin-panel/reports/", views_web.AdminReportsView.as_view(), name="admin_reports"),
+    path("admin-panel/users/", views_web.AdminUsersView.as_view(), name="admin_users"),
+    path("admin-panel/database/", views_web.AdminDatabaseView.as_view(), name="admin_database"),
+
+    # Errors
+    path("401/", views_web.view_401, name="unauthorized"),
+    path("403/", views_web.view_403, name="forbidden"),
+]
+
+urlpatterns = api_patterns + web_patterns

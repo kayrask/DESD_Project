@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}For Producers – DESD Marketplace{% endblock %}
+
+{% block content %}
+<section class="py-5" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
+  <div class="container text-white text-center py-3">
+    <h1 class="display-5 fw-bold">Grow Your Business with DESD</h1>
+    <p class="lead">Reach thousands of customers who value local, sustainable food.</p>
+    <a href="{% url 'register' %}" class="btn btn-light btn-lg mt-2">Start Selling Today</a>
+  </div>
+</section>
+
+<div class="container py-5">
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 p-4">
+        <i class="bi bi-bar-chart-fill fs-2 text-success mb-3"></i>
+        <h5 class="fw-bold">Manage Your Products</h5>
+        <p class="text-muted">Easily list, update, and manage your entire product catalogue from your dashboard.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 p-4">
+        <i class="bi bi-clipboard-check fs-2 text-success mb-3"></i>
+        <h5 class="fw-bold">Track Orders</h5>
+        <p class="text-muted">See incoming orders in real time and update their status from Pending to Delivered.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 p-4">
+        <i class="bi bi-cash-coin fs-2 text-success mb-3"></i>
+        <h5 class="fw-bold">Weekly Payments</h5>
+        <p class="text-muted">Get a clear view of your weekly earnings, pending payments, and commission breakdown.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 p-4">
+        <i class="bi bi-people-fill fs-2 text-success mb-3"></i>
+        <h5 class="fw-bold">Direct Customer Access</h5>
+        <p class="text-muted">Build lasting relationships with customers in your local area.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 p-4">
+        <i class="bi bi-graph-up-arrow fs-2 text-success mb-3"></i>
+        <h5 class="fw-bold">AI Recommendations</h5>
+        <p class="text-muted">Your products are featured in AI-powered recommendations shown to customers.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 p-4">
+        <i class="bi bi-shield-lock-fill fs-2 text-success mb-3"></i>
+        <h5 class="fw-bold">Secure Platform</h5>
+        <p class="text-muted">Your data and transactions are protected by our enterprise-grade security.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

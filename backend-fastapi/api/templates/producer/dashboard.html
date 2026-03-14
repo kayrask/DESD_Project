@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Producer Dashboard – DESD{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar py-4 px-3">
+      <div class="text-white fw-bold fs-6 mb-4 px-3">Producer Panel</div>
+      <a href="{% url 'producer_dashboard' %}" class="active"><i class="bi bi-grid me-2"></i>Dashboard</a>
+      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam me-2"></i>Products</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list me-2"></i>Orders</a>
+      <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack me-2"></i>Payments</a>
+    </div>
+
+    <!-- Main content -->
+    <div class="col-md-10 py-4 px-4">
+      <h3 class="fw-bold mb-1">Dashboard</h3>
+      <p class="text-muted">Welcome, {{ user.full_name }}</p>
+
+      <div class="row g-4 mt-2">
+        <div class="col-md-4">
+          <div class="card stat-card border-0 shadow-sm p-4">
+            <div class="text-muted small mb-1">Orders Today</div>
+            <div class="fs-2 fw-bold text-success">{{ summary.orders_today }}</div>
+            <div class="text-muted small">deliveries scheduled</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card stat-card border-0 shadow-sm p-4">
+            <div class="text-muted small mb-1">Low Stock Products</div>
+            <div class="fs-2 fw-bold {% if summary.low_stock_products > 0 %}text-warning{% else %}text-success{% endif %}">
+              {{ summary.low_stock_products }}
+            </div>
+            <div class="text-muted small">products below 10 units</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-4">
+        <div class="col-auto">
+          <a href="{% url 'producer_products' %}" class="btn btn-brand">
+            <i class="bi bi-box-seam me-1"></i> Manage Products
+          </a>
+        </div>
+        <div class="col-auto">
+          <a href="{% url 'producer_orders' %}" class="btn btn-outline-success">
+            <i class="bi bi-clipboard-list me-1"></i> View Orders
+          </a>
+        </div>
+        <div class="col-auto">
+          <a href="{% url 'producer_payments' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-cash-stack me-1"></i> Payments
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

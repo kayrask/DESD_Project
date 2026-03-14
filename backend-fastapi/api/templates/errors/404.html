@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}404 Not Found – DESD{% endblock %}
+{% block content %}
+<div class="container py-5 text-center">
+  <i class="bi bi-question-circle-fill text-muted" style="font-size:5rem;"></i>
+  <h2 class="mt-4 fw-bold">404 – Page Not Found</h2>
+  <p class="text-muted">The page you're looking for doesn't exist.</p>
+  <a href="{% url 'home' %}" class="btn btn-brand mt-2">Go Home</a>
+</div>
+{% endblock %}

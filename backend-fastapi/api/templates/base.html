@@ -1,0 +1,105 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DESD Marketplace{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --brand-green: #2d6a4f;
+      --brand-light: #52b788;
+      --brand-bg: #f8fdf9;
+    }
+    body { background-color: var(--brand-bg); }
+    .navbar-brand { font-weight: 700; color: var(--brand-green) !important; }
+    .nav-link { color: #333 !important; }
+    .nav-link:hover { color: var(--brand-green) !important; }
+    .btn-brand { background-color: var(--brand-green); color: #fff; border: none; }
+    .btn-brand:hover { background-color: #1b4332; color: #fff; }
+    .sidebar { min-height: 100vh; background-color: var(--brand-green); }
+    .sidebar a { color: rgba(255,255,255,0.85); text-decoration: none; display: block; padding: 0.6rem 1.2rem; border-radius: 6px; }
+    .sidebar a:hover, .sidebar a.active { background-color: rgba(255,255,255,0.15); color: #fff; }
+    .sidebar .sidebar-heading { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.5); padding: 0.6rem 1.2rem; margin-top: 1rem; }
+    .stat-card { border-left: 4px solid var(--brand-green); }
+    .badge-status-available { background-color: #d1e7dd; color: #0a3622; }
+    .badge-status-pending { background-color: #fff3cd; color: #664d03; }
+    .badge-status-confirmed { background-color: #cff4fc; color: #055160; }
+    .badge-status-ready { background-color: #d1e7dd; color: #0a3622; }
+    .badge-status-delivered { background-color: #e2e3e5; color: #41464b; }
+    .badge-status-out-of-stock { background-color: #f8d7da; color: #58151c; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'home' %}">
+      <i class="bi bi-tree-fill text-success me-1"></i> DESD Marketplace
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="{% url 'marketplace' %}">Marketplace</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'for_producers' %}">For Producers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'how_it_works' %}">How It Works</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'sustainability' %}">Sustainability</a></li>
+      </ul>
+      <ul class="navbar-nav ms-auto align-items-center">
+        {% if user.is_authenticated %}
+          <li class="nav-item me-2">
+            <span class="badge bg-secondary">{{ user.full_name }} ({{ user.role }})</span>
+          </li>
+          {% if user.role == "producer" %}
+            <li class="nav-item"><a class="nav-link" href="{% url 'producer_dashboard' %}"><i class="bi bi-grid me-1"></i>Dashboard</a></li>
+          {% elif user.role == "admin" %}
+            <li class="nav-item"><a class="nav-link" href="{% url 'admin_dashboard' %}"><i class="bi bi-shield me-1"></i>Admin Panel</a></li>
+          {% elif user.role == "customer" %}
+            <li class="nav-item"><a class="nav-link" href="{% url 'cart' %}"><i class="bi bi-cart me-1"></i>Cart</a></li>
+          {% endif %}
+          <li class="nav-item">
+            <form method="post" action="{% url 'logout' %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-secondary btn-sm ms-2">Log Out</button>
+            </form>
+          </li>
+        {% else %}
+          <li class="nav-item"><a class="nav-link" href="{% url 'login' %}">Sign In</a></li>
+          <li class="nav-item"><a class="btn btn-brand btn-sm ms-2" href="{% url 'register' %}">Get Started</a></li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- Flash messages -->
+{% if messages %}
+<div class="container mt-3">
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Page content -->
+{% block content %}{% endblock %}
+
+<footer class="bg-dark text-white-50 text-center py-4 mt-5">
+  <div class="container">
+    <small>&copy; 2026 DESD Marketplace &mdash; Distributed &amp; Enterprise Software Development</small>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>
