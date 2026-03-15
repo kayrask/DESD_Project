@@ -1,79 +1,138 @@
 {% extends 'base.html' %}
 {% block title %}DESD Marketplace – Fresh Local Produce{% endblock %}
 
+{% block extra_head %}
+<style>
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #14532d 60%, #15803d 100%);
+    padding: 5rem 0 6rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(22,163,74,.2) 0%, transparent 70%);
+    top: -150px; right: -150px;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 20px; padding: .35rem .9rem; font-size: .8rem;
+    color: rgba(255,255,255,.8); margin-bottom: 1.5rem; backdrop-filter: blur(10px);
+  }
+  .hero h1 { font-weight: 800; font-size: 3rem; letter-spacing: -0.03em; line-height: 1.1; color: #fff; margin-bottom: 1.25rem; }
+  .hero h1 span { color: #86efac; }
+  .hero p { color: rgba(255,255,255,.65); font-size: 1.05rem; max-width: 500px; line-height: 1.75; margin-bottom: 0; }
+  .hero-btns { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 2rem; }
+  .btn-hero-primary { background: var(--brand); color: #fff; font-weight: 700; border: none; border-radius: 10px; padding: .75rem 1.75rem; font-size: .95rem; text-decoration: none; transition: all .2s; display: inline-block; }
+  .btn-hero-primary:hover { background: #15803d; color: #fff; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(22,163,74,.4); }
+  .btn-hero-ghost { background: rgba(255,255,255,.08); color: #fff; font-weight: 600; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; padding: .75rem 1.75rem; font-size: .95rem; text-decoration: none; transition: all .2s; display: inline-block; backdrop-filter: blur(10px); }
+  .btn-hero-ghost:hover { background: rgba(255,255,255,.15); color: #fff; }
+  .hero-stats { border-top: 1px solid rgba(255,255,255,.1); padding-top: 2.5rem; margin-top: 2.5rem; display: flex; gap: 2.5rem; }
+  .hero-stat .num { font-size: 1.9rem; font-weight: 800; color: #fff; letter-spacing: -0.03em; }
+  .hero-stat .lbl { font-size: .78rem; color: rgba(255,255,255,.45); margin-top: .1rem; }
+  .section-label { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--brand); margin-bottom: .5rem; }
+  .section-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: .75rem; }
+  .feature-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 1.1rem; }
+  .feature-card { padding: 1.5rem; background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); height: 100%; transition: transform .15s, box-shadow .15s; }
+  .feature-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .cta-band { background: linear-gradient(135deg, #14532d, #15803d); border-radius: 20px; padding: 3.5rem; text-align: center; }
+  .btn-cta-white { background: #fff; color: var(--brand-darker); font-weight: 700; border: none; border-radius: 10px; padding: .75rem 1.75rem; font-size: .95rem; text-decoration: none; display: inline-block; transition: all .2s; }
+  .btn-cta-white:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.15); color: var(--brand-darker); }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- Hero -->
-<section class="py-5" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
-  <div class="container text-white text-center py-4">
-    <h1 class="display-4 fw-bold mb-3">Fresh Local Produce, Direct from Farmers</h1>
-    <p class="lead mb-4">Connect with trusted local producers. Order seasonal, sustainable food delivered to your door.</p>
-    <a href="{% url 'marketplace' %}" class="btn btn-light btn-lg me-3">Browse Marketplace</a>
-    <a href="{% url 'register' %}" class="btn btn-outline-light btn-lg">Join as Producer</a>
-  </div>
-</section>
-
-<!-- Stats -->
-<section class="py-5 bg-white">
-  <div class="container">
-    <div class="row text-center g-4">
-      <div class="col-md-4">
-        <div class="p-4">
-          <h2 class="display-5 fw-bold text-success">500+</h2>
-          <p class="text-muted">Local Producers</p>
-        </div>
+<section class="hero">
+  <div class="container position-relative">
+    <div class="col-lg-7">
+      <div class="hero-badge"><i class="bi bi-patch-check-fill" style="color:#86efac"></i> Trusted by 500+ local farms</div>
+      <h1>Fresh produce,<br><span>direct from farms</span><br>to your door.</h1>
+      <p>Connect with verified local producers. Order seasonal, sustainable food and support your community — all in one place.</p>
+      <div class="hero-btns">
+        <a href="{% url 'marketplace' %}" class="btn-hero-primary">Browse Marketplace</a>
+        <a href="{% url 'register' %}" class="btn-hero-ghost">Start selling &rarr;</a>
       </div>
-      <div class="col-md-4">
-        <div class="p-4">
-          <h2 class="display-5 fw-bold text-success">12k+</h2>
-          <p class="text-muted">Happy Customers</p>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="p-4">
-          <h2 class="display-5 fw-bold text-success">98%</h2>
-          <p class="text-muted">Satisfaction Rate</p>
-        </div>
+      <div class="hero-stats">
+        <div class="hero-stat"><div class="num">500+</div><div class="lbl">Local Producers</div></div>
+        <div class="hero-stat"><div class="num">12k+</div><div class="lbl">Customers</div></div>
+        <div class="hero-stat"><div class="num">98%</div><div class="lbl">Satisfaction</div></div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- Features -->
-<section class="py-5">
+<section style="padding:5rem 0;">
   <div class="container">
-    <h2 class="text-center fw-bold mb-5">Why Choose DESD Marketplace?</h2>
+    <div class="text-center mb-5">
+      <div class="section-label">Why DESD</div>
+      <h2 class="section-title">Everything you need to eat better</h2>
+      <p class="text-muted" style="max-width:480px;margin:0 auto;line-height:1.7;">A complete platform connecting local food producers directly with customers who care about what they eat.</p>
+    </div>
     <div class="row g-4">
       <div class="col-md-4">
-        <div class="card h-100 border-0 shadow-sm p-4">
-          <div class="text-success mb-3"><i class="bi bi-leaf fs-2"></i></div>
-          <h5 class="fw-bold">100% Local</h5>
-          <p class="text-muted">All produce sourced from verified local farms within your region.</p>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#dcfce7;color:var(--brand)"><i class="bi bi-leaf-fill"></i></div>
+          <h6 style="font-weight:700;letter-spacing:-.01em;margin-bottom:.5rem">100% Local</h6>
+          <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.7">All produce sourced from verified farms in your region — nothing from industrial warehouses.</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="card h-100 border-0 shadow-sm p-4">
-          <div class="text-success mb-3"><i class="bi bi-truck fs-2"></i></div>
-          <h5 class="fw-bold">Direct Delivery</h5>
-          <p class="text-muted">Producers deliver directly to customers — no middlemen, fresher food.</p>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#dbeafe;color:#2563eb"><i class="bi bi-lightning-charge-fill"></i></div>
+          <h6 style="font-weight:700;letter-spacing:-.01em;margin-bottom:.5rem">Fast Delivery</h6>
+          <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.7">Producers ship directly — no warehousing delays. Food reaches you at peak freshness.</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="card h-100 border-0 shadow-sm p-4">
-          <div class="text-success mb-3"><i class="bi bi-shield-check fs-2"></i></div>
-          <h5 class="fw-bold">Trusted &amp; Secure</h5>
-          <p class="text-muted">Every producer is verified. Every order is protected.</p>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#f3e8ff;color:#7c3aed"><i class="bi bi-shield-check-fill"></i></div>
+          <h6 style="font-weight:700;letter-spacing:-.01em;margin-bottom:.5rem">Trusted &amp; Secure</h6>
+          <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.7">Every producer is verified. Every transaction is protected. Your data stays private.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#fef3c7;color:#d97706"><i class="bi bi-stars"></i></div>
+          <h6 style="font-weight:700;letter-spacing:-.01em;margin-bottom:.5rem">AI Recommendations</h6>
+          <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.7">Smart suggestions tailored to your taste and what's in season near you right now.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-heart-fill"></i></div>
+          <h6 style="font-weight:700;letter-spacing:-.01em;margin-bottom:.5rem">Support Local</h6>
+          <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.7">Every purchase puts money directly into local hands and strengthens your community.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#dcfce7;color:var(--brand)"><i class="bi bi-recycle"></i></div>
+          <h6 style="font-weight:700;letter-spacing:-.01em;margin-bottom:.5rem">Sustainable</h6>
+          <p class="text-muted mb-0" style="font-size:.875rem;line-height:1.7">Shorter supply chains mean fewer food miles, less packaging, and a smaller footprint.</p>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
-<section class="py-5 bg-success text-white text-center">
+<!-- CTA band -->
+<section style="padding:0 0 5rem;">
   <div class="container">
-    <h2 class="fw-bold mb-3">Ready to get started?</h2>
-    <p class="mb-4">Join thousands of customers already eating better with DESD.</p>
-    <a href="{% url 'register' %}" class="btn btn-light btn-lg">Create Free Account</a>
+    <div class="cta-band">
+      <h2 style="font-weight:800;font-size:2rem;letter-spacing:-.03em;color:#fff;margin-bottom:.75rem">Ready to eat better?</h2>
+      <p style="color:rgba(255,255,255,.7);max-width:420px;margin:0 auto 2rem;line-height:1.75;">Join thousands of customers already enjoying fresh, local food delivered straight from farms.</p>
+      <div class="d-flex gap-3 justify-content-center flex-wrap">
+        <a href="{% url 'register' %}" class="btn-cta-white">Create free account</a>
+        <a href="{% url 'marketplace' %}" class="btn-hero-ghost">Browse marketplace &rarr;</a>
+      </div>
+    </div>
   </div>
 </section>
 {% endblock %}

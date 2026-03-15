@@ -2,49 +2,55 @@
 {% block title %}Admin Dashboard – DESD{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="row">
-    <div class="col-md-2 sidebar py-4 px-3">
-      <div class="text-white fw-bold fs-6 mb-4 px-3">Admin Panel</div>
-      <a href="{% url 'admin_dashboard' %}" class="active"><i class="bi bi-shield me-2"></i>Dashboard</a>
-      <a href="{% url 'admin_reports' %}"><i class="bi bi-bar-chart me-2"></i>Reports</a>
-      <a href="{% url 'admin_users' %}"><i class="bi bi-people me-2"></i>Users</a>
-      <a href="{% url 'admin_database' %}"><i class="bi bi-database me-2"></i>Database</a>
-      <div class="sidebar-heading">Django</div>
-      <a href="/admin/" target="_blank"><i class="bi bi-gear me-2"></i>Django Admin</a>
+<div class="container-fluid p-0" style="min-height:calc(100vh - 61px)">
+  <div class="row g-0 h-100">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);padding:.25rem .75rem;margin-bottom:.75rem">Admin Panel</div>
+      <a href="{% url 'admin_dashboard' %}" class="active"><i class="bi bi-shield-fill"></i> Dashboard</a>
+      <a href="{% url 'admin_reports' %}"><i class="bi bi-bar-chart-fill"></i> Reports</a>
+      <a href="{% url 'admin_users' %}"><i class="bi bi-people-fill"></i> Users</a>
+      <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
+      <span class="sidebar-label">Django</span>
+      <a href="/admin/" target="_blank"><i class="bi bi-gear-fill"></i> Django Admin</a>
     </div>
 
-    <div class="col-md-10 py-4 px-4">
-      <h3 class="fw-bold mb-1">Admin Dashboard</h3>
-      <p class="text-muted">Welcome, {{ user.full_name }}</p>
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header">
+        <h3>Admin Dashboard</h3>
+        <p>Welcome back, {{ user.full_name }}</p>
+      </div>
 
-      <div class="row g-4 mt-2">
+      <div class="row g-3 mb-4">
         <div class="col-md-4">
-          <div class="card stat-card border-0 shadow-sm p-4">
-            <div class="text-muted small mb-1">Commission Today</div>
-            <div class="fs-2 fw-bold text-success">£{{ summary.commission_today }}</div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-currency-pound"></i></div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Commission Today</div>
+            <div style="font-size:2.25rem;font-weight:800;letter-spacing:-.03em;color:var(--text);line-height:1.1;margin-top:.25rem">£{{ summary.commission_today }}</div>
           </div>
         </div>
         <div class="col-md-4">
-          <div class="card stat-card border-0 shadow-sm p-4">
-            <div class="text-muted small mb-1">Active Users</div>
-            <div class="fs-2 fw-bold text-primary">{{ summary.active_users }}</div>
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-people-fill"></i></div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Active Users</div>
+            <div style="font-size:2.25rem;font-weight:800;letter-spacing:-.03em;color:var(--text);line-height:1.1;margin-top:.25rem">{{ summary.active_users }}</div>
           </div>
         </div>
         <div class="col-md-4">
-          <div class="card stat-card border-0 shadow-sm p-4">
-            <div class="text-muted small mb-1">Open Flags</div>
-            <div class="fs-2 fw-bold {% if summary.open_flags > 0 %}text-danger{% else %}text-success{% endif %}">
-              {{ summary.open_flags }}
-            </div>
+          <div class="stat-card">
+            <div class="stat-icon {% if summary.open_flags > 0 %}red{% else %}green{% endif %}"><i class="bi bi-flag-fill"></i></div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Open Flags</div>
+            <div style="font-size:2.25rem;font-weight:800;letter-spacing:-.03em;color:{% if summary.open_flags > 0 %}#dc2626{% else %}var(--brand){% endif %};line-height:1.1;margin-top:.25rem">{{ summary.open_flags }}</div>
           </div>
         </div>
       </div>
 
-      <div class="row g-3 mt-4">
-        <div class="col-auto"><a href="{% url 'admin_reports' %}" class="btn btn-brand"><i class="bi bi-bar-chart me-1"></i> View Reports</a></div>
-        <div class="col-auto"><a href="{% url 'admin_users' %}" class="btn btn-outline-success"><i class="bi bi-people me-1"></i> Manage Users</a></div>
-        <div class="col-auto"><a href="{% url 'admin_database' %}" class="btn btn-outline-secondary"><i class="bi bi-database me-1"></i> Database View</a></div>
+      <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Quick Actions</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'admin_reports' %}" class="btn btn-brand"><i class="bi bi-bar-chart me-1"></i> View Reports</a>
+        <a href="{% url 'admin_users' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-people me-1"></i> Manage Users</a>
+        <a href="{% url 'admin_database' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-database me-1"></i> Database</a>
       </div>
     </div>
   </div>
