@@ -2,6 +2,10 @@ Django==5.1.5
 djangorestframework==3.15.2
 django-cors-headers==4.6.0
 python-dotenv==1.0.1
-passlib==1.7.4
-bcrypt==4.2.1
-supabase==2.11.0
+psycopg2-binary==2.9.10
+# ML / AI dependencies
+torch==2.2.2
+torchvision==0.17.2
+Pillow==10.3.0
+numpy==1.26.4
+scikit-learn==1.4.2

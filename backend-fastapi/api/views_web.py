@@ -1,0 +1,594 @@
+"""
+Django template-based views (MVT pattern).
+
+Models  → api/models.py
+Views   → here (class-based views using Django ORM directly)
+Templates → api/templates/
+"""
+
+from datetime import date
+
+from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.db.models import Sum
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views import View
+from django.views.generic import ListView, TemplateView
+
+from api.forms import (
+    CheckoutForm,
+    LoginForm,
+    OrderStatusForm,
+    ProductForm,
+    ReportFilterForm,
+    RegisterForm,
+)
+from api.models import (
+    CommissionReport,
+    Order,
+    OrderItem,
+    Product,
+    QualityAssessment,
+    User,
+)
+from app.services.ai_service import recommend_products
+from app.services.quality_service import (
+    assess_product_image,
+    get_ai_monitoring_stats,
+    get_producer_assessments,
+)
+
+
+# ── Role-enforcement mixins ───────────────────────────────────────────────────
+
+class _RoleMixin(LoginRequiredMixin, UserPassesTestMixin):
+    login_url = "/login/"
+    _required_role: str = ""
+
+    def test_func(self):
+        return self.request.user.role == self._required_role
+
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            return redirect("/login/")
+        return redirect("/403/")
+
+
+class CustomerRequiredMixin(_RoleMixin):
+    _required_role = "customer"
+
+
+class ProducerRequiredMixin(_RoleMixin):
+    _required_role = "producer"
+
+
+class AdminRequiredMixin(_RoleMixin):
+    _required_role = "admin"
+
+
+# ── Public views ──────────────────────────────────────────────────────────────
+
+class HomeView(TemplateView):
+    template_name = "home.html"
+
+
+class MarketplaceView(TemplateView):
+    template_name = "marketplace.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["products"] = Product.objects.filter(status="Available").order_by("name")[:12]
+        ctx["categories"] = list(Product.objects.values_list("category", flat=True).distinct())
+
+        customer_email = None
+        if self.request.user.is_authenticated and self.request.user.role == "customer":
+            customer_email = self.request.user.email
+
+        try:
+            recs = recommend_products(limit=4, customer_email=customer_email)
+            ctx["recommendations"] = recs.get("items", [])
+            ctx["rec_model_version"] = recs.get("model_version", "")
+        except Exception:
+            ctx["recommendations"] = []
+            ctx["rec_model_version"] = ""
+        return ctx
+
+
+class ForProducersView(TemplateView):
+    template_name = "for_producers.html"
+
+
+class HowItWorksView(TemplateView):
+    template_name = "how_it_works.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["steps"] = [
+            {"title": "Browse Products", "desc": "Explore fresh produce from verified local producers in your area."},
+            {"title": "Add to Cart", "desc": "Choose what you want and add it to your cart with a single click."},
+            {"title": "Place Your Order", "desc": "Complete checkout with your delivery details and preferred payment method."},
+            {"title": "Receive Delivery", "desc": "Your producer confirms and delivers directly to your door."},
+        ]
+        return ctx
+
+
+class SustainabilityView(TemplateView):
+    template_name = "sustainability.html"
+
+
+# ── Authentication ────────────────────────────────────────────────────────────
+
+class LoginPageView(View):
+    template_name = "login.html"
+
+    def get(self, request):
+        if request.user.is_authenticated:
+            return redirect("/")
+        return render(request, self.template_name, {"form": LoginForm()})
+
+    def post(self, request):
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            user = authenticate(
+                request,
+                username=form.cleaned_data["email"],
+                password=form.cleaned_data["password"],
+            )
+            if user is not None:
+                login(request, user)
+                messages.success(request, f"Welcome back, {user.full_name}!")
+                return redirect(request.GET.get("next", "/"))
+            form.add_error(None, "Invalid email or password.")
+        return render(request, self.template_name, {"form": form})
+
+
+class LogoutView(View):
+    def post(self, request):
+        logout(request)
+        messages.info(request, "You have been logged out.")
+        return redirect("/login/")
+
+
+class RegisterPageView(View):
+    template_name = "register.html"
+
+    def get(self, request):
+        if request.user.is_authenticated:
+            return redirect("/")
+        return render(request, self.template_name, {"form": RegisterForm()})
+
+    def post(self, request):
+        form = RegisterForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            if User.objects.filter(email=email).exists():
+                form.add_error("email", "An account with this email already exists.")
+                return render(request, self.template_name, {"form": form})
+            User.objects.create_user(
+                email=email,
+                password=form.cleaned_data["password"],
+                full_name=form.cleaned_data["full_name"],
+                role=form.cleaned_data["role"],
+            )
+            messages.success(request, "Account created! You can now log in.")
+            return redirect("/login/")
+        return render(request, self.template_name, {"form": form})
+
+
+# ── Customer views ────────────────────────────────────────────────────────────
+
+class CustomerDashboardView(CustomerRequiredMixin, TemplateView):
+    template_name = "customer/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        ctx["upcoming_deliveries"] = Order.objects.filter(
+            customer_name__icontains=user.full_name,
+            status__in=["Confirmed", "Ready"],
+        ).count()
+        ctx["recent_products"] = Product.objects.filter(status="Available").order_by("?")[:4]
+        return ctx
+
+
+class ProductListView(CustomerRequiredMixin, ListView):
+    template_name = "customer/products.html"
+    context_object_name = "products"
+
+    def get_queryset(self):
+        qs = Product.objects.filter(status="Available")
+        q = self.request.GET.get("q", "")
+        category = self.request.GET.get("category", "")
+        if q:
+            qs = qs.filter(name__icontains=q)
+        if category:
+            qs = qs.filter(category=category)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["categories"] = list(Product.objects.values_list("category", flat=True).distinct())
+        ctx["q"] = self.request.GET.get("q", "")
+        ctx["selected_category"] = self.request.GET.get("category", "")
+        return ctx
+
+
+class CartView(CustomerRequiredMixin, TemplateView):
+    template_name = "customer/cart.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        cart = self.request.session.get("cart", [])
+        ctx["cart"] = cart
+        ctx["total"] = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
+        return ctx
+
+
+class AddToCartView(CustomerRequiredMixin, View):
+    def post(self, request, product_id):
+        product = get_object_or_404(Product, pk=product_id, status="Available")
+        cart = request.session.get("cart", [])
+        for item in cart:
+            if item["product_id"] == product_id:
+                item["quantity"] += 1
+                request.session["cart"] = cart
+                messages.success(request, f"Added another {product.name} to cart.")
+                return redirect("/products/")
+        cart.append({
+            "product_id": product_id,
+            "name": product.name,
+            "price": float(product.price),
+            "quantity": 1,
+        })
+        request.session["cart"] = cart
+        messages.success(request, f"{product.name} added to cart.")
+        return redirect("/products/")
+
+
+class RemoveFromCartView(CustomerRequiredMixin, View):
+    def post(self, request, product_id):
+        cart = request.session.get("cart", [])
+        request.session["cart"] = [i for i in cart if i["product_id"] != product_id]
+        messages.info(request, "Item removed from cart.")
+        return redirect("/cart/")
+
+
+class CheckoutView(CustomerRequiredMixin, View):
+    template_name = "customer/checkout.html"
+
+    def get(self, request):
+        cart = request.session.get("cart", [])
+        total = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
+        return render(request, self.template_name, {"form": CheckoutForm(), "cart": cart, "total": total})
+
+    def post(self, request):
+        form = CheckoutForm(request.POST)
+        cart = request.session.get("cart", [])
+        total = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
+        if form.is_valid():
+            form.save()
+            request.session["cart"] = []
+            messages.success(request, "Order placed successfully! We will contact you shortly.")
+            return redirect("/customer/")
+        return render(request, self.template_name, {"form": form, "cart": cart, "total": total})
+
+
+# ── Producer views ────────────────────────────────────────────────────────────
+
+class ProducerDashboardView(ProducerRequiredMixin, TemplateView):
+    template_name = "producer/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        producer = self.request.user
+        ctx["orders_today"] = Order.objects.filter(
+            producer=producer,
+            delivery_date=date.today(),
+        ).count()
+        ctx["low_stock_count"] = Product.objects.filter(
+            producer=producer,
+            stock__lt=10,
+        ).count()
+        return ctx
+
+
+class ProducerProductsView(ProducerRequiredMixin, View):
+    template_name = "producer/products.html"
+
+    def _render(self, request, form=None):
+        products = Product.objects.filter(producer=request.user).order_by("name")
+        return render(request, self.template_name, {
+            "products": products,
+            "form": form or ProductForm(),
+        })
+
+    def get(self, request):
+        return self._render(request)
+
+    def post(self, request):
+        form = ProductForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, form=form)
+
+        data = form.cleaned_data
+        stock = data["stock"]
+        status = data["status"] if stock > 0 else "Out of Stock"
+
+        Product.objects.create(
+            name=data["name"],
+            category=data["category"],
+            price=data["price"],
+            stock=stock,
+            status=status,
+            producer=request.user,
+        )
+        messages.success(request, "Product created successfully.")
+        return redirect("/producer/products/")
+
+
+class ProducerProductEditView(ProducerRequiredMixin, View):
+    template_name = "producer/product_edit.html"
+
+    def _get_product(self, request, pk):
+        return get_object_or_404(Product, pk=pk, producer=request.user)
+
+    def get(self, request, pk):
+        product = self._get_product(request, pk)
+        return render(request, self.template_name, {"form": ProductForm(instance=product), "product": product})
+
+    def post(self, request, pk):
+        product = self._get_product(request, pk)
+        form = ProductForm(request.POST, instance=product)
+        if form.is_valid():
+            updated = form.save(commit=False)
+            if updated.stock == 0:
+                updated.status = "Out of Stock"
+            elif updated.status == "Out of Stock" and updated.stock > 0:
+                updated.status = "Available"
+            updated.save()
+            messages.success(request, "Product updated.")
+            return redirect("/producer/products/")
+        return render(request, self.template_name, {"form": form, "product": product})
+
+
+class ProducerOrdersView(ProducerRequiredMixin, TemplateView):
+    template_name = "producer/orders.html"
+
+    _next_status = {
+        "pending": "Confirmed",
+        "confirmed": "Ready",
+        "ready": "Delivered",
+    }
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        orders = Order.objects.filter(producer=self.request.user).order_by("delivery_date")
+        ctx["orders"] = [
+            {
+                "order_id": o.order_id,
+                "customer_name": o.customer_name,
+                "delivery_date": o.delivery_date,
+                "status": o.status,
+                # None when already Delivered — no further transitions allowed
+                "next_status": self._next_status.get(o.status.lower()),
+            }
+            for o in orders
+        ]
+        return ctx
+
+
+class ProducerOrderDetailView(ProducerRequiredMixin, TemplateView):
+    template_name = "producer/order_detail.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        order = get_object_or_404(Order, order_id=self.kwargs["order_id"], producer=self.request.user)
+        items = order.items.select_related("product").order_by("id")
+        ctx["order"] = order
+        ctx["items"] = [
+            {
+                "name": item.product.name,
+                "quantity": item.quantity,
+                "unit_price": float(item.unit_price),
+                "line_total": round(item.quantity * float(item.unit_price), 2),
+            }
+            for item in items
+        ]
+        ctx["order_total"] = round(sum(i["line_total"] for i in ctx["items"]), 2)
+        return ctx
+
+
+class ProducerOrderStatusUpdateView(ProducerRequiredMixin, View):
+    _allowed_transitions = {
+        "pending": "confirmed",
+        "confirmed": "ready",
+        "ready": "delivered",
+    }
+
+    def post(self, request, order_id):
+        form = OrderStatusForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Invalid status.")
+            return redirect("/producer/orders/")
+
+        order = get_object_or_404(Order, order_id=order_id, producer=request.user)
+        new_status = form.cleaned_data["status"].strip().lower()
+        current = order.status.strip().lower()
+
+        if self._allowed_transitions.get(current) != new_status:
+            messages.error(request, f"Cannot move order from {current} to {new_status}.")
+            return redirect("/producer/orders/")
+
+        order.status = new_status.capitalize()
+        order.save()
+        messages.success(request, "Order status updated.")
+        return redirect("/producer/orders/")
+
+
+class ProducerPaymentsView(ProducerRequiredMixin, TemplateView):
+    template_name = "producer/payments.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        producer = self.request.user
+        delivered_items = OrderItem.objects.filter(
+            order__producer=producer,
+            order__status="Delivered",
+        ).select_related("order")
+        gross = sum(float(i.unit_price) * i.quantity for i in delivered_items)
+        commission = round(gross * 0.10, 2)
+        ctx["payments"] = {
+            "this_week": round(gross, 2),
+            "pending": round(gross * 0.20, 2),
+            "commission": commission,
+        }
+        return ctx
+
+
+# ── Admin views ───────────────────────────────────────────────────────────────
+
+class AdminDashboardView(AdminRequiredMixin, TemplateView):
+    template_name = "admin_panel/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        today = date.today()
+        commission_today = CommissionReport.objects.filter(
+            report_date=today,
+        ).aggregate(total=Sum("commission_amount"))["total"] or 0
+        ctx["summary"] = {
+            "commission_today": round(float(commission_today), 2),
+            "active_users": User.objects.filter(status="active").count(),
+            "open_flags": QualityAssessment.objects.filter(
+                model_confidence__lt=0.60,
+            ).count(),
+        }
+        return ctx
+
+
+class AdminReportsView(AdminRequiredMixin, View):
+    template_name = "admin_panel/reports.html"
+
+    def get(self, request):
+        form = ReportFilterForm(request.GET or None)
+        qs = CommissionReport.objects.all()
+        if form.is_valid():
+            df = form.cleaned_data.get("date_from")
+            dt = form.cleaned_data.get("date_to")
+            if df:
+                qs = qs.filter(report_date__gte=df)
+            if dt:
+                qs = qs.filter(report_date__lte=dt)
+
+        rows = [
+            {
+                "date": str(r.report_date),
+                "orders": r.total_orders,
+                "gross": float(r.gross_amount),
+                "commission": float(r.commission_amount),
+            }
+            for r in qs
+        ]
+        return render(request, self.template_name, {
+            "form": form,
+            "rows": rows,
+            "total_orders": sum(r["orders"] for r in rows),
+            "total_gross": round(sum(r["gross"] for r in rows), 2),
+            "total_commission": round(sum(r["commission"] for r in rows), 2),
+        })
+
+
+class AdminUsersView(AdminRequiredMixin, ListView):
+    template_name = "admin_panel/users.html"
+    context_object_name = "users"
+
+    def get_queryset(self):
+        return User.objects.all().order_by("role", "email")
+
+
+class AdminDatabaseView(AdminRequiredMixin, TemplateView):
+    template_name = "admin_panel/database.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["db_users"] = User.objects.values(
+            "id", "email", "role", "full_name", "status",
+        ).order_by("id")
+        ctx["db_products"] = [
+            {**p, "price": float(p["price"])}
+            for p in Product.objects.values(
+                "id", "name", "category", "price", "stock", "status", "producer_id",
+            ).order_by("id")
+        ]
+        ctx["db_orders"] = [
+            {**o, "delivery_date": str(o["delivery_date"]) if o["delivery_date"] else None}
+            for o in Order.objects.values(
+                "id", "order_id", "customer_name", "delivery_date", "status", "producer_id",
+            ).order_by("id")
+        ]
+        return ctx
+
+
+# ── AI views ──────────────────────────────────────────────────────────────────
+
+class ProducerQualityCheckView(ProducerRequiredMixin, View):
+    template_name = "producer/quality_check.html"
+
+    def _render(self, request, result=None):
+        return render(request, self.template_name, {
+            "result": result,
+            "products": Product.objects.filter(producer=request.user),
+            "assessments": get_producer_assessments(request.user),
+        })
+
+    def get(self, request):
+        return self._render(request)
+
+    def post(self, request):
+        product_id = request.POST.get("product_id")
+        image_file = request.FILES.get("image")
+        if not product_id or not image_file:
+            messages.error(request, "Please select a product and upload an image.")
+            return self._render(request)
+        try:
+            result = assess_product_image(image_file, int(product_id), request.user)
+            messages.success(
+                request,
+                f"Quality check complete: Grade {result['grade']} "
+                f"({result['model_confidence']:.0%} confidence)",
+            )
+            return self._render(request, result=result)
+        except Product.DoesNotExist:
+            messages.error(request, "Product not found or does not belong to you.")
+        except Exception as exc:
+            messages.error(request, f"Assessment failed: {exc}")
+        return self._render(request)
+
+
+class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
+    template_name = "admin_panel/ai_monitoring.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stats"] = get_ai_monitoring_stats()
+        ctx["recent_assessments"] = (
+            QualityAssessment.objects
+            .select_related("product", "assessed_by")
+            .order_by("-assessed_at")[:20]
+        )
+        return ctx
+
+
+# ── Error views ───────────────────────────────────────────────────────────────
+
+def view_401(request):
+    return render(request, "errors/401.html", status=401)
+
+
+def view_403(request):
+    return render(request, "errors/403.html", status=403)
+
+
+def view_404(request, exception=None):
+    return render(request, "errors/404.html", status=404)

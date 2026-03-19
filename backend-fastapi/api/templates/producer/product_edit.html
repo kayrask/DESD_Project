@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Edit Product – DESD{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-7">
+      <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'producer_products' %}" class="btn btn-outline-secondary btn-sm me-3">
+          <i class="bi bi-arrow-left"></i> Back
+        </a>
+        <h3 class="fw-bold mb-0">Edit Product</h3>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h6 class="text-muted mb-3">Editing: {{ product.name }}</h6>
+          <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label fw-semibold">Product Name</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Category</label>
+                {{ form.category }}
+                {% if form.category.errors %}<div class="text-danger small">{{ form.category.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-semibold">Price (£)</label>
+                {{ form.price }}
+                {% if form.price.errors %}<div class="text-danger small">{{ form.price.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-semibold">Stock</label>
+                {{ form.stock }}
+                {% if form.stock.errors %}<div class="text-danger small">{{ form.stock.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Status</label>
+                {{ form.status }}
+                {% if form.status.errors %}<div class="text-danger small">{{ form.status.errors }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+              <button type="submit" class="btn btn-brand">Save Changes</button>
+              <a href="{% url 'producer_products' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

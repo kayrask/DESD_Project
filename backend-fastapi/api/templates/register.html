@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Create Account – DESD Marketplace{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+          <div class="text-center mb-4">
+            <i class="bi bi-person-plus-fill fs-1 text-success"></i>
+            <h3 class="fw-bold mt-2">Create Account</h3>
+            <p class="text-muted">Join the DESD Marketplace community</p>
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+          </div>
+          {% endif %}
+
+          <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="{{ form.full_name.id_for_label }}" class="form-label fw-semibold">Full Name</label>
+              {{ form.full_name }}
+              {% if form.full_name.errors %}<div class="text-danger small mt-1">{{ form.full_name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">Email Address</label>
+              {{ form.email }}
+              {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.role.id_for_label }}" class="form-label fw-semibold">I am a</label>
+              {{ form.role }}
+              {% if form.role.errors %}<div class="text-danger small mt-1">{{ form.role.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.password.id_for_label }}" class="form-label fw-semibold">Password</label>
+              {{ form.password }}
+              <div class="form-text">At least 8 characters, one uppercase, one lowercase, one digit.</div>
+              {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.confirm_password.id_for_label }}" class="form-label fw-semibold">Confirm Password</label>
+              {{ form.confirm_password }}
+              {% if form.confirm_password.errors %}<div class="text-danger small mt-1">{{ form.confirm_password.errors }}</div>{% endif %}
+            </div>
+
+            <div class="d-grid mt-4">
+              <button type="submit" class="btn btn-brand btn-lg">Create Account</button>
+            </div>
+          </form>
+
+          <hr>
+          <p class="text-center text-muted mb-0">
+            Already have an account? <a href="{% url 'login' %}" class="text-success">Sign in here</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

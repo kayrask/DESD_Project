@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Customer Dashboard – DESD{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <h2 class="fw-bold mb-1">My Dashboard</h2>
+  <p class="text-muted">Welcome back, {{ user.full_name }}</p>
+
+  <div class="row g-4 mt-2">
+    <div class="col-md-4">
+      <div class="card stat-card border-0 shadow-sm p-4">
+        <div class="text-muted small mb-1">Upcoming Deliveries</div>
+        <div class="fs-2 fw-bold text-success">{{ summary.upcoming_deliveries }}</div>
+        <div class="text-muted small">orders on the way</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card stat-card border-0 shadow-sm p-4">
+        <div class="text-muted small mb-1">Saved Producers</div>
+        <div class="fs-2 fw-bold text-success">{{ summary.saved_producers }}</div>
+        <div class="text-muted small">producers favourited</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-4">
+    <div class="col-auto">
+      <a href="{% url 'marketplace' %}" class="btn btn-brand">
+        <i class="bi bi-shop me-1"></i> Browse Marketplace
+      </a>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'product_list' %}" class="btn btn-outline-success">
+        <i class="bi bi-grid me-1"></i> All Products
+      </a>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'cart' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-cart me-1"></i> My Cart
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

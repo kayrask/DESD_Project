@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}How It Works – DESD Marketplace{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="text-center mb-5">
+    <h2 class="fw-bold">How DESD Marketplace Works</h2>
+    <p class="text-muted">From farm to your door in four simple steps.</p>
+  </div>
+  <div class="row g-4 justify-content-center">
+    {% for step in steps %}
+    <div class="col-md-3 text-center">
+      <div class="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center mb-3" style="width:60px;height:60px;font-size:1.5rem;font-weight:700;">
+        {{ forloop.counter }}
+      </div>
+      <h5 class="fw-bold">{{ step.title }}</h5>
+      <p class="text-muted">{{ step.desc }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% comment %}Steps are rendered via template context injected by view{% endcomment %}
+{% endblock %}

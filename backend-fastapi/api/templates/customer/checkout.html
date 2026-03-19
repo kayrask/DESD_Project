@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Checkout – DESD{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <h2 class="fw-bold mb-4">Checkout</h2>
+
+  <div class="row g-4">
+    <!-- Checkout form -->
+    <div class="col-md-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold py-3">Delivery &amp; Payment Details</div>
+        <div class="card-body p-4">
+          <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label fw-semibold">Full Name</label>
+                {{ form.full_name }}
+                {% if form.full_name.errors %}<div class="text-danger small">{{ form.full_name.errors }}</div>{% endif %}
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Email Address</label>
+                {{ form.email }}
+                {% if form.email.errors %}<div class="text-danger small">{{ form.email.errors }}</div>{% endif %}
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Street Address</label>
+                {{ form.address }}
+                {% if form.address.errors %}<div class="text-danger small">{{ form.address.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-7">
+                <label class="form-label fw-semibold">City</label>
+                {{ form.city }}
+                {% if form.city.errors %}<div class="text-danger small">{{ form.city.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-5">
+                <label class="form-label fw-semibold">Postal Code</label>
+                {{ form.postal_code }}
+                {% if form.postal_code.errors %}<div class="text-danger small">{{ form.postal_code.errors }}</div>{% endif %}
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Payment Method</label>
+                {{ form.payment_method }}
+                {% if form.payment_method.errors %}<div class="text-danger small">{{ form.payment_method.errors }}</div>{% endif %}
+              </div>
+              <div class="col-12">
+                <div class="form-check">
+                  {{ form.accept_terms }}
+                  <label class="form-check-label" for="{{ form.accept_terms.id_for_label }}">
+                    I agree to the terms and conditions
+                  </label>
+                  {% if form.accept_terms.errors %}<div class="text-danger small">{{ form.accept_terms.errors }}</div>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="d-grid mt-4">
+              <button type="submit" class="btn btn-brand btn-lg">Place Order</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Order summary -->
+    <div class="col-md-5">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold py-3">Order Summary</div>
+        <div class="card-body p-0">
+          {% if cart %}
+          <table class="table mb-0">
+            <tbody>
+              {% for item in cart %}
+              <tr>
+                <td>{{ item.name }} <span class="text-muted">×{{ item.quantity }}</span></td>
+                <td class="text-end">£{{ item.price }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+              <tr>
+                <th>Total</th>
+                <th class="text-end text-success">£{{ total }}</th>
+              </tr>
+            </tfoot>
+          </table>
+          {% else %}
+          <p class="p-3 text-muted">Cart is empty.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

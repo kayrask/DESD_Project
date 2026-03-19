@@ -1,0 +1,162 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DESD Marketplace{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #16a34a;
+      --brand-dark: #15803d;
+      --brand-darker: #14532d;
+      --brand-light: #dcfce7;
+      --sidebar-bg: #0f172a;
+      --sidebar-hover: rgba(255,255,255,0.08);
+      --surface: #ffffff;
+      --bg: #f1f5f9;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 10px 30px rgba(0,0,0,.06);
+    }
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 0.925rem; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Navbar */
+    .navbar { background: var(--surface) !important; border-bottom: 1px solid var(--border); padding: 0.75rem 0; position: sticky; top: 0; z-index: 1000; }
+    .navbar-brand { font-weight: 800; font-size: 1.1rem; color: var(--brand-darker) !important; letter-spacing: -0.02em; }
+    .nav-link { color: var(--muted) !important; font-weight: 500; font-size: 0.875rem; padding: 0.4rem 0.7rem !important; border-radius: 6px; transition: all 0.15s; }
+    .nav-link:hover { color: var(--text) !important; background: var(--bg); }
+    .btn-brand { background: var(--brand); color: #fff; font-weight: 600; border: none; border-radius: 8px; padding: 0.45rem 1rem; font-size: 0.875rem; transition: all 0.15s; }
+    .btn-brand:hover { background: var(--brand-dark); color: #fff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(22,163,74,.3); }
+    .btn-outline-brand { border: 1.5px solid var(--brand); color: var(--brand); font-weight: 600; border-radius: 8px; padding: 0.4rem 0.9rem; font-size: 0.875rem; background: transparent; transition: all 0.15s; }
+    .btn-outline-brand:hover { background: var(--brand-light); color: var(--brand-dark); }
+    .user-chip { background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+
+    /* Sidebar */
+    .sidebar { background: var(--sidebar-bg); min-height: calc(100vh - 61px); padding: 1.5rem 0.75rem; position: sticky; top: 61px; align-self: flex-start; }
+    .sidebar-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,.3); padding: 0.5rem 0.75rem; margin-top: 1rem; display: block; }
+    .sidebar a { display: flex; align-items: center; gap: 0.6rem; color: rgba(255,255,255,.65); text-decoration: none; padding: 0.55rem 0.75rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; transition: all 0.15s; margin-bottom: 2px; }
+    .sidebar a:hover { background: var(--sidebar-hover); color: #fff; }
+    .sidebar a.active { background: var(--brand); color: #fff; }
+
+    /* Cards & stats */
+    .card { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; box-shadow: var(--shadow); }
+    .stat-card { border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); padding: 1.5rem; transition: transform 0.15s, box-shadow 0.15s; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 1rem; }
+    .stat-icon.green { background: #dcfce7; color: var(--brand); }
+    .stat-icon.blue  { background: #dbeafe; color: #2563eb; }
+    .stat-icon.amber { background: #fef3c7; color: #d97706; }
+    .stat-icon.red   { background: #fee2e2; color: #dc2626; }
+
+    /* Table */
+    .table { font-size: 0.875rem; }
+    .table thead th { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border); padding: 0.875rem 1rem; background: #f8fafc; }
+    .table td { padding: 0.875rem 1rem; vertical-align: middle; }
+    .table-hover tbody tr:hover { background: #f8fafc; }
+
+    /* Badges */
+    .badge { font-weight: 600; font-size: 0.72rem; padding: 0.35em 0.7em; border-radius: 6px; }
+    .badge-available    { background: #dcfce7; color: #15803d; }
+    .badge-pending      { background: #fef3c7; color: #b45309; }
+    .badge-confirmed    { background: #dbeafe; color: #1d4ed8; }
+    .badge-ready        { background: #d1fae5; color: #065f46; }
+    .badge-delivered    { background: #e2e8f0; color: #475569; }
+    .badge-out-of-stock { background: #fee2e2; color: #991b1b; }
+    .badge-unavailable  { background: #f1f5f9; color: #64748b; }
+
+    /* Forms */
+    .form-control, .form-select { border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.9rem; padding: 0.55rem 0.875rem; transition: border-color 0.15s, box-shadow 0.15s; }
+    .form-control:focus, .form-select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+    .form-label { font-weight: 600; font-size: 0.825rem; color: #334155; margin-bottom: 0.375rem; }
+
+    /* Alerts */
+    .alert { border-radius: var(--radius); border: none; font-size: 0.875rem; }
+    .alert-success { background: #dcfce7; color: #166534; }
+    .alert-danger  { background: #fee2e2; color: #991b1b; }
+    .alert-info    { background: #dbeafe; color: #1e40af; }
+    .alert-warning { background: #fef3c7; color: #92400e; }
+
+    /* Page header */
+    .page-header { margin-bottom: 2rem; }
+    .page-header h2, .page-header h3 { font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+    .page-header p { color: var(--muted); font-size: 0.9rem; margin: 0; }
+
+    footer { background: var(--sidebar-bg); color: rgba(255,255,255,.35); font-size: 0.8rem; text-align: center; padding: 1.5rem; margin-top: auto; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
+      <span style="background:var(--brand);color:#fff;border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:.85rem;">
+        <i class="bi bi-tree-fill"></i>
+      </span>
+      DESD Marketplace
+    </a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav me-auto gap-1 ms-3">
+        <li class="nav-item"><a class="nav-link" href="{% url 'marketplace' %}">Marketplace</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'for_producers' %}">For Producers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'how_it_works' %}">How It Works</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'sustainability' %}">Sustainability</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2">
+        {% if user.is_authenticated %}
+          <span class="user-chip"><i class="bi bi-person-fill me-1"></i>{{ user.full_name }} &middot; {{ user.role }}</span>
+          {% if user.role == "producer" %}
+            <a href="{% url 'producer_dashboard' %}" class="btn btn-brand btn-sm">Dashboard</a>
+          {% elif user.role == "admin" %}
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-brand btn-sm">Admin Panel</a>
+          {% elif user.role == "customer" %}
+            <a href="{% url 'cart' %}" class="btn btn-outline-brand btn-sm"><i class="bi bi-cart2 me-1"></i>Cart</a>
+          {% endif %}
+          <form method="post" action="{% url 'logout' %}" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--muted);background:transparent;">Log out</button>
+          </form>
+        {% else %}
+          <a href="{% url 'login' %}" class="nav-link">Sign in</a>
+          <a href="{% url 'register' %}" class="btn btn-brand btn-sm">Get started</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+{% if messages %}
+<div class="container mt-3">
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show d-flex align-items-center gap-2" role="alert">
+    {% if message.tags == 'success' %}<i class="bi bi-check-circle-fill"></i>
+    {% elif message.tags == 'danger' or message.tags == 'error' %}<i class="bi bi-exclamation-circle-fill"></i>
+    {% else %}<i class="bi bi-info-circle-fill"></i>{% endif %}
+    <span>{{ message }}</span>
+    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% block content %}{% endblock %}
+
+<footer>
+  &copy; 2026 DESD Marketplace &nbsp;&middot;&nbsp; Distributed &amp; Enterprise Software Development
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

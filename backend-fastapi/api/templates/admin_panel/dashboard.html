@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard – DESD{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0" style="min-height:calc(100vh - 61px)">
+  <div class="row g-0 h-100">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);padding:.25rem .75rem;margin-bottom:.75rem">Admin Panel</div>
+      <a href="{% url 'admin_dashboard' %}" class="active"><i class="bi bi-shield-fill"></i> Dashboard</a>
+      <a href="{% url 'admin_reports' %}"><i class="bi bi-bar-chart-fill"></i> Reports</a>
+      <a href="{% url 'admin_users' %}"><i class="bi bi-people-fill"></i> Users</a>
+      <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
+      <span class="sidebar-label">Django</span>
+      <a href="/admin/" target="_blank"><i class="bi bi-gear-fill"></i> Django Admin</a>
+    </div>
+
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header">
+        <h3>Admin Dashboard</h3>
+        <p>Welcome back, {{ user.full_name }}</p>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-currency-pound"></i></div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Commission Today</div>
+            <div style="font-size:2.25rem;font-weight:800;letter-spacing:-.03em;color:var(--text);line-height:1.1;margin-top:.25rem">£{{ summary.commission_today }}</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-people-fill"></i></div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Active Users</div>
+            <div style="font-size:2.25rem;font-weight:800;letter-spacing:-.03em;color:var(--text);line-height:1.1;margin-top:.25rem">{{ summary.active_users }}</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-icon {% if summary.open_flags > 0 %}red{% else %}green{% endif %}"><i class="bi bi-flag-fill"></i></div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Open Flags</div>
+            <div style="font-size:2.25rem;font-weight:800;letter-spacing:-.03em;color:{% if summary.open_flags > 0 %}#dc2626{% else %}var(--brand){% endif %};line-height:1.1;margin-top:.25rem">{{ summary.open_flags }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Quick Actions</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'admin_reports' %}" class="btn btn-brand"><i class="bi bi-bar-chart me-1"></i> View Reports</a>
+        <a href="{% url 'admin_users' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-people me-1"></i> Manage Users</a>
+        <a href="{% url 'admin_database' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-database me-1"></i> Database</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Products – DESD{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <h2 class="fw-bold mb-1">All Products</h2>
+  <p class="text-muted mb-4">Browse available produce from our local producers.</p>
+
+  <!-- Search & filter form -->
+  <form method="get" class="row g-3 mb-4">
+    <div class="col-md-5">
+      <input type="text" name="q" class="form-control" placeholder="Search by name..." value="{{ q }}">
+    </div>
+    <div class="col-md-3">
+      <select name="category" class="form-select">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-brand w-100">Filter</button>
+    </div>
+    {% if q or selected_category %}
+    <div class="col-md-2">
+      <a href="{% url 'product_list' %}" class="btn btn-outline-secondary w-100">Clear</a>
+    </div>
+    {% endif %}
+  </form>
+
+  {% if products %}
+  <div class="row g-4">
+    {% for product in products %}
+    <div class="col-md-4 col-lg-3">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <span class="badge bg-light text-dark mb-2">{{ product.category }}</span>
+          <h6 class="fw-bold">{{ product.name }}</h6>
+          <p class="text-muted small">Stock: {{ product.stock }}</p>
+          <p class="fw-bold text-success fs-5 mb-0">£{{ product.price }}</p>
+        </div>
+        <div class="card-footer bg-white border-0 pb-3">
+          <form method="post" action="{% url 'cart_add' product.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-brand btn-sm w-100">
+              <i class="bi bi-cart-plus me-1"></i>Add to Cart
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-search fs-1"></i>
+    <p class="mt-2">No products match your search.</p>
+    <a href="{% url 'product_list' %}" class="btn btn-outline-success">View all products</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
