@@ -26,6 +26,7 @@ api_patterns = [
     path("orders/", views.orders_create),
     path("orders/<int:order_id>", views.orders_get),
     path("ai/recommendations", views.ai_recommendations),
+    path("ai/quality-check", views.ai_quality_check),
 ]
 
 # ── Web (template) URL patterns ───────────────────────────────────────────────
@@ -58,12 +59,14 @@ web_patterns = [
     path("producer/orders/<str:order_id>/", views_web.ProducerOrderDetailView.as_view(), name="producer_order_detail"),
     path("producer/orders/<str:order_id>/status/", views_web.ProducerOrderStatusUpdateView.as_view(), name="producer_order_status"),
     path("producer/payments/", views_web.ProducerPaymentsView.as_view(), name="producer_payments"),
+    path("producer/quality-check/", views_web.ProducerQualityCheckView.as_view(), name="producer_quality_check"),
 
     # Admin panel (note: /admin/ is taken by Django admin)
     path("admin-panel/", views_web.AdminDashboardView.as_view(), name="admin_dashboard"),
     path("admin-panel/reports/", views_web.AdminReportsView.as_view(), name="admin_reports"),
     path("admin-panel/users/", views_web.AdminUsersView.as_view(), name="admin_users"),
     path("admin-panel/database/", views_web.AdminDatabaseView.as_view(), name="admin_database"),
+    path("admin-panel/ai-monitoring/", views_web.AdminAIMonitoringView.as_view(), name="admin_ai_monitoring"),
 
     # Errors
     path("401/", views_web.view_401, name="unauthorized"),

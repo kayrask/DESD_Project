@@ -1,81 +1,109 @@
 {% extends 'base.html' %}
-{% block title %}Order Detail – DESD{% endblock %}
+{% block title %}Order {{ order.order_id }} – DESD{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-  <div class="d-flex align-items-center mb-4">
-    <a href="{% url 'producer_orders' %}" class="btn btn-outline-secondary btn-sm me-3">
-      <i class="bi bi-arrow-left"></i> Back to Orders
-    </a>
-    <h3 class="fw-bold mb-0">
-      Order {% if order %}{{ order.order_id }}{% else %}Not Found{% endif %}
-    </h3>
-  </div>
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
 
-  {% if order %}
-  <div class="row g-4">
-    <div class="col-md-4">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-bold py-3">Order Details</div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-5 text-muted">Order ID</dt>
-            <dd class="col-sm-7 fw-semibold">{{ order.order_id }}</dd>
-            <dt class="col-sm-5 text-muted">Customer</dt>
-            <dd class="col-sm-7">{{ order.customer_name }}</dd>
-            <dt class="col-sm-5 text-muted">Delivery</dt>
-            <dd class="col-sm-7">{{ order.delivery_date|default:"—" }}</dd>
-            <dt class="col-sm-5 text-muted">Status</dt>
-            <dd class="col-sm-7">
-              <span class="badge badge-status-{{ order.status|lower }}">{{ order.status }}</span>
-            </dd>
-            <dt class="col-sm-5 text-muted">Order Total</dt>
-            <dd class="col-sm-7 fw-bold text-success">£{{ order.order_total }}</dd>
-          </dl>
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);padding:.25rem .75rem;margin-bottom:.75rem">Producer</div>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
+      <a href="{% url 'producer_orders' %}" class="active"><i class="bi bi-clipboard-list"></i> Orders</a>
+      <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
+      <span class="sidebar-label">AI Tools</span>
+      <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
+    </div>
+
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="{% url 'producer_orders' %}" class="btn btn-sm btn-outline-secondary" style="border-radius:8px">
+          <i class="bi bi-arrow-left me-1"></i> Back
+        </a>
+        <div>
+          <h4 class="mb-0 fw-700" style="font-weight:700;letter-spacing:-.02em">Order {{ order.order_id }}</h4>
+          <p class="mb-0 text-muted" style="font-size:.85rem">{{ order.customer_name }}</p>
         </div>
+      </div>
+
+      <div class="row g-4">
+
+        <!-- Order meta -->
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 style="font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:1rem">Order Details</h6>
+              <dl class="row mb-0" style="font-size:.9rem">
+                <dt class="col-5 text-muted fw-normal">Order ID</dt>
+                <dd class="col-7 fw-600" style="font-weight:600">{{ order.order_id }}</dd>
+                <dt class="col-5 text-muted fw-normal">Customer</dt>
+                <dd class="col-7">{{ order.customer_name }}</dd>
+                <dt class="col-5 text-muted fw-normal">Delivery</dt>
+                <dd class="col-7">{{ order.delivery_date|default:"—" }}</dd>
+                <dt class="col-5 text-muted fw-normal">Status</dt>
+                <dd class="col-7">
+                  {% with s=order.status|lower %}
+                  {% if s == "pending" %}<span class="badge badge-pending">Pending</span>
+                  {% elif s == "confirmed" %}<span class="badge badge-confirmed">Confirmed</span>
+                  {% elif s == "ready" %}<span class="badge badge-ready">Ready</span>
+                  {% elif s == "delivered" %}<span class="badge badge-delivered">Delivered</span>
+                  {% else %}<span class="badge">{{ order.status }}</span>
+                  {% endif %}
+                  {% endwith %}
+                </dd>
+                <dt class="col-5 text-muted fw-normal">Total</dt>
+                <dd class="col-7 fw-700" style="font-weight:700;color:var(--brand)">£{{ order_total }}</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <!-- Line items -->
+        <div class="col-md-8">
+          <div class="card h-100">
+            <div class="card-body p-0">
+              <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border)">
+                <h6 style="font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0">Order Items</h6>
+              </div>
+              {% if items %}
+              <table class="table mb-0">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-end">Unit Price</th>
+                    <th class="text-end">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in items %}
+                  <tr>
+                    <td>{{ item.name }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-end">£{{ item.unit_price }}</td>
+                    <td class="text-end fw-600" style="font-weight:600">£{{ item.line_total }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot style="background:#f8fafc;border-top:2px solid var(--border)">
+                  <tr>
+                    <th colspan="3" class="text-end" style="font-size:.85rem">Order Total</th>
+                    <th class="text-end" style="color:var(--brand)">£{{ order_total }}</th>
+                  </tr>
+                </tfoot>
+              </table>
+              {% else %}
+              <p class="p-4 text-muted mb-0">No items recorded for this order.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
-    <div class="col-md-8">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-bold py-3">Order Items</div>
-        <div class="card-body p-0">
-          {% if order.items %}
-          <table class="table mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Product</th>
-                <th class="text-center">Qty</th>
-                <th class="text-end">Unit Price</th>
-                <th class="text-end">Line Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in order.items %}
-              <tr>
-                <td>{{ item.product_name }}</td>
-                <td class="text-center">{{ item.quantity }}</td>
-                <td class="text-end">£{{ item.unit_price }}</td>
-                <td class="text-end fw-semibold">£{{ item.line_total }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot class="table-light">
-              <tr>
-                <th colspan="3" class="text-end">Total</th>
-                <th class="text-end text-success">£{{ order.order_total }}</th>
-              </tr>
-            </tfoot>
-          </table>
-          {% else %}
-          <p class="p-3 text-muted">No items in this order.</p>
-          {% endif %}
-        </div>
-      </div>
-    </div>
   </div>
-  {% else %}
-  <div class="alert alert-warning">Order not found.</div>
-  {% endif %}
 </div>
 {% endblock %}

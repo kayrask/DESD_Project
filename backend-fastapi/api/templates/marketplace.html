@@ -1,13 +1,27 @@
 {% extends 'base.html' %}
 {% block title %}Marketplace – DESD{% endblock %}
 
+{% block extra_head %}
+<style>
+  .rec-card { border-radius: 12px; border: 1.5px solid #bbf7d0; background: linear-gradient(135deg, #f0fdf4, #dcfce7); padding: 1.1rem; transition: transform .15s, box-shadow .15s; }
+  .rec-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(22,163,74,.15); }
+  .rec-score { font-size: .7rem; font-weight: 700; color: var(--brand); background: rgba(22,163,74,.12); border-radius: 20px; padding: .2em .6em; }
+  .product-card { border-radius: 12px; border: 1px solid var(--border); background: #fff; overflow: hidden; transition: transform .15s, box-shadow .15s; }
+  .product-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .product-body { padding: 1rem; }
+  .category-pill { font-size: .72rem; font-weight: 600; background: #f1f5f9; color: var(--muted); border-radius: 20px; padding: .2em .65em; display: inline-block; margin-bottom: .5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-5">
-  <h2 class="fw-bold mb-1">Browse the Marketplace</h2>
-  <p class="text-muted mb-4">Discover fresh, locally grown produce from verified producers.</p>
+  <div class="page-header">
+    <h2>Marketplace</h2>
+    <p>Fresh, locally grown produce from verified producers near you.</p>
+  </div>
 
   <!-- Search & filter -->
-  <form method="get" class="row g-3 mb-4">
+  <form method="get" class="row g-2 mb-5 align-items-center">
     <div class="col-md-5">
       <input type="text" name="q" class="form-control" placeholder="Search products..." value="{{ request.GET.q|default:'' }}">
     </div>
@@ -22,21 +36,45 @@
     <div class="col-md-2">
       <button type="submit" class="btn btn-brand w-100">Search</button>
     </div>
+    {% if request.GET.q or request.GET.category %}
+    <div class="col-md-2">
+      <a href="{% url 'marketplace' %}" class="btn btn-outline-secondary w-100">Clear</a>
+    </div>
+    {% endif %}
   </form>
 
-  <!-- AI recommendations (if available) -->
+  <!-- AI recommendations -->
   {% if recommendations %}
   <div class="mb-5">
-    <h5 class="fw-bold mb-3"><i class="bi bi-stars text-warning me-2"></i>Recommended for You</h5>
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <span style="background:#fef3c7;color:#d97706;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center">
+        <i class="bi bi-stars"></i>
+      </span>
+      <div>
+        <div style="font-weight:700;font-size:.95rem">Recommended for You</div>
+        <div style="font-size:.75rem;color:var(--muted)">Powered by {{ rec_model_version }} · ranked by popularity &amp; preference</div>
+      </div>
+    </div>
     <div class="row g-3">
       {% for rec in recommendations %}
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <h6 class="fw-bold">{{ rec.name }}</h6>
-            <span class="badge bg-light text-dark">{{ rec.category }}</span>
-            <div class="mt-2 fw-bold text-success">£{{ rec.price }}</div>
+        <div class="rec-card">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <span class="category-pill">{{ rec.category }}</span>
+            <span class="rec-score">Score {{ rec.score }}</span>
           </div>
+          <h6 style="font-weight:700;margin-bottom:.25rem">{{ rec.name }}</h6>
+          <div style="font-size:1.1rem;font-weight:800;color:var(--brand-darker);margin-bottom:.75rem">£{{ rec.price }}</div>
+          {% if user.is_authenticated and user.role == "customer" %}
+          <form method="post" action="{% url 'cart_add' rec.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-brand btn-sm w-100" style="font-size:.8rem">
+              <i class="bi bi-cart-plus me-1"></i>Add to Cart
+            </button>
+          </form>
+          {% else %}
+          <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-sm w-100" style="font-size:.8rem">Sign in to order</a>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -44,19 +82,24 @@
   </div>
   {% endif %}
 
-  <!-- Product grid -->
+  <!-- All products -->
+  <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1rem">
+    All Products {% if products %}({{ products|length }}){% endif %}
+  </div>
   {% if products %}
   <div class="row g-4">
     {% for product in products %}
     <div class="col-md-4 col-lg-3">
-      <div class="card h-100 border-0 shadow-sm">
-        <div class="card-body">
-          <span class="badge bg-light text-dark mb-2">{{ product.category }}</span>
-          <h6 class="fw-bold">{{ product.name }}</h6>
-          <p class="text-muted small">In stock: {{ product.stock }}</p>
-          <div class="fw-bold text-success fs-5">£{{ product.price }}</div>
+      <div class="product-card h-100">
+        <div class="product-body">
+          <span class="category-pill">{{ product.category }}</span>
+          <h6 style="font-weight:700;margin-bottom:.25rem">{{ product.name }}</h6>
+          <div style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
+            <i class="bi bi-box-seam me-1"></i>{{ product.stock }} in stock
+          </div>
+          <div style="font-size:1.25rem;font-weight:800;color:var(--brand-darker)">£{{ product.price }}</div>
         </div>
-        <div class="card-footer bg-white border-0">
+        <div style="padding:.75rem 1rem;border-top:1px solid var(--border);">
           {% if user.is_authenticated and user.role == "customer" %}
           <form method="post" action="{% url 'cart_add' product.id %}">
             {% csrf_token %}
@@ -65,7 +108,7 @@
             </button>
           </form>
           {% else %}
-          <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-sm w-100">Sign in to Order</a>
+          <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-sm w-100">Sign in to order</a>
           {% endif %}
         </div>
       </div>
@@ -74,29 +117,9 @@
   </div>
   {% else %}
   <div class="text-center py-5 text-muted">
-    <i class="bi bi-search fs-1"></i>
-    <p class="mt-2">No products found. Try adjusting your search.</p>
-  </div>
-  {% endif %}
-
-  <!-- Customer summary (if logged in as customer) -->
-  {% if customer_data %}
-  <div class="mt-5 p-4 bg-white rounded shadow-sm">
-    <h5 class="fw-bold"><i class="bi bi-person-check me-2 text-success"></i>Your Marketplace</h5>
-    <div class="row mt-3">
-      <div class="col-md-4">
-        <div class="stat-card card border-0 shadow-sm p-3">
-          <div class="text-muted small">Upcoming Deliveries</div>
-          <div class="fs-4 fw-bold">{{ customer_data.upcoming_deliveries }}</div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="stat-card card border-0 shadow-sm p-3">
-          <div class="text-muted small">Saved Producers</div>
-          <div class="fs-4 fw-bold">{{ customer_data.saved_producers }}</div>
-        </div>
-      </div>
-    </div>
+    <i class="bi bi-search" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:1rem"></i>
+    <p>No products found. Try adjusting your search.</p>
+    <a href="{% url 'marketplace' %}" class="btn btn-outline-secondary btn-sm">Clear filters</a>
   </div>
   {% endif %}
 </div>

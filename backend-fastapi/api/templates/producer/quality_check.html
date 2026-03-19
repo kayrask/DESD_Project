@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+{% block title %}AI Quality Check – DESD{% endblock %}
+
+{% block extra_head %}
+<style>
+  .grade-badge { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; margin: 0 auto 1rem; }
+  .grade-A { background: #dcfce7; color: #15803d; }
+  .grade-B { background: #fef3c7; color: #b45309; }
+  .grade-C { background: #fee2e2; color: #dc2626; }
+  .score-bar { height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; margin-top: .3rem; }
+  .score-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+  .upload-zone { border: 2px dashed var(--border); border-radius: 14px; padding: 2.5rem; text-align: center; transition: border-color .2s, background .2s; cursor: pointer; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--brand); background: var(--brand-light); }
+  .upload-zone i { font-size: 2.5rem; color: var(--muted); display: block; margin-bottom: .75rem; }
+  .assessment-row td { font-size: .82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <span class="sidebar-label">Producer</span>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list"></i> Orders</a>
+      <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
+      <span class="sidebar-label">AI Tools</span>
+      <a href="{% url 'producer_quality_check' %}" class="active"><i class="bi bi-stars"></i> Quality Check</a>
+    </div>
+
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header">
+        <h3>AI Quality Check</h3>
+        <p>Upload a product photo — the AI grades it A / B / C based on colour, size, and ripeness.</p>
+      </div>
+
+      <div class="row g-4">
+        <!-- Upload form -->
+        <div class="col-lg-5">
+          <div class="card p-4">
+            <h6 style="font-weight:700;margin-bottom:1.25rem">Upload Image</h6>
+            <form method="post" enctype="multipart/form-data">
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label">Select Product</label>
+                <select name="product_id" class="form-select" required>
+                  <option value="">-- choose a product --</option>
+                  {% for p in products %}
+                  <option value="{{ p.id }}">{{ p.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Product Image</label>
+                <div class="upload-zone" id="uploadZone">
+                  <i class="bi bi-cloud-upload"></i>
+                  <p style="font-size:.875rem;color:var(--muted);margin:0">Drag &amp; drop or <strong>click to browse</strong></p>
+                  <p style="font-size:.75rem;color:var(--muted);margin-top:.3rem">JPG, PNG — max 10 MB</p>
+                  <input type="file" name="image" id="imageInput" accept="image/*" style="display:none" required>
+                </div>
+                <p id="fileName" style="font-size:.8rem;color:var(--brand);margin-top:.5rem;display:none"></p>
+              </div>
+              <button type="submit" class="btn btn-brand w-100">
+                <i class="bi bi-stars me-1"></i> Run Quality Check
+              </button>
+            </form>
+
+            <!-- Responsible AI notice -->
+            <div class="alert alert-info mt-3 py-2" style="font-size:.8rem">
+              <i class="bi bi-info-circle me-1"></i>
+              <strong>Responsible AI:</strong> Results are indicative only. Low-confidence assessments are flagged.
+              You can always override the grade using the notes field.
+            </div>
+          </div>
+        </div>
+
+        <!-- Result -->
+        <div class="col-lg-7">
+          {% if result %}
+          <div class="card p-4 mb-4">
+            <h6 style="font-weight:700;margin-bottom:1.5rem">Assessment Result — {{ result.product_name }}</h6>
+            <div class="grade-badge grade-{{ result.grade }}">{{ result.grade }}</div>
+            <p class="text-center text-muted" style="font-size:.875rem;margin-bottom:1.75rem">
+              {% if result.grade == 'A' %}Premium quality – eligible for featured listing{% elif result.grade == 'B' %}Standard quality – list at normal price{% else %}Below standard – consider a discount{% endif %}
+            </p>
+
+            {% if result.warnings %}
+            <div class="alert alert-warning py-2 mb-3" style="font-size:.8rem">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              {% for w in result.warnings %}{{ w }}{% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="row g-3 mb-3">
+              <div class="col-4">
+                <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">COLOUR</div>
+                <div style="font-weight:700;font-size:1.1rem">{{ result.color_score }}%</div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.color_score }}%;background:{% if result.color_score >= 85 %}var(--brand){% elif result.color_score >= 75 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+              </div>
+              <div class="col-4">
+                <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">SIZE</div>
+                <div style="font-weight:700;font-size:1.1rem">{{ result.size_score }}%</div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.size_score }}%;background:{% if result.size_score >= 90 %}var(--brand){% elif result.size_score >= 80 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+              </div>
+              <div class="col-4">
+                <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">RIPENESS</div>
+                <div style="font-weight:700;font-size:1.1rem">{{ result.ripeness_score }}%</div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.ripeness_score }}%;background:{% if result.ripeness_score >= 80 %}var(--brand){% elif result.ripeness_score >= 70 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between" style="font-size:.8rem;color:var(--muted)">
+              <span><i class="bi bi-cpu me-1"></i>Model: {{ result.model_version }}</span>
+              <span>Confidence: {{ result.model_confidence|floatformat:1 }}%</span>
+            </div>
+            {% if result.notes %}
+            <div class="alert alert-success mt-3 py-2" style="font-size:.82rem">{{ result.notes }}</div>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="card p-4 d-flex align-items-center justify-content-center" style="min-height:280px;border-style:dashed!important;">
+            <div class="text-center text-muted">
+              <i class="bi bi-stars" style="font-size:3rem;opacity:.3;display:block;margin-bottom:1rem"></i>
+              <p style="font-size:.9rem">Upload an image to see the AI grade result</p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- History -->
+      {% if assessments %}
+      <div class="card mt-4">
+        <div class="card-body p-0">
+          <div class="p-3 pb-0">
+            <h6 style="font-weight:700;margin:0">Assessment History</h6>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Product</th><th>Grade</th><th>Colour</th><th>Size</th><th>Ripeness</th><th>Confidence</th><th>Model</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in assessments %}
+                <tr class="assessment-row">
+                  <td><strong>{{ a.product_name }}</strong></td>
+                  <td><span class="badge grade-{{ a.grade }}" style="font-size:.8rem;padding:.4em .7em">{{ a.grade }}</span></td>
+                  <td>{{ a.color_score }}%</td>
+                  <td>{{ a.size_score }}%</td>
+                  <td>{{ a.ripeness_score }}%</td>
+                  <td>{{ a.model_confidence|floatformat:1 }}%</td>
+                  <td style="color:var(--muted)">{{ a.model_version }}</td>
+                  <td style="color:var(--muted)">{{ a.assessed_at|date:"d M Y" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const zone = document.getElementById('uploadZone');
+  const input = document.getElementById('imageInput');
+  const label = document.getElementById('fileName');
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; showName(e.dataTransfer.files[0].name); }
+  });
+  input.addEventListener('change', () => { if (input.files[0]) showName(input.files[0].name); });
+  function showName(n) { label.textContent = '✓ ' + n; label.style.display = 'block'; }
+</script>
+{% endblock %}

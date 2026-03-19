@@ -132,3 +132,35 @@ class CommissionReport(models.Model):
 
     def __str__(self):
         return f"Report {self.report_date} — {self.total_orders} orders"
+
+
+GRADE_CHOICES = [
+    ("A", "Grade A – Premium"),
+    ("B", "Grade B – Standard"),
+    ("C", "Grade C – Discounted"),
+]
+
+
+class QualityAssessment(models.Model):
+    """
+    Stores the result of an AI quality check performed on a producer's product image.
+    The CNN model classifies the image as Healthy/Rotten and maps confidence to A/B/C.
+    """
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="quality_assessments")
+    assessed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="assessments")
+    image = models.ImageField(upload_to="quality_checks/")
+    grade = models.CharField(max_length=1, choices=GRADE_CHOICES)
+    color_score = models.FloatField(help_text="Colour uniformity score 0–100")
+    size_score = models.FloatField(help_text="Size / shape score 0–100")
+    ripeness_score = models.FloatField(help_text="Ripeness / freshness score 0–100")
+    model_confidence = models.FloatField(help_text="CNN softmax confidence 0–1")
+    model_version = models.CharField(max_length=50, default="mobilenetv2-v1")
+    is_healthy = models.BooleanField()
+    notes = models.TextField(blank=True, default="")
+    assessed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-assessed_at"]
+
+    def __str__(self):
+        return f"{self.product.name} → Grade {self.grade} ({self.model_confidence:.0%} conf)"

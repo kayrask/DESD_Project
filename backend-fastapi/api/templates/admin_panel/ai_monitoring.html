@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}AI Monitoring – DESD Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <span class="sidebar-label">Admin Panel</span>
+      <a href="{% url 'admin_dashboard' %}"><i class="bi bi-shield-fill"></i> Dashboard</a>
+      <a href="{% url 'admin_reports' %}"><i class="bi bi-bar-chart-fill"></i> Reports</a>
+      <a href="{% url 'admin_users' %}"><i class="bi bi-people-fill"></i> Users</a>
+      <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
+      <span class="sidebar-label">AI</span>
+      <a href="{% url 'admin_ai_monitoring' %}" class="active"><i class="bi bi-stars"></i> AI Monitoring</a>
+      <span class="sidebar-label">Django</span>
+      <a href="/admin/" target="_blank"><i class="bi bi-gear-fill"></i> Django Admin</a>
+    </div>
+
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header">
+        <h3>AI Monitoring</h3>
+        <p>Quality assessment model usage, grade distribution, and responsible AI overview.</p>
+      </div>
+
+      <!-- Stats row -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-stars"></i></div>
+            <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Total Assessments</div>
+            <div style="font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-top:.2rem">{{ stats.total_assessments }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-graph-up"></i></div>
+            <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Avg Confidence</div>
+            <div style="font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-top:.2rem">{{ stats.avg_confidence }}%</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="stat-card">
+            <div class="stat-icon {% if stats.low_confidence_count > 0 %}amber{% else %}green{% endif %}"><i class="bi bi-exclamation-triangle"></i></div>
+            <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Low Confidence</div>
+            <div style="font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-top:.2rem">{{ stats.low_confidence_count }}</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:.15rem">need manual review</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-cpu"></i></div>
+            <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Model Versions</div>
+            <div style="font-size:1.1rem;font-weight:700;margin-top:.4rem">
+              {% for v in stats.model_versions %}
+              <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:.72rem">{{ v }}</span>
+              {% empty %}<span style="color:var(--muted)">—</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grade distribution + Responsible AI -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-5">
+          <div class="card p-4 h-100">
+            <h6 style="font-weight:700;margin-bottom:1.5rem">Grade Distribution</h6>
+            {% if stats.total_assessments > 0 %}
+            {% with total=stats.total_assessments %}
+            <div class="mb-3">
+              <div class="d-flex justify-content-between mb-1">
+                <span style="font-weight:600;font-size:.875rem">Grade A – Premium</span>
+                <span style="font-size:.875rem;color:var(--muted)">{{ stats.grade_distribution.A }}</span>
+              </div>
+              <div style="height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden">
+                <div style="height:100%;background:#16a34a;border-radius:5px;width:{% widthratio stats.grade_distribution.A total 100 %}%"></div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <div class="d-flex justify-content-between mb-1">
+                <span style="font-weight:600;font-size:.875rem">Grade B – Standard</span>
+                <span style="font-size:.875rem;color:var(--muted)">{{ stats.grade_distribution.B }}</span>
+              </div>
+              <div style="height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden">
+                <div style="height:100%;background:#d97706;border-radius:5px;width:{% widthratio stats.grade_distribution.B total 100 %}%"></div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <div class="d-flex justify-content-between mb-1">
+                <span style="font-weight:600;font-size:.875rem">Grade C – Discounted</span>
+                <span style="font-size:.875rem;color:var(--muted)">{{ stats.grade_distribution.C }}</span>
+              </div>
+              <div style="height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden">
+                <div style="height:100%;background:#dc2626;border-radius:5px;width:{% widthratio stats.grade_distribution.C total 100 %}%"></div>
+              </div>
+            </div>
+            {% endwith %}
+            {% else %}
+            <p class="text-muted" style="font-size:.875rem">No assessments yet.</p>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-7">
+          <div class="card p-4 h-100">
+            <h6 style="font-weight:700;margin-bottom:1.25rem">Responsible AI Principles</h6>
+            <div class="d-flex flex-column gap-3">
+              <div class="d-flex gap-3 align-items-start">
+                <span style="background:#dcfce7;color:#15803d;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="bi bi-journal-text"></i></span>
+                <div>
+                  <div style="font-weight:600;font-size:.875rem">Auditability</div>
+                  <div style="font-size:.8rem;color:var(--muted)">Every assessment stores model version, confidence, and grade — full history is retained.</div>
+                </div>
+              </div>
+              <div class="d-flex gap-3 align-items-start">
+                <span style="background:#dbeafe;color:#2563eb;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="bi bi-person-check"></i></span>
+                <div>
+                  <div style="font-weight:600;font-size:.875rem">Human Override</div>
+                  <div style="font-size:.8rem;color:var(--muted)">Producers can annotate or override any AI grade via the notes field before publishing.</div>
+                </div>
+              </div>
+              <div class="d-flex gap-3 align-items-start">
+                <span style="background:#fef3c7;color:#b45309;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="bi bi-shield-exclamation"></i></span>
+                <div>
+                  <div style="font-weight:600;font-size:.875rem">Low-Confidence Flagging</div>
+                  <div style="font-size:.8rem;color:var(--muted)">Assessments below 60% confidence are automatically flagged for manual review.</div>
+                </div>
+              </div>
+              <div class="d-flex gap-3 align-items-start">
+                <span style="background:#f3e8ff;color:#7c3aed;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="bi bi-arrows-expand"></i></span>
+                <div>
+                  <div style="font-weight:600;font-size:.875rem">No Producer Bias</div>
+                  <div style="font-size:.8rem;color:var(--muted)">The model grades the image only — producer identity is never an input.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent assessments table -->
+      <div class="card">
+        <div class="card-body p-0">
+          <div class="p-3 pb-0 d-flex justify-content-between align-items-center">
+            <h6 style="font-weight:700;margin:0">Recent Assessments</h6>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Product</th><th>Producer</th><th>Grade</th><th>Colour</th><th>Size</th><th>Ripeness</th><th>Confidence</th><th>Model</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in recent_assessments %}
+                <tr style="font-size:.82rem">
+                  <td><strong>{{ a.product.name }}</strong></td>
+                  <td style="color:var(--muted)">{{ a.assessed_by.email }}</td>
+                  <td>
+                    <span class="badge" style="background:{% if a.grade == 'A' %}#dcfce7;color:#15803d{% elif a.grade == 'B' %}#fef3c7;color:#b45309{% else %}#fee2e2;color:#dc2626{% endif %}">{{ a.grade }}</span>
+                    {% if not a.is_healthy %}<i class="bi bi-exclamation-circle text-danger ms-1" title="Rotten detected"></i>{% endif %}
+                  </td>
+                  <td>{{ a.color_score }}%</td>
+                  <td>{{ a.size_score }}%</td>
+                  <td>{{ a.ripeness_score }}%</td>
+                  <td>
+                    {% if a.model_confidence < 0.6 %}
+                    <span style="color:#dc2626;font-weight:600">{{ a.model_confidence|floatformat:1 }}% ⚠</span>
+                    {% else %}{{ a.model_confidence|floatformat:1 }}%{% endif %}
+                  </td>
+                  <td style="color:var(--muted)">{{ a.model_version }}</td>
+                  <td style="color:var(--muted)">{{ a.assessed_at|date:"d M Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">No assessments yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

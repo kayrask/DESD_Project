@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from api.models import CheckoutOrder, CommissionReport, Order, OrderItem, Product, User
+from api.models import CheckoutOrder, CommissionReport, Order, OrderItem, Product, QualityAssessment, User
 
 
 @admin.register(User)
@@ -62,3 +62,12 @@ class CheckoutOrderAdmin(admin.ModelAdmin):
 class CommissionReportAdmin(admin.ModelAdmin):
     list_display = ("report_date", "total_orders", "gross_amount", "commission_amount")
     ordering = ("-report_date",)
+
+
+@admin.register(QualityAssessment)
+class QualityAssessmentAdmin(admin.ModelAdmin):
+    list_display = ("product", "assessed_by", "grade", "color_score", "size_score", "ripeness_score", "model_confidence", "model_version", "assessed_at")
+    list_filter = ("grade", "is_healthy", "model_version")
+    search_fields = ("product__name", "assessed_by__email")
+    ordering = ("-assessed_at",)
+    readonly_fields = ("assessed_at", "model_version", "model_confidence", "is_healthy")
