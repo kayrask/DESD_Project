@@ -240,7 +240,11 @@ class AddToCartView(CustomerRequiredMixin, View):
         cart = request.session.get("cart", [])
         for item in cart:
             if item["product_id"] == product_id:
-                item["quantity"] += 1
+                new_qty = item["quantity"] + 1
+                if new_qty > product.stock:
+                    messages.error(request, f"Only {product.stock} units of {product.name} in stock.")
+                    return redirect("/products/")
+                item["quantity"] = new_qty
                 request.session["cart"] = cart
                 messages.success(request, f"Added another {product.name} to cart.")
                 return redirect("/products/")
@@ -271,6 +275,10 @@ class UpdateCartView(CustomerRequiredMixin, View):
             quantity = 1
         if quantity < 1:
             quantity = 1
+        product = get_object_or_404(Product, pk=product_id)
+        if quantity > product.stock:
+            messages.error(request, f"Only {product.stock} units of {product.name} in stock.")
+            return redirect("/cart/")
         cart = request.session.get("cart", [])
         for item in cart:
             if item["product_id"] == product_id:
