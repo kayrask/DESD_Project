@@ -114,6 +114,7 @@ class CheckoutOrder(models.Model):
     city = models.CharField(max_length=100)
     postal_code = models.CharField(max_length=20)
     payment_method = models.CharField(max_length=50)
+    delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=CHECKOUT_STATUS_CHOICES, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
 

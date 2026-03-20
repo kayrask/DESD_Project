@@ -116,15 +116,17 @@ class CheckoutOrderSerializer(serializers.ModelSerializer):
         model = CheckoutOrder
         fields = [
             "id", "full_name", "email", "address", "city",
-            "postal_code", "payment_method", "status", "created_at",
+            "postal_code", "payment_method", "delivery_date", "status", "created_at",
         ]
         read_only_fields = ["id", "status", "created_at"]
 
 
 class CheckoutOrderCreateSerializer(serializers.ModelSerializer):
+    delivery_date = serializers.DateField(required=False, allow_null=True)
+
     class Meta:
         model = CheckoutOrder
-        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method"]
+        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method", "delivery_date"]
 
     def validate_email(self, value):
         if "@" not in value:
