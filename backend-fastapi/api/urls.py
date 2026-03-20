@@ -46,10 +46,13 @@ web_patterns = [
     # Customer
     path("customer/", views_web.CustomerDashboardView.as_view(), name="customer_dashboard"),
     path("products/", views_web.ProductListView.as_view(), name="product_list"),
+    path("products/<int:pk>/", views_web.ProductDetailView.as_view(), name="product_detail"),
     path("cart/", views_web.CartView.as_view(), name="cart"),
     path("cart/add/<int:product_id>/", views_web.AddToCartView.as_view(), name="cart_add"),
     path("cart/remove/<int:product_id>/", views_web.RemoveFromCartView.as_view(), name="cart_remove"),
+    path("cart/update/<int:product_id>/", views_web.UpdateCartView.as_view(), name="cart_update"),
     path("checkout/", views_web.CheckoutView.as_view(), name="checkout"),
+    path("orders/<int:order_id>/confirmation/", views_web.OrderConfirmationView.as_view(), name="order_confirmation"),
 
     # Producer
     path("producer/", views_web.ProducerDashboardView.as_view(), name="producer_dashboard"),

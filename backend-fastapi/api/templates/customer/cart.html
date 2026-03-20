@@ -23,7 +23,13 @@
           <tr>
             <td class="align-middle fw-semibold">{{ item.name }}</td>
             <td class="align-middle text-end">£{{ item.price }}</td>
-            <td class="align-middle text-center">{{ item.quantity }}</td>
+            <td class="align-middle text-center" style="min-width:160px;">
+              <form method="post" action="{% url 'cart_update' item.product_id %}" class="d-flex align-items-center gap-2">
+                {% csrf_token %}
+                <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control form-control-sm" style="width:70px;">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Update</button>
+              </form>
+            </td>
             <td class="align-middle text-end">£{% widthratio item.price 1 item.quantity %}</td>
             <td class="align-middle text-end">
               <form method="post" action="{% url 'cart_remove' item.product_id %}">

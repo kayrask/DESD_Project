@@ -214,6 +214,15 @@ class ProductListView(CustomerRequiredMixin, ListView):
         return ctx
 
 
+class ProductDetailView(TemplateView):
+    template_name = "customer/product_detail.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["product"] = get_object_or_404(Product, pk=self.kwargs["pk"])
+        return ctx
+
+
 class CartView(CustomerRequiredMixin, TemplateView):
     template_name = "customer/cart.html"
 
@@ -254,24 +263,93 @@ class RemoveFromCartView(CustomerRequiredMixin, View):
         return redirect("/cart/")
 
 
+class UpdateCartView(CustomerRequiredMixin, View):
+    def post(self, request, product_id):
+        try:
+            quantity = int(request.POST.get("quantity", 1))
+        except (ValueError, TypeError):
+            quantity = 1
+        if quantity < 1:
+            quantity = 1
+        cart = request.session.get("cart", [])
+        for item in cart:
+            if item["product_id"] == product_id:
+                item["quantity"] = quantity
+                break
+        request.session["cart"] = cart
+        messages.success(request, "Cart updated.")
+        return redirect("/cart/")
+
+
 class CheckoutView(CustomerRequiredMixin, View):
     template_name = "customer/checkout.html"
 
+    def _build_context(self, request, form, cart):
+        total = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
+        commission = round(total * 0.10, 2)
+        return {"form": form, "cart": cart, "total": total, "commission": commission}
+
     def get(self, request):
         cart = request.session.get("cart", [])
-        total = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
-        return render(request, self.template_name, {"form": CheckoutForm(), "cart": cart, "total": total})
+        return render(request, self.template_name, self._build_context(request, CheckoutForm(), cart))
 
     def post(self, request):
         form = CheckoutForm(request.POST)
         cart = request.session.get("cart", [])
-        total = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
+
+        # Stock validation before saving
+        stock_errors = []
+        for item in cart:
+            try:
+                product = Product.objects.get(pk=item["product_id"])
+                if product.stock <= 0:
+                    stock_errors.append(f"{item['name']} is out of stock.")
+                elif item["quantity"] > product.stock:
+                    stock_errors.append(
+                        f"{item['name']}: only {product.stock} in stock (requested {item['quantity']})."
+                    )
+            except Product.DoesNotExist:
+                stock_errors.append(f"Product '{item['name']}' no longer exists.")
+
+        if stock_errors:
+            for err in stock_errors:
+                messages.error(request, err)
+            return render(request, self.template_name, self._build_context(request, form, cart))
+
         if form.is_valid():
-            form.save()
+            order = form.save()
+            # Decrement stock
+            for item in cart:
+                try:
+                    product = Product.objects.get(pk=item["product_id"])
+                    product.stock = max(0, product.stock - item["quantity"])
+                    if product.stock == 0:
+                        product.status = "Out of Stock"
+                    product.save()
+                except Product.DoesNotExist:
+                    pass
+            # Preserve cart snapshot for confirmation page, then clear
+            request.session["last_order_cart"] = cart
+            request.session["last_order_total"] = round(
+                sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2
+            )
             request.session["cart"] = []
-            messages.success(request, "Order placed successfully! We will contact you shortly.")
-            return redirect("/customer/")
-        return render(request, self.template_name, {"form": form, "cart": cart, "total": total})
+            messages.success(request, "Order placed successfully!")
+            return redirect(f"/orders/{order.id}/confirmation/")
+        return render(request, self.template_name, self._build_context(request, form, cart))
+
+
+class OrderConfirmationView(CustomerRequiredMixin, TemplateView):
+    template_name = "customer/order_confirmation.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from api.models import CheckoutOrder
+        order = get_object_or_404(CheckoutOrder, pk=self.kwargs["order_id"])
+        ctx["order"] = order
+        ctx["cart"] = self.request.session.get("last_order_cart", [])
+        ctx["total"] = self.request.session.get("last_order_total", 0)
+        return ctx
 
 
 # ── Producer views ────────────────────────────────────────────────────────────

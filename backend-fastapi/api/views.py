@@ -431,9 +431,17 @@ def dashboards_customer(request):
 
 # ── Orders ────────────────────────────────────────────────────────────────────
 
+def _checkout_error(code: str, message: str, details: dict, http_status: int) -> Response:
+    return Response({"code": code, "message": message, "details": details}, status=http_status)
+
+
 @csrf_exempt
 @api_view(["POST"])
 def orders_create(request):
+    from datetime import date, timedelta
+
+    delivery_date_raw = request.data.get("deliveryDate") or request.data.get("delivery_date")
+
     serializer = CheckoutOrderCreateSerializer(data={
         "full_name": request.data.get("fullName"),
         "email": request.data.get("email"),
@@ -441,10 +449,72 @@ def orders_create(request):
         "city": request.data.get("city"),
         "postal_code": request.data.get("postalCode"),
         "payment_method": request.data.get("paymentMethod"),
+        "delivery_date": delivery_date_raw,
     })
     if not serializer.is_valid():
-        return Response({"error": "validation_error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return _checkout_error(
+            "validation_error",
+            "Invalid order data.",
+            serializer.errors,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    # 48-hour delivery date validation
+    if delivery_date_raw:
+        try:
+            delivery_date = date.fromisoformat(str(delivery_date_raw))
+            if delivery_date < date.today() + timedelta(days=2):
+                return _checkout_error(
+                    "invalid_delivery_date",
+                    "Delivery date must be at least 2 days from today.",
+                    {"delivery_date": str(delivery_date_raw)},
+                    status.HTTP_400_BAD_REQUEST,
+                )
+        except ValueError:
+            return _checkout_error(
+                "validation_error",
+                "delivery_date must be in YYYY-MM-DD format.",
+                {"delivery_date": delivery_date_raw},
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+    # Stock validation
+    items = request.data.get("items", [])
+    stock_errors = {}
+    products_to_update = []
+    for item in items:
+        try:
+            product_id = int(item.get("product_id", 0))
+            quantity = int(item.get("quantity", 1))
+            product = Product.objects.get(pk=product_id)
+            if product.stock <= 0:
+                stock_errors[str(product_id)] = f"{product.name} is out of stock."
+            elif quantity > product.stock:
+                stock_errors[str(product_id)] = (
+                    f"{product.name}: only {product.stock} in stock (requested {quantity})."
+                )
+            else:
+                products_to_update.append((product, quantity))
+        except (Product.DoesNotExist, ValueError, TypeError):
+            stock_errors[str(item.get("product_id", "?"))] = "Product not found."
+
+    if stock_errors:
+        return _checkout_error(
+            "out_of_stock",
+            "One or more items are unavailable.",
+            stock_errors,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
     order = serializer.save()
+
+    # Decrement stock after successful order
+    for product, quantity in products_to_update:
+        product.stock = max(0, product.stock - quantity)
+        if product.stock == 0:
+            product.status = "Out of Stock"
+        product.save()
+
     return Response(
         {"id": order.id, "message": "Order created successfully.", "data": CheckoutOrderSerializer(order).data},
         status=status.HTTP_201_CREATED,
@@ -457,7 +527,7 @@ def orders_get(request, order_id: int):
         order = CheckoutOrder.objects.get(id=order_id)
         return Response(CheckoutOrderSerializer(order).data)
     except CheckoutOrder.DoesNotExist:
-        return _error_response("not_found", "Order not found.", status.HTTP_404_NOT_FOUND)
+        return _checkout_error("not_found", "Order not found.", {}, status.HTTP_404_NOT_FOUND)
 
 
 # ── AI ────────────────────────────────────────────────────────────────────────

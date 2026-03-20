@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from django import forms
 
 from api.models import CheckoutOrder, Product
@@ -111,7 +113,7 @@ class CheckoutForm(forms.ModelForm):
 
     class Meta:
         model = CheckoutOrder
-        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method"]
+        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method", "delivery_date"]
         widgets = {
             "full_name": forms.TextInput(attrs={**_field_class, "placeholder": "Full name"}),
             "email": forms.EmailInput(attrs={**_field_class, "placeholder": "Email address"}),
@@ -121,12 +123,23 @@ class CheckoutForm(forms.ModelForm):
             "payment_method": forms.Select(
                 choices=PAYMENT_METHOD_CHOICES, attrs=_select_class
             ),
+            "delivery_date": forms.DateInput(attrs={**_field_class, "type": "date"}),
         }
 
     def validate_email(self, value):
         if "@" not in value:
             raise forms.ValidationError("Enter a valid email address.")
         return value
+
+    def clean_delivery_date(self):
+        delivery_date = self.cleaned_data.get("delivery_date")
+        if delivery_date is not None:
+            min_date = date.today() + timedelta(days=2)
+            if delivery_date < min_date:
+                raise forms.ValidationError(
+                    "Delivery date must be at least 2 days from today."
+                )
+        return delivery_date
 
 
 class OrderStatusForm(forms.Form):

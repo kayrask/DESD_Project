@@ -11,12 +11,20 @@
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-bold py-3">Delivery &amp; Payment Details</div>
         <div class="card-body p-4">
-          <form method="post" novalidate>
+          <form method="post" novalidate id="checkout-form">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
             <div class="alert alert-danger">
               {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if messages %}
+            <div class="alert alert-danger">
+              {% for msg in messages %}
+              <div>{{ msg }}</div>
+              {% endfor %}
             </div>
             {% endif %}
 
@@ -52,6 +60,13 @@
                 {% if form.payment_method.errors %}<div class="text-danger small">{{ form.payment_method.errors }}</div>{% endif %}
               </div>
               <div class="col-12">
+                <label class="form-label fw-semibold">Delivery Date <span class="text-muted fw-normal">(must be at least 2 days from today)</span></label>
+                {{ form.delivery_date }}
+                {% if form.delivery_date.errors %}
+                <div class="text-danger small">{{ form.delivery_date.errors }}</div>
+                {% endif %}
+              </div>
+              <div class="col-12">
                 <div class="form-check">
                   {{ form.accept_terms }}
                   <label class="form-check-label" for="{{ form.accept_terms.id_for_label }}">
@@ -63,7 +78,7 @@
             </div>
 
             <div class="d-grid mt-4">
-              <button type="submit" class="btn btn-brand btn-lg">Place Order</button>
+              <button type="submit" id="submit-btn" class="btn btn-brand btn-lg">Place Order</button>
             </div>
           </form>
         </div>
@@ -87,6 +102,14 @@
             </tbody>
             <tfoot class="table-light">
               <tr>
+                <th>Subtotal</th>
+                <th class="text-end">£{{ total }}</th>
+              </tr>
+              <tr>
+                <td class="text-muted">Commission (10%)</td>
+                <td class="text-end text-muted">£{{ commission }}</td>
+              </tr>
+              <tr>
                 <th>Total</th>
                 <th class="text-end text-success">£{{ total }}</th>
               </tr>
@@ -100,4 +123,12 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.getElementById('checkout-form').addEventListener('submit', function () {
+    var btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Placing order...';
+  });
+</script>
 {% endblock %}
