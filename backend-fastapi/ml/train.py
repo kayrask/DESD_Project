@@ -1,12 +1,15 @@
-"""
-Training script – run this ONCE to produce quality_classifier.pt.
+"""Training script – run this ONCE to produce quality_classifier.pt.
 
 Usage (from backend-fastapi/):
-    python -m ml.train --data_dir "../Fruit And Vegetable Diseases Dataset" --epochs 10
+        python -m ml.train --data_dir "../Fruit And Vegetable Diseases Dataset" --epochs 10
 
-The dataset folder must contain sub-folders named <Item>__Healthy and
-<Item>__Rotten (exactly as downloaded from Kaggle).  All Healthy images
-are treated as class 0 (healthy) and all Rotten images as class 1 (rotten).
+Dataset structure:
+
+- This script trains a **binary** classifier: class 0 = healthy/fresh, class 1 = rotten.
+- It supports common folder naming patterns used by public datasets:
+    - ``<Item>__Healthy`` / ``<Item>__Rotten`` (Kaggle produce disease/freshness datasets)
+    - ``Healthy`` / ``Rotten``
+    - ``Fresh`` / ``Rotten``
 
 The trained model is saved to ml/saved_models/quality_classifier.pt.
 
@@ -17,6 +20,7 @@ Evidence prefix: ai-model
 import argparse
 import os
 import pathlib
+import time
 
 import torch
 import torch.nn as nn
@@ -30,6 +34,8 @@ SAVE_PATH = pathlib.Path(__file__).parent / "saved_models" / "quality_classifier
 IMG_SIZE = 224
 BATCH_SIZE = 32
 SEED = 42
+_IN_DOCKER = pathlib.Path("/.dockerenv").exists()
+NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 
 
 def get_transforms():
@@ -60,7 +66,18 @@ class HealthyRottenDataset(torch.utils.data.Dataset):
         # Build remap: original_idx -> binary label
         self._remap = {}
         for class_name, idx in self._inner.class_to_idx.items():
-            self._remap[idx] = 0 if "Healthy" in class_name else 1
+            normalized = class_name.strip().lower()
+
+            # Explicit mapping to avoid silently mislabeling unexpected folders.
+            if "healthy" in normalized or "fresh" in normalized:
+                self._remap[idx] = 0
+            elif "rotten" in normalized:
+                self._remap[idx] = 1
+            else:
+                raise ValueError(
+                    "Unrecognized class folder name for binary mapping: "
+                    f"{class_name!r}. Expected folder names containing 'Healthy'/'Fresh' or 'Rotten'."
+                )
 
     def __len__(self):
         return len(self._inner)
@@ -70,7 +87,7 @@ class HealthyRottenDataset(torch.utils.data.Dataset):
         return image, self._remap[label]
 
 
-def train(data_dir: str, epochs: int, lr: float):
+def train(data_dir: str, epochs: int, lr: float, log_every: int):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Training on {device}")
 
@@ -86,8 +103,8 @@ def train(data_dir: str, epochs: int, lr: float):
     # Apply val transforms to val split
     val_set.dataset = HealthyRottenDataset(root=data_dir, transform=val_tf)
 
-    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+    val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
     model = build_model(num_classes=2, pretrained=True).to(device)
     criterion = nn.CrossEntropyLoss()
@@ -99,7 +116,12 @@ def train(data_dir: str, epochs: int, lr: float):
         # Train
         model.train()
         running_loss, correct, total = 0.0, 0, 0
+
+        epoch_start = time.time()
+        last_log_time = epoch_start
+        batches_seen = 0
         for images, labels in train_loader:
+            batches_seen += 1
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
@@ -110,6 +132,19 @@ def train(data_dir: str, epochs: int, lr: float):
             preds = outputs.argmax(dim=1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
+
+            if log_every and (batches_seen % log_every == 0):
+                elapsed = time.time() - epoch_start
+                avg_batch = elapsed / batches_seen
+                remaining_batches = max(0, len(train_loader) - batches_seen)
+                eta_sec = int(remaining_batches * avg_batch)
+                batch_acc = correct / total if total else 0.0
+                print(
+                    f"  [epoch {epoch}/{epochs}] batch {batches_seen}/{len(train_loader)} "
+                    f"loss={loss.item():.4f} acc={batch_acc:.3f} "
+                    f"avg_batch={avg_batch:.2f}s ETA~{eta_sec//60}m{eta_sec%60:02d}s"
+                )
+                last_log_time = time.time()
 
         train_acc = correct / total
         train_loss = running_loss / total
@@ -144,5 +179,6 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", required=True, help="Path to dataset root folder")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--log_every", type=int, default=50, help="Print progress every N batches (0 disables)")
     args = parser.parse_args()
-    train(args.data_dir, args.epochs, args.lr)
+    train(args.data_dir, args.epochs, args.lr, args.log_every)

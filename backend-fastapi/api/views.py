@@ -252,7 +252,7 @@ def dashboards_producer_payments(request):
         payments = {
             "this_week": round(gross, 2),
             "pending": round(gross * 0.20, 2),
-            "commission": round(gross * 0.10, 2),
+            "commission": round(gross * 0.05, 2),
         }
         return Response(ProducerPaymentsSerializer(payments).data)
     except ApiAuthError as exc:
@@ -351,23 +351,30 @@ def dashboards_admin_reports(request):
         return user
     try:
         require_role(user, ["admin"])
-        date_from = request.GET.get("from")
-        date_to = request.GET.get("to")
-        if date_from:
-            date.fromisoformat(date_from)
-        if date_to:
-            date.fromisoformat(date_to)
-        if date_from and date_to and date_from > date_to:
-            return _error_response("validation_error", "from must be before to.", status.HTTP_400_BAD_REQUEST)
+        date_from_raw = request.GET.get("from")
+        date_to_raw = request.GET.get("to")
+
+        parsed_from = None
+        parsed_to = None
+        if date_from_raw:
+            parsed_from = date.fromisoformat(date_from_raw)
+        if date_to_raw:
+            parsed_to = date.fromisoformat(date_to_raw)
+        if parsed_from and parsed_to and parsed_from > parsed_to:
+            return _error_response(
+                "validation_error",
+                "from date must be before to date",
+                status.HTTP_400_BAD_REQUEST,
+            )
         qs = CommissionReport.objects.all()
-        if date_from:
-            qs = qs.filter(report_date__gte=date_from)
-        if date_to:
-            qs = qs.filter(report_date__lte=date_to)
+        if parsed_from:
+            qs = qs.filter(report_date__gte=parsed_from)
+        if parsed_to:
+            qs = qs.filter(report_date__lte=parsed_to)
         rows = [{"date": str(r.report_date), "orders": r.total_orders, "gross": float(r.gross_amount), "commission": float(r.commission_amount)} for r in qs]
         return Response(AdminReportsResponseSerializer({"rows": rows}).data)
     except ValueError:
-        return _error_response("validation_error", "Dates must use YYYY-MM-DD.", status.HTTP_400_BAD_REQUEST)
+        return _error_response("validation_error", "Dates must use YYYY-MM-DD", status.HTTP_400_BAD_REQUEST)
     except ApiAuthError as exc:
         return _error_response(exc.error, exc.message, exc.status_code)
 
@@ -439,6 +446,8 @@ def _checkout_error(code: str, message: str, details: dict, http_status: int) ->
 @api_view(["POST"])
 def orders_create(request):
     from datetime import date, timedelta
+    from collections import defaultdict
+    from decimal import Decimal
 
     delivery_date_raw = request.data.get("deliveryDate") or request.data.get("delivery_date")
 
@@ -508,12 +517,55 @@ def orders_create(request):
 
     order = serializer.save()
 
+    # Create producer-visible orders (supports multi-vendor carts)
+    grouped = defaultdict(list)
+    gross_total = Decimal("0.00")
+    for product, quantity in products_to_update:
+        grouped[product.producer_id].append((product, quantity))
+        gross_total += (Decimal(str(product.price)) * quantity)
+
+    base_order_id = f"CO-{order.id}"
+    is_multi_vendor = len(grouped) > 1
+    for producer_id, lines in grouped.items():
+        producer = lines[0][0].producer
+        vendor_order_id = base_order_id if not is_multi_vendor else f"{base_order_id}-{producer_id}"
+        vendor_order = Order.objects.create(
+            order_id=vendor_order_id,
+            customer_name=order.full_name,
+            delivery_date=order.delivery_date,
+            status="Pending",
+            producer=producer,
+        )
+        for product, quantity in lines:
+            OrderItem.objects.create(
+                order=vendor_order,
+                product=product,
+                quantity=quantity,
+                unit_price=product.price,
+            )
+
     # Decrement stock after successful order
     for product, quantity in products_to_update:
         product.stock = max(0, product.stock - quantity)
         if product.stock == 0:
             product.status = "Out of Stock"
         product.save()
+
+    # Update today's commission report (automatic 5% network commission)
+    commission_rate = Decimal("0.05")
+    commission_amount = (gross_total * commission_rate).quantize(Decimal("0.01"))
+    report, _ = CommissionReport.objects.get_or_create(
+        report_date=date.today(),
+        defaults={
+            "total_orders": 0,
+            "gross_amount": Decimal("0.00"),
+            "commission_amount": Decimal("0.00"),
+        },
+    )
+    report.total_orders += 1
+    report.gross_amount = (Decimal(str(report.gross_amount)) + gross_total).quantize(Decimal("0.01"))
+    report.commission_amount = (Decimal(str(report.commission_amount)) + commission_amount).quantize(Decimal("0.01"))
+    report.save()
 
     return Response(
         {"id": order.id, "message": "Order created successfully.", "data": CheckoutOrderSerializer(order).data},

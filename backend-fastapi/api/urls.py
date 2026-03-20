@@ -37,6 +37,7 @@ web_patterns = [
     path("for-producers/", views_web.ForProducersView.as_view(), name="for_producers"),
     path("how-it-works/", views_web.HowItWorksView.as_view(), name="how_it_works"),
     path("sustainability/", views_web.SustainabilityView.as_view(), name="sustainability"),
+    path("legal/", views_web.LegalView.as_view(), name="legal"),
 
     # Authentication
     path("login/", views_web.LoginPageView.as_view(), name="login"),

@@ -16,7 +16,14 @@
         <div class="card-body">
           <dl class="row mb-0">
             <dt class="col-sm-4">Order ID</dt>
-            <dd class="col-sm-8">#{{ order.id }}</dd>
+            <dd class="col-sm-8">
+              {% if customer_order_id %}{{ customer_order_id }}{% else %}#{{ order.id }}{% endif %}
+              {% if vendor_order_ids and vendor_order_ids|length > 1 %}
+              <div class="text-muted small mt-1">
+                Split into vendor orders: {{ vendor_order_ids|join:", " }}
+              </div>
+              {% endif %}
+            </dd>
 
             <dt class="col-sm-4">Name</dt>
             <dd class="col-sm-8">{{ order.full_name }}</dd>

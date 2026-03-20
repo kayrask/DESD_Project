@@ -165,9 +165,10 @@
                   <td>{{ a.size_score }}%</td>
                   <td>{{ a.ripeness_score }}%</td>
                   <td>
+                    {% widthratio a.model_confidence 1 100 as conf_pct %}
                     {% if a.model_confidence < 0.6 %}
-                    <span style="color:#dc2626;font-weight:600">{{ a.model_confidence|floatformat:1 }}% ⚠</span>
-                    {% else %}{{ a.model_confidence|floatformat:1 }}%{% endif %}
+                    <span style="color:#dc2626;font-weight:600">{{ conf_pct }}% ⚠</span>
+                    {% else %}{{ conf_pct }}%{% endif %}
                   </td>
                   <td style="color:var(--muted)">{{ a.model_version }}</td>
                   <td style="color:var(--muted)">{{ a.assessed_at|date:"d M Y H:i" }}</td>

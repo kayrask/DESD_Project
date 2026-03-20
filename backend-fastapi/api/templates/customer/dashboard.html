@@ -40,5 +40,37 @@
       </a>
     </div>
   </div>
+
+  <div class="mt-5">
+    <h5 class="fw-bold mb-3">Recent Orders</h5>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Order</th>
+              <th>Placed</th>
+              <th>Delivery</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in recent_orders %}
+            <tr>
+              <td class="fw-semibold">CO-{{ o.id }}</td>
+              <td class="text-muted">{{ o.created_at|date:"d M Y H:i" }}</td>
+              <td>{% if o.delivery_date %}{{ o.delivery_date }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td><span class="badge bg-warning text-dark">{{ o.status|capfirst }}</span></td>
+              <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="/orders/{{ o.id }}/confirmation/">View</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">No orders yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

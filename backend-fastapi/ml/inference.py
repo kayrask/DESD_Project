@@ -7,8 +7,8 @@ Responsible for:
   3. Running inference and returning confidence scores.
   4. Mapping confidence → Color / Size / Ripeness scores → Grade A/B/C.
 
-Fallback: if no trained model file exists, a heuristic colour-analysis
-method is used so the app still runs during development.
+Fallback: if no trained model file exists, an unsupervised ML fallback
+(KMeans colour clustering) is used so the app still runs during development.
 
 Author (ai-integration): Kayra
 Evidence prefix: ai-integration
@@ -91,26 +91,47 @@ def _confidence_to_scores(healthy_confidence: float) -> dict:
     }
 
 
-def _heuristic_fallback(image_bytes: bytes) -> dict:
+def _kmeans_fallback(image_bytes: bytes) -> dict:
     """
-    Colour-histogram heuristic used when no trained model is available.
-    Analyses the green/yellow channel ratio as a proxy for freshness.
+    Unsupervised ML fallback used when no trained model is available.
+
+    Uses KMeans clustering over RGB pixels to estimate the proportion of
+    "fresh" (green-ish) vs "brown" tones, mapped to a confidence score.
     Returns the same dict shape as the CNN inference path.
     """
     from PIL import Image
     import numpy as np
+    from sklearn.cluster import KMeans
 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((128, 128))
     arr = np.array(img, dtype=np.float32)
+    pixels = arr.reshape(-1, 3)
 
-    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
-    # Freshness proxy: high green, low brown (high red + low blue in rotten produce)
-    greenness = float(g.mean()) / 255.0
-    brownness = float((r - b).clip(0).mean()) / 255.0
-    confidence = float(np.clip(greenness - brownness * 0.5, 0, 1))
+    # Sample pixels for speed/determinism (still representative for 128x128)
+    rng = np.random.default_rng(42)
+    sample_size = min(5000, pixels.shape[0])
+    sample = pixels[rng.choice(pixels.shape[0], size=sample_size, replace=False)]
+
+    # Cluster colours and interpret the centroids
+    kmeans = KMeans(n_clusters=3, n_init="auto", random_state=42)
+    labels = kmeans.fit_predict(sample)
+    centers = kmeans.cluster_centers_  # shape [k, 3]
+
+    # Identify the most "green" and most "brown" centroid.
+    # - green: highest G channel
+    # - brown: high R relative to B, and lower G
+    green_idx = int(np.argmax(centers[:, 1]))
+    brown_scores = (centers[:, 0] - centers[:, 2]) - (centers[:, 1] * 0.25)
+    brown_idx = int(np.argmax(brown_scores))
+
+    green_prop = float(np.mean(labels == green_idx))
+    brown_prop = float(np.mean(labels == brown_idx))
+
+    # Confidence proxy: more green and less brown → higher confidence
+    confidence = float(np.clip(green_prop - (brown_prop * 0.8) + 0.5, 0, 1))
 
     result = _confidence_to_scores(confidence)
-    result["model_version"] = "heuristic-fallback-v1"
+    result["model_version"] = "kmeans-fallback-v1"
     return result
 
 
@@ -123,8 +144,23 @@ def classify_image(image_bytes: bytes) -> dict:
         model_confidence, is_healthy, model_version
     """
     if not MODEL_PATH.exists():
-        result = _heuristic_fallback(image_bytes)
-        return result
+        try:
+            return _kmeans_fallback(image_bytes)
+        except Exception:
+            # If scikit-learn isn't available or clustering fails,
+            # fall back to the simplest safe heuristic.
+            from PIL import Image
+            import numpy as np
+
+            img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((128, 128))
+            arr = np.array(img, dtype=np.float32)
+            r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+            greenness = float(g.mean()) / 255.0
+            brownness = float((r - b).clip(0).mean()) / 255.0
+            confidence = float(np.clip(greenness - brownness * 0.5, 0, 1))
+            result = _confidence_to_scores(confidence)
+            result["model_version"] = "heuristic-fallback-v1"
+            return result
 
     import torch
     model = _load_model_once()

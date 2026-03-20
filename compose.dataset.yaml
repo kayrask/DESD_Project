@@ -1,0 +1,4 @@
+services:
+  backend:
+    volumes:
+      - ../Dataset:/app/data/food_freshness/Dataset:ro

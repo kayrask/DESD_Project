@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Legal – DESD Marketplace{% endblock %}
+
+{% block content %}
+<section class="py-5 bg-success text-white text-center">
+  <div class="container py-3">
+    <h1 class="display-5 fw-bold">Legal</h1>
+    <p class="lead">Key legal considerations for using DESD Marketplace.</p>
+  </div>
+</section>
+
+<div class="container py-5">
+  <div class="row g-5">
+    <div class="col-lg-8">
+      <h3 class="fw-bold">Important Notice</h3>
+      <p class="text-muted" style="line-height:1.8">
+        This page provides general information about legal and compliance considerations for a food marketplace.
+        It is not legal advice. Requirements vary by country/region and by the type of food products sold.
+      </p>
+
+      <h4 class="fw-bold mt-4">Food Safety &amp; Product Responsibility</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li><strong>Producers are responsible</strong> for the safety, quality, labeling, and suitability of products they list.</li>
+        <li>Maintain appropriate handling, storage, and cold-chain practices where applicable.</li>
+        <li>Ensure accurate product descriptions (e.g., ingredients, allergens, origin, and best-before information when relevant).</li>
+      </ul>
+
+      <h4 class="fw-bold mt-4">Consumer Rights &amp; Returns</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li>Customers may have statutory consumer rights (refunds, replacements, remedies) depending on local law.</li>
+        <li>Perishable goods often have special rules; producers should respond promptly to quality complaints.</li>
+      </ul>
+
+      <h4 class="fw-bold mt-4">Platform Liability &amp; Disclaimers</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li>DESD Marketplace facilitates transactions between customers and independent producers.</li>
+        <li>Where permitted by law, the platform may limit liability for indirect losses and acts/omissions of third-party sellers.</li>
+        <li>Nothing on the platform removes or overrides mandatory legal protections.</li>
+      </ul>
+
+      <h4 class="fw-bold mt-4">AI Features (Recommendations &amp; Quality Checks)</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li>AI outputs are <strong>indicative</strong> and may be inaccurate; human review is recommended for low-confidence results.</li>
+        <li>Producers remain responsible for business decisions (pricing, stock adjustments, disposal decisions).</li>
+        <li>Model performance can vary by lighting, camera quality, and product variety.</li>
+      </ul>
+
+      <h4 class="fw-bold mt-4">Privacy &amp; Data Handling</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li>Account information and order details are used to operate the service (authentication, fulfilment, reporting).</li>
+        <li>Uploaded images may be stored for auditability of AI assessments and system monitoring.</li>
+        <li>Data retention and access should follow applicable privacy laws and organizational policies.</li>
+      </ul>
+
+      <h4 class="fw-bold mt-4">Intellectual Property</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li>Producers should only upload photos and content they own or have permission to use.</li>
+        <li>Misuse of copyrighted/trademarked content may lead to removal or account action.</li>
+      </ul>
+
+      <h4 class="fw-bold mt-4">Regulatory Compliance</h4>
+      <ul class="text-muted" style="line-height:1.8">
+        <li>Some products may require licenses, inspections, or certifications depending on jurisdiction.</li>
+        <li>Taxes (VAT/GST/sales tax), invoicing, and reporting requirements may apply to producers.</li>
+      </ul>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card p-4">
+        <h6 style="font-weight:700;margin-bottom:.75rem">Quick Summary</h6>
+        <p class="text-muted" style="font-size:.9rem;line-height:1.7;margin-bottom:1rem">
+          Producers are responsible for product safety and compliance. The platform provides tools (including AI) to help,
+          but does not replace legal obligations.
+        </p>
+        <div class="alert alert-info py-2" style="font-size:.82rem;margin:0">
+          <i class="bi bi-info-circle me-1"></i>
+          For formal requirements, consult your local regulator or legal advisor.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

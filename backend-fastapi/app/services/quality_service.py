@@ -114,6 +114,7 @@ def get_producer_assessments(producer: User) -> list[dict]:
             "model_version": a.model_version,
             "is_healthy": a.is_healthy,
             "notes": a.notes,
+            "quantity_lost": a.quantity_lost,
             "assessed_at": a.assessed_at,
         }
         for a in assessments
