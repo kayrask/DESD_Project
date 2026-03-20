@@ -10,6 +10,8 @@
       <a href="{% url 'admin_reports' %}" class="active"><i class="bi bi-bar-chart me-2"></i>Reports</a>
       <a href="{% url 'admin_users' %}"><i class="bi bi-people me-2"></i>Users</a>
       <a href="{% url 'admin_database' %}"><i class="bi bi-database me-2"></i>Database</a>
+      <div class="sidebar-heading">AI</div>
+      <a href="{% url 'admin_ai_monitoring' %}"><i class="bi bi-stars me-2"></i>AI Monitoring</a>
       <div class="sidebar-heading">Django</div>
       <a href="/admin/" target="_blank"><i class="bi bi-gear me-2"></i>Django Admin</a>
     </div>
@@ -39,6 +41,13 @@
             </div>
             <div class="col-md-2">
               <a href="{% url 'admin_reports' %}" class="btn btn-outline-secondary w-100">Reset</a>
+            </div>
+            <div class="col-md-2">
+              {% if request.GET %}
+              <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success w-100">Export CSV</a>
+              {% else %}
+              <a href="?export=csv" class="btn btn-outline-success w-100">Export CSV</a>
+              {% endif %}
             </div>
           </form>
         </div>

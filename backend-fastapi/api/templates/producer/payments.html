@@ -10,6 +10,7 @@
       <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam me-2"></i>Products</a>
       <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list me-2"></i>Orders</a>
       <a href="{% url 'producer_payments' %}" class="active"><i class="bi bi-cash-stack me-2"></i>Payments</a>
+      <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars me-2"></i>Quality Check</a>
     </div>
 
     <div class="col-md-10 py-4 px-4">
@@ -42,8 +43,42 @@
       <div class="mt-4 p-4 bg-light rounded">
         <p class="mb-0 text-muted small">
           <i class="bi bi-info-circle me-2"></i>
-          Payments are processed weekly. Commission is 10% of gross sales. Contact support for queries.
+          Payments are processed weekly. Commission is 5% of gross sales. Contact support for queries.
         </p>
+      </div>
+
+      <div class="card mt-4">
+        <div class="card-body">
+          <h6 style="font-weight:700;margin-bottom:1rem">Pending Orders</h6>
+          {% if pending_orders %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Delivery Date</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in pending_orders %}
+                <tr>
+                  <td><strong>{{ o.order_id }}</strong></td>
+                  <td>{{ o.customer_name }}</td>
+                  <td>{% if o.delivery_date %}{{ o.delivery_date }}{% else %}—{% endif %}</td>
+                  <td><span class="badge badge-pending">{{ o.status }}</span></td>
+                  <td>£{{ o.total }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0" style="font-size:.9rem">No pending orders right now.</p>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>

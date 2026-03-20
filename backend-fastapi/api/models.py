@@ -158,6 +158,7 @@ class QualityAssessment(models.Model):
     model_version = models.CharField(max_length=50, default="mobilenetv2-v1")
     is_healthy = models.BooleanField()
     notes = models.TextField(blank=True, default="")
+    quantity_lost = models.IntegerField(default=0)
     assessed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

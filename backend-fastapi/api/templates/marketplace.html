@@ -64,6 +64,11 @@
             <span class="rec-score">Score {{ rec.score }}</span>
           </div>
           <h6 style="font-weight:700;margin-bottom:.25rem">{{ rec.name }}</h6>
+          {% if rec.producer_name %}
+          <div style="font-size:.8rem;color:var(--muted);margin-bottom:.25rem">
+            <i class="bi bi-person-badge me-1"></i>{{ rec.producer_name }}
+          </div>
+          {% endif %}
           <div style="font-size:1.1rem;font-weight:800;color:var(--brand-darker);margin-bottom:.75rem">£{{ rec.price }}</div>
           {% if user.is_authenticated and user.role == "customer" %}
           <form method="post" action="{% url 'cart_add' rec.id %}">
@@ -94,6 +99,9 @@
         <div class="product-body">
           <span class="category-pill">{{ product.category }}</span>
           <h6 style="font-weight:700;margin-bottom:.25rem">{{ product.name }}</h6>
+          <div style="font-size:.8rem;color:var(--muted);margin-bottom:.25rem">
+            <i class="bi bi-person-badge me-1"></i>{{ product.producer.full_name|default:product.producer.email }}
+          </div>
           <div style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
             <i class="bi bi-box-seam me-1"></i>{{ product.stock }} in stock
           </div>

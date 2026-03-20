@@ -56,7 +56,13 @@
       <p>Connect with verified local producers. Order seasonal, sustainable food and support your community — all in one place.</p>
       <div class="hero-btns">
         <a href="{% url 'marketplace' %}" class="btn-hero-primary">Browse Marketplace</a>
-        <a href="{% url 'register' %}" class="btn-hero-ghost">Start selling &rarr;</a>
+        {% if user.is_authenticated and user.role == "producer" %}
+          <a href="{% url 'producer_dashboard' %}" class="btn-hero-ghost">Go to dashboard &rarr;</a>
+        {% elif user.is_authenticated and user.role == "customer" %}
+          <a href="{% url 'for_producers' %}?start_selling=1" class="btn-hero-ghost">Start selling &rarr;</a>
+        {% else %}
+          <a href="{% url 'register' %}" class="btn-hero-ghost">Start selling &rarr;</a>
+        {% endif %}
       </div>
       <div class="hero-stats">
         <div class="hero-stat"><div class="num">500+</div><div class="lbl">Local Producers</div></div>
@@ -129,7 +135,13 @@
       <h2 style="font-weight:800;font-size:2rem;letter-spacing:-.03em;color:#fff;margin-bottom:.75rem">Ready to eat better?</h2>
       <p style="color:rgba(255,255,255,.7);max-width:420px;margin:0 auto 2rem;line-height:1.75;">Join thousands of customers already enjoying fresh, local food delivered straight from farms.</p>
       <div class="d-flex gap-3 justify-content-center flex-wrap">
-        <a href="{% url 'register' %}" class="btn-cta-white">Create free account</a>
+        {% if user.is_authenticated and user.role == "producer" %}
+          <a href="{% url 'producer_dashboard' %}" class="btn-cta-white">Go to dashboard</a>
+        {% elif user.is_authenticated and user.role == "customer" %}
+          <a href="{% url 'for_producers' %}?start_selling=1" class="btn-cta-white">Become a producer</a>
+        {% else %}
+          <a href="{% url 'register' %}" class="btn-cta-white">Create free account</a>
+        {% endif %}
         <a href="{% url 'marketplace' %}" class="btn-hero-ghost">Browse marketplace &rarr;</a>
       </div>
     </div>

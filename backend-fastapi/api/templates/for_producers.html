@@ -6,7 +6,27 @@
   <div class="container text-white text-center py-3">
     <h1 class="display-5 fw-bold">Grow Your Business with DESD</h1>
     <p class="lead">Reach thousands of customers who value local, sustainable food.</p>
-    <a href="{% url 'register' %}" class="btn btn-light btn-lg mt-2">Start Selling Today</a>
+    {% if request.GET.start_selling == '1' and user.is_authenticated and user.role == 'customer' %}
+      <div class="alert alert-warning mt-3 mx-auto" style="max-width:760px;text-align:left">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        <strong>You’re signed in as a customer.</strong>
+        To start selling, please create a <strong>Producer</strong> account.
+        <div class="mt-2 d-flex gap-2 flex-wrap">
+          <form method="post" action="{% url 'logout' %}" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-dark btn-sm">Log out</button>
+          </form>
+          <span class="small" style="opacity:.9">After logging out, choose “Producer” on the registration form.</span>
+        </div>
+      </div>
+    {% endif %}
+    {% if user.is_authenticated and user.role == "producer" %}
+      <a href="{% url 'producer_dashboard' %}" class="btn btn-light btn-lg mt-2">Go to Producer Dashboard</a>
+    {% elif user.is_authenticated and user.role == "customer" %}
+      <a href="{% url 'for_producers' %}?start_selling=1" class="btn btn-light btn-lg mt-2">Start Selling Today</a>
+    {% else %}
+      <a href="{% url 'register' %}" class="btn btn-light btn-lg mt-2">Start Selling Today</a>
+    {% endif %}
   </div>
 </section>
 

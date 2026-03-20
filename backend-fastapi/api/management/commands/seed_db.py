@@ -114,9 +114,10 @@ class Command(BaseCommand):
         )
 
         # ── Commission Reports ────────────────────────────────────────────────
-        self._get_or_create_report("2026-03-01", 24, 4820.00, 482.00)
-        self._get_or_create_report("2026-02-28", 19, 3110.00, 311.00)
-        self._get_or_create_report("2026-02-21", 22, 4100.00, 410.00)
+        # 5% commission requirement (assessment case study)
+        self._get_or_create_report("2026-03-01", 24, 4820.00, 241.00)
+        self._get_or_create_report("2026-02-28", 19, 3110.00, 155.50)
+        self._get_or_create_report("2026-02-21", 22, 4100.00, 205.00)
 
         self.stdout.write(self.style.SUCCESS("Database seeded successfully."))
 
@@ -169,6 +170,23 @@ class Command(BaseCommand):
                 "commission_amount": commission,
             },
         )
-        label = "created" if created else "skip"
-        self.stdout.write(f"  {label} report: {report_date}")
+        if created:
+            self.stdout.write(f"  created report: {report_date}")
+            return obj
+
+        changed = False
+        if obj.total_orders != total_orders:
+            obj.total_orders = total_orders
+            changed = True
+        if float(obj.gross_amount) != float(gross):
+            obj.gross_amount = gross
+            changed = True
+        if float(obj.commission_amount) != float(commission):
+            obj.commission_amount = commission
+            changed = True
+        if changed:
+            obj.save()
+            self.stdout.write(f"  updated report: {report_date}")
+        else:
+            self.stdout.write(f"  skip report: {report_date}")
         return obj
