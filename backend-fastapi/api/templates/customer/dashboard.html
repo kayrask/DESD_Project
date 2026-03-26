@@ -2,6 +2,15 @@
 {% block title %}Customer Dashboard – DESD{% endblock %}
 
 {% block content %}
+<!-- Real-time order notification toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100">
+  <div id="notif-toast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold" id="notif-toast-msg"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
 <div class="container py-5">
   <h2 class="fw-bold mb-1">My Dashboard</h2>
   <p class="text-muted">Welcome back, {{ user.full_name }}</p>
@@ -73,4 +82,29 @@
     </div>
   </div>
 </div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const ws = new WebSocket(`ws://${location.host}/ws/notifications/`);
+  ws.onmessage = function (e) {
+    const data = JSON.parse(e.data);
+    if (data.type === 'order_status_update') {
+      const msg = `Order ${data.order_id} is now: ${data.status}`;
+      document.getElementById('notif-toast-msg').textContent = msg;
+      const t = new bootstrap.Toast(document.getElementById('notif-toast'), { delay: 8000 });
+      t.show();
+      // Update matching badge in the orders table
+      document.querySelectorAll('tbody tr').forEach(row => {
+        const cell = row.querySelector('td:first-child');
+        if (cell && cell.textContent.trim() === data.order_id) {
+          const badge = row.querySelector('.badge');
+          if (badge) badge.textContent = data.status;
+        }
+      });
+    }
+  };
+}());
+</script>
 {% endblock %}

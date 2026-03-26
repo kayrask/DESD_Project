@@ -6,7 +6,7 @@ Views   → here (class-based views using Django ORM directly)
 Templates → api/templates/
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import csv
 from collections import defaultdict
@@ -14,9 +14,11 @@ from collections import defaultdict
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, TemplateView
 
@@ -29,6 +31,7 @@ from api.forms import (
     RegisterForm,
 )
 from api.models import (
+    CartReservation,
     CommissionReport,
     Order,
     OrderItem,
@@ -43,6 +46,88 @@ from app.services.quality_service import (
     get_ai_monitoring_stats,
     get_producer_assessments,
 )
+
+
+# ── Cart reservation helpers ─────────────────────────────────────────────────
+
+_RESERVATION_TTL_HOURS = 2  # reservations older than this are ignored
+
+
+def _reserved_by_others(product_id, session_key):
+    """Return total units of a product reserved in other active sessions."""
+    cutoff = timezone.now() - timedelta(hours=_RESERVATION_TTL_HOURS)
+    return (
+        CartReservation.objects
+        .filter(product_id=product_id, updated_at__gte=cutoff)
+        .exclude(session_key=session_key)
+        .aggregate(total=Sum("quantity"))["total"] or 0
+    )
+
+
+def _available_stock(product, session_key):
+    """Effective stock available for this session (real stock minus other carts)."""
+    return max(0, product.stock - _reserved_by_others(product.id, session_key))
+
+
+def _upsert_reservation(session_key, product_id, quantity):
+    if quantity > 0:
+        CartReservation.objects.update_or_create(
+            session_key=session_key,
+            product_id=product_id,
+            defaults={"quantity": quantity},
+        )
+    else:
+        CartReservation.objects.filter(session_key=session_key, product_id=product_id).delete()
+
+
+def _clear_reservations(session_key):
+    CartReservation.objects.filter(session_key=session_key).delete()
+
+
+def _ensure_session_key(request):
+    if not request.session.session_key:
+        request.session.create()
+    return request.session.session_key
+
+
+# ── Real-time broadcast helpers (Channels) ───────────────────────────────────
+
+def _get_channel_layer():
+    from channels.layers import get_channel_layer
+    return get_channel_layer()
+
+
+def _broadcast_order_status(order):
+    """Notify customer WebSocket connections about an order status change."""
+    from asgiref.sync import async_to_sync
+    layer = _get_channel_layer()
+    if layer is None:
+        return
+    payload = {"type": "order.status.update", "order_id": order.order_id, "status": order.status}
+    # Notify anyone watching this specific order (order confirmation page)
+    async_to_sync(layer.group_send)(f"order_{order.order_id}", payload)
+    # Notify the customer's dashboard notification channel
+    try:
+        parts = order.order_id.split("-")  # CO-1 or CO-1-42
+        checkout_id = int(parts[1])
+        from api.models import CheckoutOrder
+        co = CheckoutOrder.objects.filter(id=checkout_id).select_related("customer").first()
+        if co and co.customer_id:
+            async_to_sync(layer.group_send)(f"user_{co.customer_id}", payload)
+    except (IndexError, ValueError):
+        pass
+
+
+def _broadcast_stock_update(product):
+    """Notify all product-list pages about a stock change."""
+    from asgiref.sync import async_to_sync
+    layer = _get_channel_layer()
+    if layer is None:
+        return
+    async_to_sync(layer.group_send)(
+        "stock_updates",
+        {"type": "stock.update", "product_id": product.id, "stock": product.stock, "status": product.status},
+    )
 
 
 # ── Role-enforcement mixins ───────────────────────────────────────────────────
@@ -269,33 +354,48 @@ class CartView(CustomerRequiredMixin, TemplateView):
 
 class AddToCartView(CustomerRequiredMixin, View):
     def post(self, request, product_id):
-        product = get_object_or_404(Product, pk=product_id, status="Available")
-        cart = request.session.get("cart", [])
-        for item in cart:
-            if item["product_id"] == product_id:
-                new_qty = item["quantity"] + 1
-                if new_qty > product.stock:
-                    messages.error(request, f"Only {product.stock} units of {product.name} in stock.")
+        session_key = _ensure_session_key(request)
+        with transaction.atomic():
+            product = get_object_or_404(
+                Product.objects.select_for_update(), pk=product_id, status="Available"
+            )
+            available = _available_stock(product, session_key)
+            cart = request.session.get("cart", [])
+            for item in cart:
+                if item["product_id"] == product_id:
+                    new_qty = item["quantity"] + 1
+                    if new_qty > available:
+                        messages.error(
+                            request,
+                            f"Only {available} unit(s) of {product.name} available right now.",
+                        )
+                        return redirect("/products/")
+                    item["quantity"] = new_qty
+                    request.session["cart"] = cart
+                    _upsert_reservation(session_key, product_id, new_qty)
+                    messages.success(request, f"Added another {product.name} to cart.")
                     return redirect("/products/")
-                item["quantity"] = new_qty
-                request.session["cart"] = cart
-                messages.success(request, f"Added another {product.name} to cart.")
+            if available < 1:
+                messages.error(request, f"{product.name} is not available right now.")
                 return redirect("/products/")
-        cart.append({
-            "product_id": product_id,
-            "name": product.name,
-            "price": float(product.price),
-            "quantity": 1,
-        })
-        request.session["cart"] = cart
+            cart.append({
+                "product_id": product_id,
+                "name": product.name,
+                "price": float(product.price),
+                "quantity": 1,
+            })
+            request.session["cart"] = cart
+            _upsert_reservation(session_key, product_id, 1)
         messages.success(request, f"{product.name} added to cart.")
         return redirect("/products/")
 
 
 class RemoveFromCartView(CustomerRequiredMixin, View):
     def post(self, request, product_id):
+        session_key = _ensure_session_key(request)
         cart = request.session.get("cart", [])
         request.session["cart"] = [i for i in cart if i["product_id"] != product_id]
+        _upsert_reservation(session_key, product_id, 0)
         messages.info(request, "Item removed from cart.")
         return redirect("/cart/")
 
@@ -308,16 +408,23 @@ class UpdateCartView(CustomerRequiredMixin, View):
             quantity = 1
         if quantity < 1:
             quantity = 1
-        product = get_object_or_404(Product, pk=product_id)
-        if quantity > product.stock:
-            messages.error(request, f"Only {product.stock} units of {product.name} in stock.")
-            return redirect("/cart/")
-        cart = request.session.get("cart", [])
-        for item in cart:
-            if item["product_id"] == product_id:
-                item["quantity"] = quantity
-                break
-        request.session["cart"] = cart
+        session_key = _ensure_session_key(request)
+        with transaction.atomic():
+            product = get_object_or_404(Product.objects.select_for_update(), pk=product_id)
+            available = _available_stock(product, session_key)
+            if quantity > available:
+                messages.error(
+                    request,
+                    f"Only {available} unit(s) of {product.name} available right now.",
+                )
+                return redirect("/cart/")
+            cart = request.session.get("cart", [])
+            for item in cart:
+                if item["product_id"] == product_id:
+                    item["quantity"] = quantity
+                    break
+            request.session["cart"] = cart
+            _upsert_reservation(session_key, product_id, quantity)
         messages.success(request, "Cart updated.")
         return redirect("/cart/")
 
@@ -346,34 +453,49 @@ class CheckoutView(CustomerRequiredMixin, View):
             messages.error(request, "Your cart is empty.")
             return redirect("/cart/")
 
-        # Fetch all products once (needed for multi-vendor grouping + stock validation)
-        product_ids = [int(i.get("product_id")) for i in cart if str(i.get("product_id", "")).isdigit()]
-        products = list(Product.objects.filter(pk__in=product_ids).select_related("producer"))
-        product_by_id = {p.id: p for p in products}
-
-        # Stock validation before saving
-        stock_errors = []
-        for item in cart:
-            try:
-                product = product_by_id.get(int(item["product_id"]))
-                if not product:
-                    raise Product.DoesNotExist()
-                if product.stock <= 0:
-                    stock_errors.append(f"{item['name']} is out of stock.")
-                elif item["quantity"] > product.stock:
-                    stock_errors.append(
-                        f"{item['name']}: only {product.stock} in stock (requested {item['quantity']})."
-                    )
-            except Product.DoesNotExist:
-                stock_errors.append(f"Product '{item['name']}' no longer exists.")
-
-        if stock_errors:
-            for err in stock_errors:
-                messages.error(request, err)
+        # Address must be selected from Nominatim suggestions
+        if request.POST.get("address_confirmed") != "1":
+            messages.error(request, "Please select a valid address from the suggestions.")
             return render(request, self.template_name, self._build_context(request, form, cart))
 
-        if form.is_valid():
-            checkout_order = form.save()
+        if not form.is_valid():
+            return render(request, self.template_name, self._build_context(request, form, cart))
+
+        with transaction.atomic():
+            # Lock product rows for the duration of this transaction so two
+            # concurrent checkouts cannot both read the same stock and oversell.
+            product_ids = [int(i.get("product_id")) for i in cart if str(i.get("product_id", "")).isdigit()]
+            products = list(
+                Product.objects.select_for_update()
+                .filter(pk__in=product_ids)
+                .select_related("producer")
+            )
+            product_by_id = {p.id: p for p in products}
+
+            # Stock validation inside the lock
+            stock_errors = []
+            for item in cart:
+                try:
+                    product = product_by_id.get(int(item["product_id"]))
+                    if not product:
+                        raise Product.DoesNotExist()
+                    if product.stock <= 0:
+                        stock_errors.append(f"{item['name']} is out of stock.")
+                    elif item["quantity"] > product.stock:
+                        stock_errors.append(
+                            f"{item['name']}: only {product.stock} in stock (requested {item['quantity']})."
+                        )
+                except Product.DoesNotExist:
+                    stock_errors.append(f"Product '{item['name']}' no longer exists.")
+
+            if stock_errors:
+                for err in stock_errors:
+                    messages.error(request, err)
+                return render(request, self.template_name, self._build_context(request, form, cart))
+
+            checkout_order = form.save(commit=False)
+            checkout_order.customer = request.user
+            checkout_order.save()
 
             # Group items by producer so we support single-vendor AND multi-vendor orders.
             grouped: dict[int, list[tuple[Product, int]]] = defaultdict(list)
@@ -410,7 +532,7 @@ class CheckoutView(CustomerRequiredMixin, View):
                     )
                 created_vendor_orders.append(vendor_order.order_id)
 
-            # Decrement stock using the same fetched product objects
+            # Decrement stock using the same fetched product objects and broadcast changes
             for item in cart:
                 product = product_by_id.get(int(item["product_id"]))
                 if not product:
@@ -419,6 +541,7 @@ class CheckoutView(CustomerRequiredMixin, View):
                 if product.stock == 0:
                     product.status = "Out of Stock"
                 product.save()
+                _broadcast_stock_update(product)
 
             # Update today's commission report (automatic 5% network commission)
             report_date = date.today()
@@ -442,10 +565,10 @@ class CheckoutView(CustomerRequiredMixin, View):
             request.session["last_order_base_id"] = base_order_id
             request.session["last_order_vendor_ids"] = created_vendor_orders
             request.session["cart"] = []
+            _clear_reservations(_ensure_session_key(request))
 
             messages.success(request, "Order placed successfully!")
             return redirect(f"/orders/{checkout_order.id}/confirmation/")
-        return render(request, self.template_name, self._build_context(request, form, cart))
 
 
 class OrderConfirmationView(CustomerRequiredMixin, TemplateView):
@@ -538,6 +661,7 @@ class ProducerProductEditView(ProducerRequiredMixin, View):
             elif updated.status == "Out of Stock" and updated.stock > 0:
                 updated.status = "Available"
             updated.save()
+            _broadcast_stock_update(updated)
             messages.success(request, "Product updated.")
             return redirect("/producer/products/")
         return render(request, self.template_name, {"form": form, "product": product})
@@ -613,6 +737,10 @@ class ProducerOrderStatusUpdateView(ProducerRequiredMixin, View):
 
         order.status = new_status.capitalize()
         order.save()
+
+        # Push real-time notification to customer
+        _broadcast_order_status(order)
+
         messages.success(request, "Order status updated.")
         return redirect("/producer/orders/")
 

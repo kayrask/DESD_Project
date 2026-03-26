@@ -57,6 +57,7 @@ class Product(models.Model):
 
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default="")
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.IntegerField(default=0)
     status = models.CharField(max_length=50, choices=PRODUCT_STATUS_CHOICES, default="Available")
@@ -117,6 +118,9 @@ class CheckoutOrder(models.Model):
     delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=CHECKOUT_STATUS_CHOICES, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
+    customer = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="checkout_orders"
+    )
 
     def __str__(self):
         return f"Checkout by {self.full_name} ({self.email})"
@@ -140,6 +144,21 @@ GRADE_CHOICES = [
     ("B", "Grade B – Standard"),
     ("C", "Grade C – Discounted"),
 ]
+
+
+class CartReservation(models.Model):
+    """Tracks how many units of a product each active session has in their cart.
+    Used to soft-reserve stock so concurrent customers cannot over-commit."""
+    session_key = models.CharField(max_length=40, db_index=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="cart_reservations")
+    quantity = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("session_key", "product")
+
+    def __str__(self):
+        return f"Session {self.session_key[:8]}… — {self.quantity}x {self.product.name}"
 
 
 class QualityAssessment(models.Model):

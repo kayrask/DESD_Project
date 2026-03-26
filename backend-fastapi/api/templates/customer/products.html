@@ -30,21 +30,24 @@
   </form>
 
   {% if products %}
-  <div class="row g-4">
+  <div class="row g-4" id="product-grid">
     {% for product in products %}
-    <div class="col-md-4 col-lg-3">
+    <div class="col-md-4 col-lg-3" data-product-id="{{ product.id }}">
       <div class="card h-100 border-0 shadow-sm">
         <div class="card-body">
           <span class="badge bg-light text-dark mb-2">{{ product.category }}</span>
           <h6 class="fw-bold">
             <a href="{% url 'product_detail' product.id %}" class="text-dark text-decoration-none stretched-link">{{ product.name }}</a>
           </h6>
-          <p class="text-muted small">
-            {% if product.stock > 0 %}Stock: {{ product.stock }}{% else %}<span class="text-danger">Out of Stock</span>{% endif %}
+          {% if product.description %}
+          <p class="text-muted small mb-2" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ product.description }}</p>
+          {% endif %}
+          <p class="text-muted small stock-info mb-1">
+            {% if product.stock > 0 %}Stock: <span class="stock-count">{{ product.stock }}</span>{% else %}<span class="text-danger">Out of Stock</span>{% endif %}
           </p>
           <p class="fw-bold text-success fs-5 mb-0">£{{ product.price }}</p>
         </div>
-        <div class="card-footer bg-white border-0 pb-3">
+        <div class="card-footer bg-white border-0 pb-3 cart-action">
           {% if product.stock > 0 %}
           <form method="post" action="{% url 'cart_add' product.id %}" style="position:relative;z-index:1;">
             {% csrf_token %}
@@ -68,4 +71,44 @@
   </div>
   {% endif %}
 </div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const ws = new WebSocket(`ws://${location.host}/ws/stock/`);
+  ws.onmessage = function (e) {
+    const data = JSON.parse(e.data);
+    if (data.type !== 'stock_update') return;
+
+    const card = document.querySelector(`[data-product-id="${data.product_id}"]`);
+    if (!card) return;
+
+    const stockInfo = card.querySelector('.stock-info');
+    const cartAction = card.querySelector('.cart-action');
+    const inStock = data.stock > 0;
+
+    // Update stock count display
+    if (inStock) {
+      stockInfo.innerHTML = `Stock: <span class="stock-count">${data.stock}</span>`;
+    } else {
+      stockInfo.innerHTML = '<span class="text-danger">Out of Stock</span>';
+    }
+
+    // Swap add-to-cart button state
+    if (!inStock) {
+      cartAction.innerHTML = '<button class="btn btn-secondary btn-sm w-100" disabled>Out of Stock</button>';
+    } else if (cartAction.querySelector('button[disabled]')) {
+      const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      cartAction.innerHTML = `
+        <form method="post" action="/cart/add/${data.product_id}/" style="position:relative;z-index:1;">
+          <input type="hidden" name="csrfmiddlewaretoken" value="${csrf}">
+          <button type="submit" class="btn btn-brand btn-sm w-100">
+            <i class="bi bi-cart-plus me-1"></i>Add to Cart
+          </button>
+        </form>`;
+    }
+  };
+}());
+</script>
 {% endblock %}

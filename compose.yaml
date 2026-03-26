@@ -17,6 +17,18 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: desd-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: ./backend-fastapi
@@ -26,16 +38,59 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./backend-fastapi:/app
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
       sh -c "python manage.py migrate &&
              python manage.py seed_db &&
              python manage.py collectstatic --noinput &&
-             python manage.py runserver 0.0.0.0:8000"
+             python manage.py setup_periodic_tasks &&
+             daphne -b 0.0.0.0 -p 8000 desd_backend.asgi:application"
+
+  celery_worker:
+    build:
+      context: ./backend-fastapi
+      dockerfile: Dockerfile
+    container_name: desd-celery-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend-fastapi:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A desd_backend worker --loglevel=info --concurrency=2
+
+  celery_beat:
+    build:
+      context: ./backend-fastapi
+      dockerfile: Dockerfile
+    container_name: desd-celery-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend-fastapi:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A desd_backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
   web:
     image: nginx:1.25-alpine
