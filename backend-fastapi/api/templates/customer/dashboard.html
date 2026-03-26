@@ -10,14 +10,14 @@
     <div class="col-md-4">
       <div class="card stat-card border-0 shadow-sm p-4">
         <div class="text-muted small mb-1">Upcoming Deliveries</div>
-        <div class="fs-2 fw-bold text-success">{{ summary.upcoming_deliveries }}</div>
+        <div class="fs-2 fw-bold text-success">{{ upcoming_deliveries }}</div>
         <div class="text-muted small">orders on the way</div>
       </div>
     </div>
     <div class="col-md-4">
       <div class="card stat-card border-0 shadow-sm p-4">
-        <div class="text-muted small mb-1">Saved Producers</div>
-        <div class="fs-2 fw-bold text-success">{{ summary.saved_producers }}</div>
+        <div class="text-muted small mb-1">Total Orders</div>
+        <div class="fs-2 fw-bold text-success">{{ recent_orders|length }}</div>
         <div class="text-muted small">producers favourited</div>
       </div>
     </div>
