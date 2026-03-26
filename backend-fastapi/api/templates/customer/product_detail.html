@@ -25,6 +25,9 @@
               <span class="text-danger fw-semibold">Out of stock</span>
             {% endif %}
           </p>
+          {% if product.description %}
+          <p class="text-secondary lh-lg mb-4">{{ product.description }}</p>
+          {% endif %}
           <p class="text-muted mb-1"><strong>Status:</strong> {{ product.status }}</p>
           <p class="text-muted"><strong>Sold by:</strong> {{ product.producer.full_name }}</p>
         </div>

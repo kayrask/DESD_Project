@@ -41,7 +41,14 @@
               </div>
               <div class="col-12">
                 <label class="form-label fw-semibold">Street Address</label>
-                {{ form.address }}
+                <div class="position-relative">
+                  {{ form.address }}
+                  <ul id="address-suggestions" class="list-group position-absolute w-100 shadow-sm" style="z-index:1000;display:none;max-height:220px;overflow-y:auto;top:100%;left:0"></ul>
+                </div>
+                <input type="hidden" name="address_confirmed" id="address_confirmed" value="">
+                <div id="address-hint" class="text-muted small mt-1" style="display:none">
+                  Please select an address from the suggestions.
+                </div>
                 {% if form.address.errors %}<div class="text-danger small">{{ form.address.errors }}</div>{% endif %}
               </div>
               <div class="col-md-7">
@@ -125,10 +132,86 @@
 </div>
 
 <script>
-  document.getElementById('checkout-form').addEventListener('submit', function () {
+(function () {
+  const addressInput  = document.getElementById('{{ form.address.id_for_label }}');
+  const cityInput     = document.getElementById('{{ form.city.id_for_label }}');
+  const postalInput   = document.getElementById('{{ form.postal_code.id_for_label }}');
+  const confirmed     = document.getElementById('address_confirmed');
+  const suggestions   = document.getElementById('address-suggestions');
+  const hint          = document.getElementById('address-hint');
+
+  let debounceTimer = null;
+
+  addressInput.setAttribute('autocomplete', 'off');
+
+  addressInput.addEventListener('input', function () {
+    confirmed.value = '';
+    clearTimeout(debounceTimer);
+    const q = this.value.trim();
+    if (q.length < 4) { hideSuggestions(); return; }
+    debounceTimer = setTimeout(() => fetchSuggestions(q), 400);
+  });
+
+  function fetchSuggestions(q) {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=' + encodeURIComponent(q);
+    fetch(url, { headers: { 'Accept-Language': 'en' } })
+      .then(r => r.json())
+      .then(data => renderSuggestions(data))
+      .catch(() => hideSuggestions());
+  }
+
+  function renderSuggestions(results) {
+    suggestions.innerHTML = '';
+    if (!results.length) { hideSuggestions(); return; }
+    results.forEach(item => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item list-group-item-action py-2 px-3';
+      li.style.cursor = 'pointer';
+      li.textContent = item.display_name;
+      li.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        applySelection(item);
+      });
+      suggestions.appendChild(li);
+    });
+    suggestions.style.display = 'block';
+  }
+
+  function applySelection(item) {
+    const addr = item.address || {};
+    const road    = [addr.house_number, addr.road].filter(Boolean).join(' ');
+    const city    = addr.city || addr.town || addr.village || addr.county || '';
+    const postal  = addr.postcode || '';
+
+    addressInput.value = road || item.display_name;
+    if (city)   cityInput.value  = city;
+    if (postal) postalInput.value = postal;
+    confirmed.value = '1';
+    hideSuggestions();
+    hint.style.display = 'none';
+  }
+
+  function hideSuggestions() {
+    suggestions.style.display = 'none';
+    suggestions.innerHTML = '';
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!addressInput.contains(e.target)) hideSuggestions();
+  });
+
+  // Prevent submit if address not confirmed from suggestions
+  document.getElementById('checkout-form').addEventListener('submit', function (e) {
+    if (!confirmed.value) {
+      e.preventDefault();
+      hint.style.display = 'block';
+      addressInput.focus();
+      return;
+    }
     var btn = document.getElementById('submit-btn');
     btn.disabled = true;
     btn.textContent = 'Placing order...';
   });
+}());
 </script>
 {% endblock %}

@@ -47,6 +47,7 @@ web_patterns = [
     # Customer
     path("customer/", views_web.CustomerDashboardView.as_view(), name="customer_dashboard"),
     path("products/", views_web.ProductListView.as_view(), name="product_list"),
+    path("search/", views_web.ProductListView.as_view(), name="search"),
     path("products/<int:pk>/", views_web.ProductDetailView.as_view(), name="product_detail"),
     path("cart/", views_web.CartView.as_view(), name="cart"),
     path("cart/add/<int:product_id>/", views_web.AddToCartView.as_view(), name="cart_add"),

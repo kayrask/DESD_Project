@@ -89,4 +89,50 @@
     </div>
   </div>
 </div>
+
+<!-- Real-time order status toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100">
+  <div id="order-toast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold" id="order-toast-msg"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const orderIds = {{ vendor_order_ids|default:"[]"|safe }};
+  if (!orderIds.length) return;
+
+  const toastEl = document.getElementById('order-toast');
+  const toastMsg = document.getElementById('order-toast-msg');
+
+  function showToast(msg) {
+    toastMsg.textContent = msg;
+    const t = new bootstrap.Toast(toastEl, { delay: 6000 });
+    t.show();
+  }
+
+  function updateBadge(orderId, status) {
+    document.querySelectorAll('.badge').forEach(b => {
+      if (b.closest('dd') && b.textContent.trim().toLowerCase() === orderId.toLowerCase()) return;
+    });
+    // Update status badge on this page
+    const badge = document.querySelector('[data-order-status]');
+    if (badge) { badge.textContent = status; }
+    showToast(`Order ${orderId} is now: ${status}`);
+  }
+
+  orderIds.forEach(function (orderId) {
+    const ws = new WebSocket(`ws://${location.host}/ws/orders/${orderId}/`);
+    ws.onmessage = function (e) {
+      const data = JSON.parse(e.data);
+      if (data.type === 'status_update') {
+        updateBadge(data.order_id, data.status);
+      }
+    };
+  });
+}());
+</script>
 {% endblock %}
