@@ -439,7 +439,11 @@ def dashboards_customer(request):
 # ── Orders ────────────────────────────────────────────────────────────────────
 
 def _checkout_error(code: str, message: str, details: dict, http_status: int) -> Response:
-    return Response({"code": code, "message": message, "details": details}, status=http_status)
+    # Fix 3: unified error format — same shape as _error_response across the whole API
+    payload = {"error": code, "message": message}
+    if details:
+        payload["details"] = details
+    return Response(payload, status=http_status)
 
 
 @csrf_exempt
@@ -575,11 +579,22 @@ def orders_create(request):
 
 @api_view(["GET"])
 def orders_get(request, order_id: int):
+    # Fix 1: require authentication
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+
     try:
         order = CheckoutOrder.objects.get(id=order_id)
-        return Response(CheckoutOrderSerializer(order).data)
     except CheckoutOrder.DoesNotExist:
-        return _checkout_error("not_found", "Order not found.", {}, status.HTTP_404_NOT_FOUND)
+        return _error_response("not_found", "Order not found.", status.HTTP_404_NOT_FOUND)
+
+    # Fix 1: ownership check — customer may only read their own order
+    # Admins (role="admin") may read any order
+    if user.get("role") != "admin" and order.email != user.get("email"):
+        return _error_response("not_found", "Order not found.", status.HTTP_404_NOT_FOUND)
+
+    return Response(CheckoutOrderSerializer(order).data)
 
 
 # ── AI ────────────────────────────────────────────────────────────────────────
@@ -590,11 +605,21 @@ def ai_recommendations(request):
         limit = int(request.GET.get("limit", "6"))
     except ValueError:
         return _error_response("validation_error", "limit must be a number.", status.HTTP_400_BAD_REQUEST)
+
+    # Fix 2: if a token is present use the authenticated user's email;
+    # ignore any client-supplied customer_email to prevent probing other users.
+    customer_email = None
+    try:
+        user = user_from_token(_auth_header(request))
+        customer_email = user.get("email")
+    except ApiAuthError:
+        pass  # unauthenticated requests get generic recommendations
+
     try:
         return Response(recommend_products(
             limit=limit,
             category=request.GET.get("category"),
-            customer_email=request.GET.get("customer_email"),
+            customer_email=customer_email,
         ))
     except Exception as exc:
         return _error_response("http_error", str(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)

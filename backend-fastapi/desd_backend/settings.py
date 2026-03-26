@@ -115,4 +115,6 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.TokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # Fix 4: global handler — all unhandled DRF errors return {error, message}
+    "EXCEPTION_HANDLER": "api.exceptions.custom_exception_handler",
 }

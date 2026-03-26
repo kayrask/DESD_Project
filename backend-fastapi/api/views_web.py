@@ -334,7 +334,9 @@ class CheckoutView(CustomerRequiredMixin, View):
 
     def get(self, request):
         cart = request.session.get("cart", [])
-        return render(request, self.template_name, self._build_context(request, CheckoutForm(), cart))
+        # Pre-fill email from the logged-in user so orders are tied to their account
+        form = CheckoutForm(initial={"email": request.user.email})
+        return render(request, self.template_name, self._build_context(request, form, cart))
 
     def post(self, request):
         form = CheckoutForm(request.POST)
