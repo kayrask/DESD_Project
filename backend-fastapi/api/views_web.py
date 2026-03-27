@@ -16,7 +16,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
 from django.db.models import Sum
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
@@ -354,40 +354,56 @@ class CartView(CustomerRequiredMixin, TemplateView):
 
 class AddToCartView(CustomerRequiredMixin, View):
     def post(self, request, product_id):
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        next_url = request.POST.get("next") or request.GET.get("next") or "/products/"
         session_key = _ensure_session_key(request)
+        try:
+            quantity = max(1, int(request.POST.get("quantity", 1)))
+        except (ValueError, TypeError):
+            quantity = 1
         with transaction.atomic():
             product = get_object_or_404(
                 Product.objects.select_for_update(), pk=product_id, status="Available"
             )
             available = _available_stock(product, session_key)
+            quantity = min(quantity, available)
             cart = request.session.get("cart", [])
             for item in cart:
                 if item["product_id"] == product_id:
-                    new_qty = item["quantity"] + 1
+                    new_qty = item["quantity"] + quantity
                     if new_qty > available:
-                        messages.error(
-                            request,
-                            f"Only {available} unit(s) of {product.name} available right now.",
-                        )
-                        return redirect("/products/")
+                        msg = f"Only {available} unit(s) of {product.name} available."
+                        if is_ajax:
+                            return JsonResponse({"ok": False, "message": msg})
+                        messages.error(request, msg)
+                        return redirect(next_url)
                     item["quantity"] = new_qty
                     request.session["cart"] = cart
                     _upsert_reservation(session_key, product_id, new_qty)
-                    messages.success(request, f"Added another {product.name} to cart.")
-                    return redirect("/products/")
+                    msg = f"Added {quantity}× {product.name} to cart."
+                    if is_ajax:
+                        return JsonResponse({"ok": True, "message": msg, "cart_count": len(cart)})
+                    messages.success(request, msg)
+                    return redirect(next_url)
             if available < 1:
-                messages.error(request, f"{product.name} is not available right now.")
-                return redirect("/products/")
+                msg = f"{product.name} is not available right now."
+                if is_ajax:
+                    return JsonResponse({"ok": False, "message": msg})
+                messages.error(request, msg)
+                return redirect(next_url)
             cart.append({
                 "product_id": product_id,
                 "name": product.name,
                 "price": float(product.price),
-                "quantity": 1,
+                "quantity": quantity,
             })
             request.session["cart"] = cart
-            _upsert_reservation(session_key, product_id, 1)
-        messages.success(request, f"{product.name} added to cart.")
-        return redirect("/products/")
+            _upsert_reservation(session_key, product_id, quantity)
+        msg = f"{quantity}× {product.name} added to cart."
+        if is_ajax:
+            return JsonResponse({"ok": True, "message": msg, "cart_count": len(request.session.get("cart", []))})
+        messages.success(request, msg)
+        return redirect(next_url)
 
 
 class RemoveFromCartView(CustomerRequiredMixin, View):

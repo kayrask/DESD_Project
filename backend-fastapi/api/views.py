@@ -381,7 +381,28 @@ def dashboards_admin_reports(request):
 
 @api_view(["GET"])
 def admin_commission(request):
-    return dashboards_admin_reports(request)
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
+    try:
+        require_role(user, ["admin"])
+        date_from_raw = request.GET.get("from")
+        date_to_raw = request.GET.get("to")
+        parsed_from = date.fromisoformat(date_from_raw) if date_from_raw else None
+        parsed_to = date.fromisoformat(date_to_raw) if date_to_raw else None
+        if parsed_from and parsed_to and parsed_from > parsed_to:
+            return _error_response("validation_error", "from date must be before to date", status.HTTP_400_BAD_REQUEST)
+        qs = CommissionReport.objects.all()
+        if parsed_from:
+            qs = qs.filter(report_date__gte=parsed_from)
+        if parsed_to:
+            qs = qs.filter(report_date__lte=parsed_to)
+        rows = [{"date": str(r.report_date), "orders": r.total_orders, "gross": float(r.gross_amount), "commission": float(r.commission_amount)} for r in qs]
+        return Response(AdminReportsResponseSerializer({"rows": rows}).data)
+    except ValueError:
+        return _error_response("validation_error", "Dates must use YYYY-MM-DD", status.HTTP_400_BAD_REQUEST)
+    except ApiAuthError as exc:
+        return _error_response(exc.error, exc.message, exc.status_code)
 
 
 @api_view(["GET"])
