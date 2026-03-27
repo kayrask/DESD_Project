@@ -135,7 +135,16 @@
                 </li>
               </ul>
             </div>
-            <a href="{% url 'cart' %}" class="btn btn-outline-brand btn-sm"><i class="bi bi-cart2 me-1"></i>Cart</a>
+            <a href="{% url 'cart' %}" class="btn btn-outline-brand btn-sm position-relative">
+              <i class="bi bi-cart2 me-1"></i>Cart
+              {% with cart=request.session.cart %}
+              {% if cart %}
+              <span id="cart-count-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" style="font-size:.65rem;">{{ cart|length }}</span>
+              {% else %}
+              <span id="cart-count-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" style="font-size:.65rem;display:none;">0</span>
+              {% endif %}
+              {% endwith %}
+            </a>
           {% else %}
             <span class="user-chip"><i class="bi bi-person-fill me-1"></i>{{ user.full_name }} &middot; {{ user.role }}</span>
           {% endif %}
@@ -178,6 +187,56 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Global AJAX add-to-cart (works on any page with data-ajax-cart forms) -->
+<div id="cart-toast" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:none;min-width:240px;">
+  <div id="cart-toast-inner" class="alert shadow mb-0 d-flex align-items-center gap-2 py-2 px-3" style="border-radius:10px;font-size:.875rem;">
+    <i id="cart-toast-icon" class="bi fs-5"></i>
+    <span id="cart-toast-msg"></span>
+  </div>
+</div>
+<script>
+(function () {
+  let toastTimer;
+  function showCartToast(msg, ok) {
+    const wrap  = document.getElementById('cart-toast');
+    const inner = document.getElementById('cart-toast-inner');
+    const icon  = document.getElementById('cart-toast-icon');
+    document.getElementById('cart-toast-msg').textContent = msg;
+    inner.className = 'alert shadow mb-0 d-flex align-items-center gap-2 py-2 px-3 ' + (ok ? 'alert-success' : 'alert-danger');
+    icon.className  = 'bi fs-5 ' + (ok ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill');
+    wrap.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { wrap.style.display = 'none'; }, 2800);
+  }
+  function getCsrf() {
+    return document.cookie.split(';').map(c => c.trim())
+      .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+  }
+  document.addEventListener('submit', function (e) {
+    const form = e.target.closest('form[data-ajax-cart]');
+    if (!form) return;
+    e.preventDefault();
+    fetch(form.action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() },
+      body: new FormData(form),
+    })
+    .then(r => r.json())
+    .then(data => {
+      showCartToast(data.message, data.ok);
+      if (data.ok) {
+        const badge = document.getElementById('cart-count-badge');
+        if (badge) { badge.textContent = data.cart_count; badge.style.display = ''; }
+      }
+    })
+    .catch(() => showCartToast('Something went wrong.', false));
+  });
+  window.showCartToast = showCartToast;
+  window.getCartCsrf  = getCsrf;
+}());
+</script>
+
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

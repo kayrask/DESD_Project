@@ -144,7 +144,10 @@
 
   addressInput.setAttribute('autocomplete', 'off');
 
+  let isSelecting = false;
+
   addressInput.addEventListener('input', function () {
+    if (isSelecting) return;
     confirmed.value = '';
     clearTimeout(debounceTimer);
     const q = this.value.trim();
@@ -170,7 +173,9 @@
       li.textContent = item.display_name;
       li.addEventListener('mousedown', function (e) {
         e.preventDefault();
+        isSelecting = true;
         applySelection(item);
+        isSelecting = false;
       });
       suggestions.appendChild(li);
     });
