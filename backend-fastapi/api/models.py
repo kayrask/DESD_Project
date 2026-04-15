@@ -38,6 +38,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     full_name = models.CharField(max_length=200, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    postal_code = models.CharField(max_length=20, blank=True, default="")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name", "role"]
@@ -51,6 +52,7 @@ class User(AbstractUser):
 class Product(models.Model):
     PRODUCT_STATUS_CHOICES = [
         ("Available", "Available"),
+        ("In Season", "In Season"),
         ("Out of Stock", "Out of Stock"),
         ("Unavailable", "Unavailable"),
     ]
@@ -62,6 +64,8 @@ class Product(models.Model):
     stock = models.IntegerField(default=0)
     status = models.CharField(max_length=50, choices=PRODUCT_STATUS_CHOICES, default="Available")
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products")
+    allergens = models.TextField(blank=True, default="", help_text="List allergens e.g. Milk, Eggs, Gluten")
+    is_organic = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["name"]
@@ -185,3 +189,19 @@ class QualityAssessment(models.Model):
 
     def __str__(self):
         return f"{self.product.name} → Grade {self.grade} ({self.model_confidence:.0%} conf)"
+
+
+class Review(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reviews")
+    rating = models.IntegerField(choices=[(i, f"{i} star{'s' if i > 1 else ''}") for i in range(1, 6)])
+    title = models.CharField(max_length=200, blank=True, default="")
+    text = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("product", "customer")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.customer.full_name} → {self.product.name} ({self.rating}★)"

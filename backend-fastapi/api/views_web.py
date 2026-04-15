@@ -6,7 +6,7 @@ Views   → here (class-based views using Django ORM directly)
 Templates → api/templates/
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime as _dt, timedelta
 from decimal import Decimal
 import csv
 from collections import defaultdict
@@ -29,6 +29,7 @@ from api.forms import (
     ProductForm,
     ReportFilterForm,
     RegisterForm,
+    ReviewForm,
 )
 from api.models import (
     CartReservation,
@@ -38,6 +39,7 @@ from api.models import (
     Product,
     QualityAssessment,
     CheckoutOrder,
+    Review,
     User,
 )
 from app.services.ai_service import recommend_products
@@ -310,35 +312,106 @@ class CustomerDashboardView(CustomerRequiredMixin, TemplateView):
         return ctx
 
 
+class CustomerOrdersView(CustomerRequiredMixin, TemplateView):
+    template_name = "customer/orders.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["orders"] = (
+            CheckoutOrder.objects.filter(email=self.request.user.email)
+            .order_by("-created_at")
+        )
+        return ctx
+
+
+def product_suggest(request):
+    """Return up to 8 available products matching the query — used for live search autocomplete."""
+    q = request.GET.get("q", "").strip()
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+    qs = (
+        Product.objects.filter(name__icontains=q, status="Available")
+        .values("id", "name", "category", "price")[:8]
+    )
+    return JsonResponse({"results": list(qs)})
+
+
 class ProductListView(CustomerRequiredMixin, ListView):
     template_name = "customer/products.html"
     context_object_name = "products"
+    paginate_by = 12
+
+    _visible = ("Available", "In Season")
 
     def get_queryset(self):
-        qs = Product.objects.filter(status="Available")
+        qs = Product.objects.filter(status__in=self._visible)
         q = self.request.GET.get("q", "")
         category = self.request.GET.get("category", "")
+        organic = self.request.GET.get("organic", "")
         if q:
             qs = qs.filter(name__icontains=q)
         if category:
             qs = qs.filter(category=category)
+        if organic:
+            qs = qs.filter(is_organic=True)
         return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["categories"] = list(Product.objects.values_list("category", flat=True).distinct())
+        raw = (
+            Product.objects.filter(status__in=self._visible)
+            .exclude(category__isnull=True)
+            .exclude(category="")
+            .values_list("category", flat=True)
+        )
+        ctx["categories"] = sorted(set(c.strip() for c in raw))
         ctx["q"] = self.request.GET.get("q", "")
         ctx["selected_category"] = self.request.GET.get("category", "")
+        ctx["organic_filter"] = self.request.GET.get("organic", "")
         return ctx
 
 
-class ProductDetailView(TemplateView):
+class ProductDetailView(View):
     template_name = "customer/product_detail.html"
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["product"] = get_object_or_404(Product, pk=self.kwargs["pk"])
-        return ctx
+    def _context(self, request, pk, form=None):
+        product = get_object_or_404(Product, pk=pk)
+        reviews = product.reviews.select_related("customer").all()
+        avg_rating = None
+        if reviews:
+            avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1)
+        existing_review = None
+        if request.user.is_authenticated:
+            existing_review = reviews.filter(customer=request.user).first()
+        return {
+            "product": product,
+            "reviews": reviews,
+            "avg_rating": avg_rating,
+            "review_form": form or ReviewForm(),
+            "existing_review": existing_review,
+            "star_range": range(1, 6),
+        }
+
+    def get(self, request, pk):
+        return render(request, self.template_name, self._context(request, pk))
+
+    def post(self, request, pk):
+        if not request.user.is_authenticated or request.user.role != "customer":
+            return redirect("login")
+        product = get_object_or_404(Product, pk=pk)
+        existing = Review.objects.filter(product=product, customer=request.user).first()
+        if existing:
+            messages.warning(request, "You have already reviewed this product.")
+            return redirect("product_detail", pk=pk)
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.product = product
+            review.customer = request.user
+            review.save()
+            messages.success(request, "Review submitted. Thank you!")
+            return redirect("product_detail", pk=pk)
+        return render(request, self.template_name, self._context(request, pk, form=form))
 
 
 class CartView(CustomerRequiredMixin, TemplateView):
@@ -347,8 +420,11 @@ class CartView(CustomerRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         cart = self.request.session.get("cart", [])
+        # Add pre-computed line_total to each item so templates don't need widthratio.
+        for item in cart:
+            item["line_total"] = round(float(item["price"]) * int(item["quantity"]), 2)
         ctx["cart"] = cart
-        ctx["total"] = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
+        ctx["total"] = round(sum(i["line_total"] for i in cart), 2)
         return ctx
 
 
@@ -363,7 +439,9 @@ class AddToCartView(CustomerRequiredMixin, View):
             quantity = 1
         with transaction.atomic():
             product = get_object_or_404(
-                Product.objects.select_for_update(), pk=product_id, status="Available"
+                Product.objects.select_for_update().select_related("producer"),
+                pk=product_id,
+                status__in=("Available", "In Season"),
             )
             available = _available_stock(product, session_key)
             quantity = min(quantity, available)
@@ -380,7 +458,7 @@ class AddToCartView(CustomerRequiredMixin, View):
                     item["quantity"] = new_qty
                     request.session["cart"] = cart
                     _upsert_reservation(session_key, product_id, new_qty)
-                    msg = f"Added {quantity}× {product.name} to cart."
+                    msg = f"Updated {product.name} quantity in cart."
                     if is_ajax:
                         return JsonResponse({"ok": True, "message": msg, "cart_count": len(cart)})
                     messages.success(request, msg)
@@ -396,6 +474,8 @@ class AddToCartView(CustomerRequiredMixin, View):
                 "name": product.name,
                 "price": float(product.price),
                 "quantity": quantity,
+                "producer_id": product.producer_id,
+                "producer_name": product.producer.full_name,
             })
             request.session["cart"] = cart
             _upsert_reservation(session_key, product_id, quantity)
@@ -450,14 +530,60 @@ class CheckoutView(CustomerRequiredMixin, View):
 
     _commission_rate = Decimal("0.05")
 
-    def _build_context(self, request, form, cart):
+    def _build_context(self, request, form, cart, product_by_id=None, producer_errors=None):
+        # Load products from DB if not already provided (needed for producer grouping).
+        if cart and product_by_id is None:
+            pids = [int(i["product_id"]) for i in cart if str(i.get("product_id", "")).isdigit()]
+            products = Product.objects.filter(pk__in=pids).select_related("producer")
+            product_by_id = {p.id: p for p in products}
+
+        # Group cart items by producer, calculating per-producer subtotals and commission.
+        producer_groups_map: dict[int, dict] = {}
+        for item in cart:
+            pid_str = str(item.get("product_id", ""))
+            if not pid_str.isdigit():
+                continue
+            product = (product_by_id or {}).get(int(pid_str))
+            # Prefer live DB data; fall back to stored session data for old sessions.
+            producer_id = product.producer_id if product else item.get("producer_id", 0)
+            producer_name = (
+                product.producer.full_name if product else item.get("producer_name", "Unknown Producer")
+            )
+            qty = int(item["quantity"])
+            line_total = round(float(item["price"]) * qty, 2)
+            if producer_id not in producer_groups_map:
+                producer_groups_map[producer_id] = {
+                    "producer_id": producer_id,
+                    "producer_name": producer_name,
+                    "items": [],
+                    "subtotal": Decimal("0"),
+                }
+            producer_groups_map[producer_id]["items"].append({**item, "line_total": line_total})
+            producer_groups_map[producer_id]["subtotal"] += Decimal(str(item["price"])) * qty
+
+        producer_groups = []
+        for g in producer_groups_map.values():
+            sub = g["subtotal"]
+            g["subtotal"] = float(sub.quantize(Decimal("0.01")))
+            g["commission"] = float((sub * self._commission_rate).quantize(Decimal("0.01")))
+            producer_groups.append(g)
+
         total = round(sum(float(i["price"]) * int(i["quantity"]) for i in cart), 2)
         commission = round(total * float(self._commission_rate), 2)
-        return {"form": form, "cart": cart, "total": total, "commission": commission}
+        min_delivery_date = (date.today() + timedelta(days=2)).isoformat()
+
+        return {
+            "form": form,
+            "cart": cart,
+            "total": total,
+            "commission": commission,
+            "producer_groups": producer_groups,
+            "min_delivery_date": min_delivery_date,
+            "producer_errors": producer_errors or [],
+        }
 
     def get(self, request):
         cart = request.session.get("cart", [])
-        # Pre-fill email from the logged-in user so orders are tied to their account
         form = CheckoutForm(initial={"email": request.user.email})
         return render(request, self.template_name, self._build_context(request, form, cart))
 
@@ -469,7 +595,7 @@ class CheckoutView(CustomerRequiredMixin, View):
             messages.error(request, "Your cart is empty.")
             return redirect("/cart/")
 
-        # Address must be selected from Nominatim suggestions
+        # Address must be selected from Nominatim suggestions.
         if request.POST.get("address_confirmed") != "1":
             messages.error(request, "Please select a valid address from the suggestions.")
             return render(request, self.template_name, self._build_context(request, form, cart))
@@ -477,10 +603,40 @@ class CheckoutView(CustomerRequiredMixin, View):
         if not form.is_valid():
             return render(request, self.template_name, self._build_context(request, form, cart))
 
+        # Parse and validate per-producer delivery dates submitted as
+        # delivery_date_<producer_id> fields from the order summary column.
+        min_date = date.today() + timedelta(days=2)
+        producer_delivery_dates: dict[int, date] = {}
+        date_errors: list[str] = []
+        for key, value in request.POST.items():
+            if not key.startswith("delivery_date_"):
+                continue
+            suffix = key[len("delivery_date_"):]
+            if not suffix.isdigit():
+                continue
+            try:
+                parsed = _dt.strptime(value, "%Y-%m-%d").date()
+                if parsed < min_date:
+                    date_errors.append(
+                        "Each delivery date must be at least 2 days from today."
+                    )
+                else:
+                    producer_delivery_dates[int(suffix)] = parsed
+            except ValueError:
+                date_errors.append("Invalid delivery date — please select a valid date.")
+
+        if date_errors:
+            # De-duplicate messages
+            for err in dict.fromkeys(date_errors):
+                messages.error(request, err)
+            return render(request, self.template_name, self._build_context(request, form, cart))
+
         with transaction.atomic():
-            # Lock product rows for the duration of this transaction so two
-            # concurrent checkouts cannot both read the same stock and oversell.
-            product_ids = [int(i.get("product_id")) for i in cart if str(i.get("product_id", "")).isdigit()]
+            # Lock product rows so two concurrent checkouts cannot both read the
+            # same stock and oversell.
+            product_ids = [
+                int(i["product_id"]) for i in cart if str(i.get("product_id", "")).isdigit()
+            ]
             products = list(
                 Product.objects.select_for_update()
                 .filter(pk__in=product_ids)
@@ -488,32 +644,49 @@ class CheckoutView(CustomerRequiredMixin, View):
             )
             product_by_id = {p.id: p for p in products}
 
-            # Stock validation inside the lock
-            stock_errors = []
+            # Stock validation inside the lock — collect structured errors so the
+            # template can display them per-producer.
+            producer_errors: list[dict] = []
             for item in cart:
                 try:
                     product = product_by_id.get(int(item["product_id"]))
                     if not product:
                         raise Product.DoesNotExist()
                     if product.stock <= 0:
-                        stock_errors.append(f"{item['name']} is out of stock.")
+                        producer_errors.append({
+                            "producer_name": product.producer.full_name,
+                            "message": f"{item['name']} is out of stock.",
+                        })
                     elif item["quantity"] > product.stock:
-                        stock_errors.append(
-                            f"{item['name']}: only {product.stock} in stock (requested {item['quantity']})."
-                        )
+                        producer_errors.append({
+                            "producer_name": product.producer.full_name,
+                            "message": (
+                                f"{item['name']}: only {product.stock} in stock "
+                                f"(you requested {item['quantity']})."
+                            ),
+                        })
                 except Product.DoesNotExist:
-                    stock_errors.append(f"Product '{item['name']}' no longer exists.")
+                    producer_errors.append({
+                        "producer_name": "Unknown",
+                        "message": f"Product '{item['name']}' is no longer available.",
+                    })
 
-            if stock_errors:
-                for err in stock_errors:
-                    messages.error(request, err)
-                return render(request, self.template_name, self._build_context(request, form, cart))
+            if producer_errors:
+                return render(
+                    request,
+                    self.template_name,
+                    self._build_context(
+                        request, form, cart,
+                        product_by_id=product_by_id,
+                        producer_errors=producer_errors,
+                    ),
+                )
 
             checkout_order = form.save(commit=False)
             checkout_order.customer = request.user
             checkout_order.save()
 
-            # Group items by producer so we support single-vendor AND multi-vendor orders.
+            # Group items by producer to create one vendor Order per producer.
             grouped: dict[int, list[tuple[Product, int]]] = defaultdict(list)
             gross_total = Decimal("0.00")
             for item in cart:
@@ -522,7 +695,7 @@ class CheckoutView(CustomerRequiredMixin, View):
                     continue
                 qty = int(item["quantity"])
                 grouped[product.producer_id].append((product, qty))
-                gross_total += (Decimal(str(product.price)) * qty)
+                gross_total += Decimal(str(product.price)) * qty
 
             base_order_id = f"CO-{checkout_order.id}"
             is_multi_vendor = len(grouped) > 1
@@ -530,12 +703,16 @@ class CheckoutView(CustomerRequiredMixin, View):
             created_vendor_orders: list[str] = []
             for producer_id, lines in grouped.items():
                 producer = lines[0][0].producer
-                vendor_order_id = base_order_id if not is_multi_vendor else f"{base_order_id}-{producer_id}"
+                vendor_order_id = (
+                    base_order_id if not is_multi_vendor else f"{base_order_id}-{producer_id}"
+                )
+                # Use the per-producer delivery date submitted from the checkout form.
+                delivery_date = producer_delivery_dates.get(producer_id)
 
                 vendor_order = Order.objects.create(
                     order_id=vendor_order_id,
                     customer_name=checkout_order.full_name,
-                    delivery_date=checkout_order.delivery_date,
+                    delivery_date=delivery_date,
                     status="Pending",
                     producer=producer,
                 )
@@ -548,7 +725,7 @@ class CheckoutView(CustomerRequiredMixin, View):
                     )
                 created_vendor_orders.append(vendor_order.order_id)
 
-            # Decrement stock using the same fetched product objects and broadcast changes
+            # Decrement stock and broadcast real-time updates.
             for item in cart:
                 product = product_by_id.get(int(item["product_id"]))
                 if not product:
@@ -559,7 +736,7 @@ class CheckoutView(CustomerRequiredMixin, View):
                 product.save()
                 _broadcast_stock_update(product)
 
-            # Update today's commission report (automatic 5% network commission)
+            # Update today's commission report (automatic 5% network commission).
             report_date = date.today()
             commission_amount = (gross_total * self._commission_rate).quantize(Decimal("0.01"))
             report, _ = CommissionReport.objects.get_or_create(
@@ -571,11 +748,15 @@ class CheckoutView(CustomerRequiredMixin, View):
                 },
             )
             report.total_orders += 1
-            report.gross_amount = (Decimal(str(report.gross_amount)) + gross_total).quantize(Decimal("0.01"))
-            report.commission_amount = (Decimal(str(report.commission_amount)) + commission_amount).quantize(Decimal("0.01"))
+            report.gross_amount = (
+                Decimal(str(report.gross_amount)) + gross_total
+            ).quantize(Decimal("0.01"))
+            report.commission_amount = (
+                Decimal(str(report.commission_amount)) + commission_amount
+            ).quantize(Decimal("0.01"))
             report.save()
 
-            # Preserve cart snapshot for confirmation page, then clear
+            # Preserve cart snapshot for the confirmation page, then clear.
             request.session["last_order_cart"] = cart
             request.session["last_order_total"] = float(gross_total.quantize(Decimal("0.01")))
             request.session["last_order_base_id"] = base_order_id
@@ -597,7 +778,24 @@ class OrderConfirmationView(CustomerRequiredMixin, TemplateView):
         ctx["cart"] = self.request.session.get("last_order_cart", [])
         ctx["total"] = self.request.session.get("last_order_total", 0)
         ctx["customer_order_id"] = self.request.session.get("last_order_base_id")
-        ctx["vendor_order_ids"] = self.request.session.get("last_order_vendor_ids", [])
+        vendor_ids = self.request.session.get("last_order_vendor_ids", [])
+        ctx["vendor_order_ids"] = vendor_ids
+        # Load per-producer vendor orders with items for the breakdown table.
+        # Annotate each order with pre-computed line totals so the template
+        # avoids widthratio (which does integer rounding and loses decimals).
+        if vendor_ids:
+            vendor_orders = list(
+                Order.objects.filter(order_id__in=vendor_ids)
+                .select_related("producer")
+                .prefetch_related("items__product")
+            )
+            for vo in vendor_orders:
+                subtotal = Decimal("0")
+                for oi in vo.items.all():
+                    oi.line_total = (Decimal(str(oi.unit_price)) * oi.quantity).quantize(Decimal("0.01"))
+                    subtotal += oi.line_total
+                vo.subtotal = subtotal.quantize(Decimal("0.01"))
+            ctx["vendor_orders"] = vendor_orders
         return ctx
 
 
@@ -606,19 +804,24 @@ class OrderConfirmationView(CustomerRequiredMixin, TemplateView):
 class ProducerDashboardView(ProducerRequiredMixin, View):
     template_name = "producer/dashboard.html"
 
+    _LOW_STOCK_THRESHOLD = 5
+
     def get(self, request):
         producer = request.user
+        low_stock_qs = Product.objects.filter(
+            producer=producer,
+            stock__gt=0,
+            stock__lte=self._LOW_STOCK_THRESHOLD,
+        ).order_by("stock")
         ctx = {
             "summary": {
                 "orders_today": Order.objects.filter(
                     producer=producer,
                     delivery_date=date.today(),
                 ).count(),
-                "low_stock_products": Product.objects.filter(
-                    producer=producer,
-                    stock__lt=10,
-                ).count(),
-            }
+                "low_stock_count": low_stock_qs.count(),
+            },
+            "low_stock_products": low_stock_qs,
         }
         return render(request, self.template_name, ctx)
 
@@ -648,9 +851,12 @@ class ProducerProductsView(ProducerRequiredMixin, View):
         Product.objects.create(
             name=data["name"],
             category=data["category"],
+            description=data.get("description", ""),
             price=data["price"],
             stock=stock,
             status=status,
+            allergens=data.get("allergens", ""),
+            is_organic=data.get("is_organic", False),
             producer=request.user,
         )
         messages.success(request, "Product created successfully.")

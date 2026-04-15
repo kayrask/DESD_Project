@@ -2,10 +2,11 @@ from datetime import date, timedelta
 
 from django import forms
 
-from api.models import CheckoutOrder, Product
+from api.models import CheckoutOrder, Product, Review
 
 PRODUCT_STATUS_CHOICES = [
     ("Available", "Available"),
+    ("In Season", "In Season"),
     ("Out of Stock", "Out of Stock"),
     ("Unavailable", "Unavailable"),
 ]
@@ -83,13 +84,16 @@ class RegisterForm(forms.Form):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ["name", "category", "price", "stock", "status"]
+        fields = ["name", "category", "description", "price", "stock", "status", "allergens", "is_organic"]
         widgets = {
             "name": forms.TextInput(attrs={**_field_class, "placeholder": "Product name"}),
             "category": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Vegetable"}),
+            "description": forms.Textarea(attrs={**_field_class, "rows": 3, "placeholder": "Describe your product..."}),
             "price": forms.NumberInput(attrs={**_field_class, "step": "0.01", "min": "0"}),
             "stock": forms.NumberInput(attrs={**_field_class, "min": "0"}),
             "status": forms.Select(attrs=_select_class),
+            "allergens": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Milk, Eggs, Gluten (leave blank if none)"}),
+            "is_organic": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def clean_price(self):
@@ -105,6 +109,17 @@ class ProductForm(forms.ModelForm):
         return stock
 
 
+class ReviewForm(forms.ModelForm):
+    class Meta:
+        model = Review
+        fields = ["rating", "title", "text"]
+        widgets = {
+            "rating": forms.Select(attrs=_select_class),
+            "title": forms.TextInput(attrs={**_field_class, "placeholder": "Summary of your review"}),
+            "text": forms.Textarea(attrs={**_field_class, "rows": 3, "placeholder": "Tell us more..."}),
+        }
+
+
 class CheckoutForm(forms.ModelForm):
     accept_terms = forms.BooleanField(
         required=True,
@@ -113,7 +128,9 @@ class CheckoutForm(forms.ModelForm):
 
     class Meta:
         model = CheckoutOrder
-        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method", "delivery_date"]
+        # delivery_date is omitted — each producer has its own delivery date
+        # submitted as delivery_date_<producer_id> POST fields handled in the view.
+        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method"]
         widgets = {
             "full_name": forms.TextInput(attrs={**_field_class, "placeholder": "Full name"}),
             "email": forms.EmailInput(attrs={**_field_class, "placeholder": "Email address"}),
@@ -123,23 +140,12 @@ class CheckoutForm(forms.ModelForm):
             "payment_method": forms.Select(
                 choices=PAYMENT_METHOD_CHOICES, attrs=_select_class
             ),
-            "delivery_date": forms.DateInput(attrs={**_field_class, "type": "date"}),
         }
 
     def validate_email(self, value):
         if "@" not in value:
             raise forms.ValidationError("Enter a valid email address.")
         return value
-
-    def clean_delivery_date(self):
-        delivery_date = self.cleaned_data.get("delivery_date")
-        if delivery_date is not None:
-            min_date = date.today() + timedelta(days=2)
-            if delivery_date < min_date:
-                raise forms.ValidationError(
-                    "Delivery date must be at least 2 days from today."
-                )
-        return delivery_date
 
 
 class OrderStatusForm(forms.Form):
