@@ -24,7 +24,7 @@ import time
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset, random_split
 from torchvision import datasets, transforms
 
 from ml.model import build_model
@@ -93,15 +93,21 @@ def train(data_dir: str, epochs: int, lr: float, log_every: int):
 
     train_tf, val_tf = get_transforms()
 
-    full_dataset = HealthyRottenDataset(root=data_dir, transform=train_tf)
-    n_val = max(1, int(0.2 * len(full_dataset)))
-    n_train = len(full_dataset) - n_val
-    train_set, val_set = random_split(
-        full_dataset, [n_train, n_val],
-        generator=torch.Generator().manual_seed(SEED),
-    )
-    # Apply val transforms to val split
-    val_set.dataset = HealthyRottenDataset(root=data_dir, transform=val_tf)
+    # Build two separate dataset instances with their own transforms.
+    # Both index the same files in the same order (ImageFolder is deterministic
+    # given the same root), so random_split indices are safely interchangeable.
+    train_dataset = HealthyRottenDataset(root=data_dir, transform=train_tf)
+    val_dataset   = HealthyRottenDataset(root=data_dir, transform=val_tf)
+
+    n_val = max(1, int(0.2 * len(train_dataset)))
+    n_train = len(train_dataset) - n_val
+    indices = torch.randperm(
+        len(train_dataset), generator=torch.Generator().manual_seed(SEED)
+    ).tolist()
+    train_indices, val_indices = indices[:n_train], indices[n_train:]
+
+    train_set = Subset(train_dataset, train_indices)
+    val_set   = Subset(val_dataset,   val_indices)
 
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
     val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
