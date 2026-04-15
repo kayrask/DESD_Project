@@ -50,7 +50,7 @@ def assess_product_image(
     image_bytes = image_file.read()
     image_file.seek(0)  # reset so Django can save it to disk
 
-    result = classify_image(image_bytes)
+    result = classify_image(image_bytes, explain=True)
 
     notes = ""
     warnings = []
@@ -91,6 +91,9 @@ def assess_product_image(
         "is_healthy": result["is_healthy"],
         "notes": notes,
         "warnings": warnings,
+        # XAI fields — populated when explain=True succeeds; None otherwise
+        "xai_heatmap": result.get("xai_heatmap"),
+        "xai_explanation": result.get("xai_explanation"),
     }
 
 
