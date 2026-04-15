@@ -3,16 +3,41 @@
 
 {% block content %}
 <div class="container py-5">
+  <!-- Progress steps -->
+  <div class="d-flex align-items-center mb-5" style="max-width:480px;">
+    <div class="text-center" style="flex:1;">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white" style="width:32px;height:32px;font-size:.8rem;font-weight:700;">
+        <i class="bi bi-check-lg"></i>
+      </div>
+      <div class="small text-muted mt-1">Cart</div>
+    </div>
+    <div style="flex:1;height:2px;background:var(--brand);"></div>
+    <div class="text-center" style="flex:1;">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center text-white" style="width:32px;height:32px;font-size:.8rem;font-weight:700;background:var(--brand);">2</div>
+      <div class="small fw-semibold mt-1" style="color:var(--brand);">Details</div>
+    </div>
+    <div style="flex:1;height:2px;background:var(--border);"></div>
+    <div class="text-center" style="flex:1;">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-light text-muted border" style="width:32px;height:32px;font-size:.8rem;font-weight:700;">3</div>
+      <div class="small text-muted mt-1">Confirmation</div>
+    </div>
+  </div>
+
   <h2 class="fw-bold mb-4">Checkout</h2>
 
-  <div class="row g-4">
-    <!-- Checkout form -->
-    <div class="col-md-7">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-bold py-3">Delivery &amp; Payment Details</div>
-        <div class="card-body p-4">
-          <form method="post" novalidate id="checkout-form">
-            {% csrf_token %}
+  {# The form wraps both columns so the per-producer delivery date inputs
+     inside the order summary are submitted together with the customer details. #}
+  <form method="post" novalidate id="checkout-form">
+    {% csrf_token %}
+    <input type="hidden" name="address_confirmed" id="address_confirmed" value="">
+
+    <div class="row g-4">
+
+      <!-- ── Left column: Customer & payment details ───────────────────────── -->
+      <div class="col-md-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white fw-bold py-3">Delivery &amp; Payment Details</div>
+          <div class="card-body p-4">
 
             {% if form.non_field_errors %}
             <div class="alert alert-danger">
@@ -22,8 +47,23 @@
 
             {% if messages %}
             <div class="alert alert-danger">
-              {% for msg in messages %}
-              <div>{{ msg }}</div>
+              {% for msg in messages %}<div>{{ msg }}</div>{% endfor %}
+            </div>
+            {% endif %}
+
+            {# Per-producer stock / availability errors #}
+            {% if producer_errors %}
+            <div class="mb-3">
+              {% regroup producer_errors by producer_name as errors_by_producer %}
+              {% for group in errors_by_producer %}
+              <div class="alert alert-danger py-2 mb-2">
+                <strong>{{ group.grouper }}:</strong>
+                <ul class="mb-0 ps-3 mt-1">
+                  {% for err in group.list %}
+                  <li>{{ err.message }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
               {% endfor %}
             </div>
             {% endif %}
@@ -43,9 +83,9 @@
                 <label class="form-label fw-semibold">Street Address</label>
                 <div class="position-relative">
                   {{ form.address }}
-                  <ul id="address-suggestions" class="list-group position-absolute w-100 shadow-sm" style="z-index:1000;display:none;max-height:220px;overflow-y:auto;top:100%;left:0"></ul>
+                  <ul id="address-suggestions" class="list-group position-absolute w-100 shadow-sm"
+                      style="z-index:1000;display:none;max-height:220px;overflow-y:auto;top:100%;left:0"></ul>
                 </div>
-                <input type="hidden" name="address_confirmed" id="address_confirmed" value="">
                 <div id="address-hint" class="text-muted small mt-1" style="display:none">
                   Please select an address from the suggestions.
                 </div>
@@ -67,13 +107,6 @@
                 {% if form.payment_method.errors %}<div class="text-danger small">{{ form.payment_method.errors }}</div>{% endif %}
               </div>
               <div class="col-12">
-                <label class="form-label fw-semibold">Delivery Date <span class="text-muted fw-normal">(must be at least 2 days from today)</span></label>
-                {{ form.delivery_date }}
-                {% if form.delivery_date.errors %}
-                <div class="text-danger small">{{ form.delivery_date.errors }}</div>
-                {% endif %}
-              </div>
-              <div class="col-12">
                 <div class="form-check">
                   {{ form.accept_terms }}
                   <label class="form-check-label" for="{{ form.accept_terms.id_for_label }}">
@@ -87,61 +120,100 @@
             <div class="d-grid mt-4">
               <button type="submit" id="submit-btn" class="btn btn-brand btn-lg">Place Order</button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Order summary -->
-    <div class="col-md-5">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-bold py-3">Order Summary</div>
-        <div class="card-body p-0">
-          {% if cart %}
-          <table class="table mb-0">
-            <tbody>
-              {% for item in cart %}
-              <tr>
-                <td>{{ item.name }} <span class="text-muted">×{{ item.quantity }}</span></td>
-                <td class="text-end">£{{ item.price }}</td>
-              </tr>
+      <!-- ── Right column: Per-producer order summary ─────────────────────── -->
+      <div class="col-md-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white fw-bold py-3">Order Summary</div>
+          <div class="card-body p-0">
+            {% if producer_groups %}
+
+              {% for group in producer_groups %}
+              <div class="p-3 {% if not forloop.last %}border-bottom{% endif %}">
+
+                {# Producer header #}
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span class="fw-semibold text-primary">{{ group.producer_name }}</span>
+                  <span class="badge bg-light text-secondary border">Producer</span>
+                </div>
+
+                {# Per-producer delivery date picker #}
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold mb-1">
+                    Delivery Date
+                    <span class="text-muted fw-normal">(at least 2 days from today)</span>
+                  </label>
+                  <input type="date"
+                         name="delivery_date_{{ group.producer_id }}"
+                         class="form-control form-control-sm producer-date-input"
+                         min="{{ min_delivery_date }}"
+                         required>
+                  <div class="invalid-feedback">
+                    Please select a delivery date at least 2 days from today.
+                  </div>
+                </div>
+
+                {# Items from this producer #}
+                <table class="table table-sm mb-2">
+                  <tbody>
+                    {% for item in group.items %}
+                    <tr>
+                      <td class="ps-0">{{ item.name }} <span class="text-muted">×{{ item.quantity }}</span></td>
+                      <td class="text-end pe-0">£{{ item.line_total }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+
+                {# Per-producer financial summary #}
+                <div class="d-flex justify-content-between small text-muted">
+                  <span>Subtotal</span>
+                  <span>£{{ group.subtotal }}</span>
+                </div>
+                <div class="d-flex justify-content-between small text-muted">
+                  <span>Commission (5%)</span>
+                  <span>£{{ group.commission }}</span>
+                </div>
+
+              </div>{# /producer section #}
               {% endfor %}
-            </tbody>
-            <tfoot class="table-light">
-              <tr>
-                <th>Subtotal</th>
-                <th class="text-end">£{{ total }}</th>
-              </tr>
-              <tr>
-                <td class="text-muted">Commission (5%)</td>
-                <td class="text-end text-muted">£{{ commission }}</td>
-              </tr>
-              <tr>
-                <th>Total</th>
-                <th class="text-end text-success">£{{ total }}</th>
-              </tr>
-            </tfoot>
-          </table>
-          {% else %}
-          <p class="p-3 text-muted">Cart is empty.</p>
-          {% endif %}
+
+              {# Grand total across all producers #}
+              <div class="p-3 border-top bg-light">
+                <div class="d-flex justify-content-between fw-bold">
+                  <span>Grand Total</span>
+                  <span class="text-success">£{{ total }}</span>
+                </div>
+                <div class="d-flex justify-content-between small text-muted mt-1">
+                  <span>Total Commission (5%)</span>
+                  <span>£{{ commission }}</span>
+                </div>
+              </div>
+
+            {% else %}
+              <p class="p-3 text-muted">Your cart is empty.</p>
+            {% endif %}
+          </div>
         </div>
       </div>
-    </div>
-  </div>
+
+    </div>{# /row #}
+  </form>
 </div>
 
 <script>
 (function () {
-  const addressInput  = document.getElementById('{{ form.address.id_for_label }}');
-  const cityInput     = document.getElementById('{{ form.city.id_for_label }}');
-  const postalInput   = document.getElementById('{{ form.postal_code.id_for_label }}');
-  const confirmed     = document.getElementById('address_confirmed');
-  const suggestions   = document.getElementById('address-suggestions');
-  const hint          = document.getElementById('address-hint');
+  const addressInput = document.getElementById('{{ form.address.id_for_label }}');
+  const cityInput    = document.getElementById('{{ form.city.id_for_label }}');
+  const postalInput  = document.getElementById('{{ form.postal_code.id_for_label }}');
+  const confirmed    = document.getElementById('address_confirmed');
+  const suggestions  = document.getElementById('address-suggestions');
+  const hint         = document.getElementById('address-hint');
 
   let debounceTimer = null;
-
   addressInput.setAttribute('autocomplete', 'off');
 
   let isSelecting = false;
@@ -183,13 +255,13 @@
   }
 
   function applySelection(item) {
-    const addr = item.address || {};
-    const road    = [addr.house_number, addr.road].filter(Boolean).join(' ');
-    const city    = addr.city || addr.town || addr.village || addr.county || '';
-    const postal  = addr.postcode || '';
+    const addr   = item.address || {};
+    const road   = [addr.house_number, addr.road].filter(Boolean).join(' ');
+    const city   = addr.city || addr.town || addr.village || addr.county || '';
+    const postal = addr.postcode || '';
 
     addressInput.value = road || item.display_name;
-    if (city)   cityInput.value  = city;
+    if (city)   cityInput.value   = city;
     if (postal) postalInput.value = postal;
     confirmed.value = '1';
     hideSuggestions();
@@ -205,14 +277,40 @@
     if (!addressInput.contains(e.target)) hideSuggestions();
   });
 
-  // Prevent submit if address not confirmed from suggestions
+  // Prevent submit if address not confirmed or any per-producer date is missing / too early.
   document.getElementById('checkout-form').addEventListener('submit', function (e) {
+    // Address check
     if (!confirmed.value) {
       e.preventDefault();
       hint.style.display = 'block';
       addressInput.focus();
       return;
     }
+
+    // Per-producer delivery date check (client-side guard)
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 2);
+    let dateOk = true;
+    document.querySelectorAll('.producer-date-input').forEach(function (inp) {
+      inp.classList.remove('is-invalid');
+      if (!inp.value) {
+        inp.classList.add('is-invalid');
+        dateOk = false;
+      } else {
+        const chosen = new Date(inp.value);
+        if (chosen < minDate) {
+          inp.classList.add('is-invalid');
+          dateOk = false;
+        }
+      }
+    });
+
+    if (!dateOk) {
+      e.preventDefault();
+      document.querySelector('.producer-date-input.is-invalid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     var btn = document.getElementById('submit-btn');
     btn.disabled = true;
     btn.textContent = 'Placing order...';

@@ -30,7 +30,7 @@
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Update</button>
               </form>
             </td>
-            <td class="align-middle text-end">£{% widthratio item.price 1 item.quantity %}</td>
+            <td class="align-middle text-end">£{{ item.line_total }}</td>
             <td class="align-middle text-end">
               <form method="post" action="{% url 'cart_remove' item.product_id %}">
                 {% csrf_token %}

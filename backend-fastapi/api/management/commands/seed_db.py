@@ -75,7 +75,7 @@ class Command(BaseCommand):
             ),
             price=4.50,
             stock=52,
-            status="Available",
+            status="In Season",
         )
         self._get_or_create_product(
             producer=producer,
@@ -104,6 +104,7 @@ class Command(BaseCommand):
             price=2.80,
             stock=34,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer,
@@ -118,6 +119,7 @@ class Command(BaseCommand):
             price=3.90,
             stock=20,
             status="Available",
+            allergens="Eggs",
         )
         self._get_or_create_product(
             producer=producer,
@@ -132,7 +134,7 @@ class Command(BaseCommand):
             ),
             price=2.50,
             stock=45,
-            status="Available",
+            status="In Season",
         )
         self._get_or_create_product(
             producer=producer,
@@ -298,6 +300,7 @@ class Command(BaseCommand):
             price=3.80,
             stock=60,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -313,6 +316,7 @@ class Command(BaseCommand):
             price=3.40,
             stock=44,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -328,7 +332,8 @@ class Command(BaseCommand):
             ),
             price=3.20,
             stock=30,
-            status="Available",
+            status="In Season",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -344,7 +349,8 @@ class Command(BaseCommand):
             ),
             price=3.60,
             stock=26,
-            status="Available",
+            status="In Season",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -361,6 +367,8 @@ class Command(BaseCommand):
             price=2.10,
             stock=40,
             status="Available",
+            is_organic=True,
+            allergens="Milk",
         )
         self._get_or_create_product(
             producer=producer2,
@@ -377,6 +385,8 @@ class Command(BaseCommand):
             price=6.80,
             stock=16,
             status="Available",
+            is_organic=True,
+            allergens="Milk",
         )
         self._get_or_create_product(
             producer=producer2,
@@ -393,6 +403,8 @@ class Command(BaseCommand):
             price=2.90,
             stock=32,
             status="Available",
+            is_organic=True,
+            allergens="Milk",
         )
         self._get_or_create_product(
             producer=producer2,
@@ -408,6 +420,7 @@ class Command(BaseCommand):
             price=2.80,
             stock=24,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -424,6 +437,8 @@ class Command(BaseCommand):
             price=3.20,
             stock=50,
             status="Available",
+            is_organic=True,
+            allergens="Gluten, Wheat",
         )
         self._get_or_create_product(
             producer=producer2,
@@ -439,6 +454,8 @@ class Command(BaseCommand):
             price=2.40,
             stock=55,
             status="Available",
+            is_organic=True,
+            allergens="Gluten (Oats)",
         )
         self._get_or_create_product(
             producer=producer2,
@@ -454,6 +471,7 @@ class Command(BaseCommand):
             price=2.80,
             stock=42,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -469,7 +487,8 @@ class Command(BaseCommand):
             ),
             price=1.60,
             stock=48,
-            status="Available",
+            status="In Season",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -486,6 +505,7 @@ class Command(BaseCommand):
             price=1.60,
             stock=44,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -502,6 +522,7 @@ class Command(BaseCommand):
             price=2.20,
             stock=36,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -518,6 +539,7 @@ class Command(BaseCommand):
             price=4.50,
             stock=20,
             status="Available",
+            is_organic=True,
         )
         self._get_or_create_product(
             producer=producer2,
@@ -534,6 +556,7 @@ class Command(BaseCommand):
             price=4.80,
             stock=12,
             status="Available",
+            is_organic=True,
         )
 
         # ── Orders ───────────────────────────────────────────────────────────
@@ -596,7 +619,8 @@ class Command(BaseCommand):
         self.stdout.write(f"  created user: {email}")
         return user
 
-    def _get_or_create_product(self, producer, name, category, description, price, stock, status):
+    def _get_or_create_product(self, producer, name, category, description, price, stock, status,
+                               allergens="", is_organic=False):
         obj, created = Product.objects.get_or_create(
             name=name,
             producer=producer,
@@ -606,11 +630,26 @@ class Command(BaseCommand):
                 "price": price,
                 "stock": stock,
                 "status": status,
+                "allergens": allergens,
+                "is_organic": is_organic,
             },
         )
-        if not created and obj.description != description:
-            obj.description = description
-            obj.save(update_fields=["description"])
+        if not created:
+            update_fields = []
+            if obj.description != description:
+                obj.description = description
+                update_fields.append("description")
+            if obj.allergens != allergens:
+                obj.allergens = allergens
+                update_fields.append("allergens")
+            if obj.is_organic != is_organic:
+                obj.is_organic = is_organic
+                update_fields.append("is_organic")
+            if obj.status != status:
+                obj.status = status
+                update_fields.append("status")
+            if update_fields:
+                obj.save(update_fields=update_fields)
         label = "created" if created else "skip"
         self.stdout.write(f"  {label} product: {name}")
         return obj
