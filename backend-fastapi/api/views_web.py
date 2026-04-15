@@ -430,58 +430,59 @@ class CartView(CustomerRequiredMixin, TemplateView):
 
 class AddToCartView(CustomerRequiredMixin, View):
     def post(self, request, product_id):
-        # Read requested quantity from the form (default 1, min 1).
-        try:
-            requested_qty = max(1, int(request.POST.get("quantity", 1)))
-        except (ValueError, TypeError):
-            requested_qty = 1
-
-        # Determine where to redirect back to (product detail or product list).
-        next_url = request.POST.get("next", "/products/")
-
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        next_url = request.POST.get("next") or request.GET.get("next") or "/products/"
         session_key = _ensure_session_key(request)
+        try:
+            quantity = max(1, int(request.POST.get("quantity", 1)))
+        except (ValueError, TypeError):
+            quantity = 1
         with transaction.atomic():
             product = get_object_or_404(
                 Product.objects.select_for_update().select_related("producer"),
                 pk=product_id,
-                status="Available",
+                status__in=("Available", "In Season"),
             )
             available = _available_stock(product, session_key)
+            quantity = min(quantity, available)
             cart = request.session.get("cart", [])
             for item in cart:
                 if item["product_id"] == product_id:
-                    new_qty = item["quantity"] + requested_qty
+                    new_qty = item["quantity"] + quantity
                     if new_qty > available:
-                        messages.error(
-                            request,
-                            f"Only {available} unit(s) of {product.name} available right now.",
-                        )
+                        msg = f"Only {available} unit(s) of {product.name} available."
+                        if is_ajax:
+                            return JsonResponse({"ok": False, "message": msg})
+                        messages.error(request, msg)
                         return redirect(next_url)
                     item["quantity"] = new_qty
                     request.session["cart"] = cart
                     _upsert_reservation(session_key, product_id, new_qty)
-                    messages.success(request, f"Updated {product.name} quantity in cart.")
+                    msg = f"Updated {product.name} quantity in cart."
+                    if is_ajax:
+                        return JsonResponse({"ok": True, "message": msg, "cart_count": len(cart)})
+                    messages.success(request, msg)
                     return redirect(next_url)
             if available < 1:
-                messages.error(request, f"{product.name} is not available right now.")
-                return redirect(next_url)
-            if requested_qty > available:
-                messages.error(
-                    request,
-                    f"Only {available} unit(s) of {product.name} available right now.",
-                )
+                msg = f"{product.name} is not available right now."
+                if is_ajax:
+                    return JsonResponse({"ok": False, "message": msg})
+                messages.error(request, msg)
                 return redirect(next_url)
             cart.append({
                 "product_id": product_id,
                 "name": product.name,
                 "price": float(product.price),
-                "quantity": requested_qty,
+                "quantity": quantity,
                 "producer_id": product.producer_id,
                 "producer_name": product.producer.full_name,
             })
             request.session["cart"] = cart
-            _upsert_reservation(session_key, product_id, requested_qty)
-        messages.success(request, f"{product.name} added to cart.")
+            _upsert_reservation(session_key, product_id, quantity)
+        msg = f"{quantity}× {product.name} added to cart."
+        if is_ajax:
+            return JsonResponse({"ok": True, "message": msg, "cart_count": len(request.session.get("cart", []))})
+        messages.success(request, msg)
         return redirect(next_url)
 
 

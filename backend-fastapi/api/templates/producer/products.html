@@ -91,7 +91,7 @@
                   </span>
                 </td>
                 <td class="align-middle">
-                  <span class="badge {% if product.status == 'Available' %}badge-status-available{% elif product.status == 'Out of Stock' %}badge-status-out-of-stock{% else %}bg-secondary{% endif %}">
+                  <span class="badge {% if product.status == 'Available' %}badge-available{% elif product.status == 'Out of Stock' %}badge-out-of-stock{% else %}badge-unavailable{% endif %}">
                     {{ product.status }}
                   </span>
                 </td>
