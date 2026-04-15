@@ -14,31 +14,83 @@
     <div class="col-md-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body p-4">
-          <span class="badge bg-light text-dark mb-3 fs-6">{{ product.category }}</span>
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <span class="badge bg-light text-dark fs-6">{{ product.category }}</span>
+            {% if product.status == "In Season" %}
+            <span class="badge bg-success">In Season</span>
+            {% endif %}
+            {% if product.is_organic %}
+            <span class="badge bg-success"><i class="bi bi-leaf me-1"></i>Certified Organic</span>
+            {% endif %}
+          </div>
           <h2 class="fw-bold mb-3">{{ product.name }}</h2>
           <p class="fs-3 fw-bold text-success mb-1">£{{ product.price }}</p>
+
+          {% if avg_rating %}
+          <div class="mb-2">
+            {% for i in star_range %}
+              {% if i <= avg_rating %}
+                <i class="bi bi-star-fill text-warning"></i>
+              {% else %}
+                <i class="bi bi-star text-warning"></i>
+              {% endif %}
+            {% endfor %}
+            <span class="text-muted small ms-1">{{ avg_rating }} / 5 ({{ reviews|length }} review{{ reviews|length|pluralize }})</span>
+          </div>
+          {% endif %}
+
           <p class="text-muted mb-4">
-            Stock:
-            {% if product.stock > 0 %}
-              <span class="text-success fw-semibold">{{ product.stock }} available</span>
+            {% if product.stock <= 0 %}
+              <span class="badge bg-danger">Out of Stock</span>
+            {% elif product.stock <= 5 %}
+              <span class="text-warning fw-semibold">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Only {{ product.stock }} left!
+              </span>
             {% else %}
-              <span class="text-danger fw-semibold">Out of stock</span>
+              <span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>{{ product.stock }} available</span>
             {% endif %}
           </p>
+
           {% if product.description %}
           <p class="text-secondary lh-lg mb-4">{{ product.description }}</p>
           {% endif %}
+
           <p class="text-muted mb-1"><strong>Status:</strong> {{ product.status }}</p>
-          <p class="text-muted"><strong>Sold by:</strong> {{ product.producer.full_name }}</p>
+          <p class="text-muted mb-1"><strong>Sold by:</strong> {{ product.producer.full_name }}</p>
+
+          {# ── TC-015: Allergen warnings ─────────────────────────────────── #}
+          {% if product.allergens %}
+          <div class="alert alert-warning d-flex align-items-start gap-2 mt-3 mb-0 py-2" role="alert">
+            <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+            <div>
+              <strong>Allergen Information:</strong><br>
+              Contains: {{ product.allergens }}
+            </div>
+          </div>
+          {% else %}
+          <div class="alert alert-success d-flex align-items-center gap-2 mt-3 mb-0 py-2" role="alert">
+            <i class="bi bi-shield-check"></i>
+            <span>No common allergens declared.</span>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
 
-    <div class="col-md-6 d-flex flex-column justify-content-center">
-      {% if product.stock > 0 and product.status == "Available" %}
+    <div class="col-md-6 d-flex flex-column justify-content-start">
+      {% if product.stock > 0 and product.status != "Unavailable" %}
       {% if request.user.is_authenticated and request.user.role == "customer" %}
       <form method="post" action="{% url 'cart_add' product.id %}">
         {% csrf_token %}
+        <input type="hidden" name="next" value="/products/{{ product.id }}/">
+        <label class="form-label fw-semibold mb-1">Quantity</label>
+        <div class="input-group mb-3" style="max-width:180px;">
+          <button type="button" class="btn btn-outline-secondary qty-dec">−</button>
+          <input type="number" name="quantity" id="qty-detail" value="1" min="1" max="{{ product.stock }}"
+                 class="form-control text-center fw-bold qty-input">
+          <button type="button" class="btn btn-outline-secondary qty-inc">+</button>
+        </div>
+        <p class="text-muted small mb-3">Max: {{ product.stock }} available</p>
         <button type="submit" class="btn btn-brand btn-lg w-100">
           <i class="bi bi-cart-plus me-2"></i>Add to Cart
         </button>
@@ -57,5 +109,83 @@
       </a>
     </div>
   </div>
+
+  {# ── TC-024: Reviews section ───────────────────────────────────────────── #}
+  <div class="row mt-5">
+    <div class="col-md-8">
+      <h4 class="fw-bold mb-4">Customer Reviews
+        {% if reviews %}
+        <span class="fs-6 fw-normal text-muted ms-2">({{ reviews|length }})</span>
+        {% endif %}
+      </h4>
+
+      {% if request.user.is_authenticated and request.user.role == "customer" and not existing_review %}
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white fw-semibold py-3">Write a Review</div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Rating</label>
+              {{ review_form.rating }}
+              {% if review_form.rating.errors %}<div class="text-danger small">{{ review_form.rating.errors }}</div>{% endif %}
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Title</label>
+              {{ review_form.title }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Review</label>
+              {{ review_form.text }}
+            </div>
+            <button type="submit" class="btn btn-brand">Submit Review</button>
+          </form>
+        </div>
+      </div>
+      {% elif existing_review %}
+      <div class="alert alert-info">You have already reviewed this product.</div>
+      {% endif %}
+
+      {% if reviews %}
+        {% for r in reviews %}
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <div>
+                <span class="fw-semibold">{{ r.customer.full_name }}</span>
+                <span class="ms-2">
+                  {% for i in star_range %}
+                    {% if i <= r.rating %}<i class="bi bi-star-fill text-warning"></i>
+                    {% else %}<i class="bi bi-star text-warning"></i>{% endif %}
+                  {% endfor %}
+                </span>
+              </div>
+              <span class="text-muted small">{{ r.created_at|date:"d M Y" }}</span>
+            </div>
+            {% if r.title %}<p class="fw-semibold mb-1">{{ r.title }}</p>{% endif %}
+            {% if r.text %}<p class="text-secondary mb-0">{{ r.text }}</p>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">No reviews yet. Be the first to review this product!</p>
+      {% endif %}
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.qty-dec, .qty-inc');
+  if (!btn) return;
+  const input = document.getElementById('qty-detail');
+  const max   = parseInt(input.max) || 9999;
+  let val = parseInt(input.value) || 1;
+  if (btn.classList.contains('qty-inc')) val = Math.min(val + 1, max);
+  else                                   val = Math.max(val - 1, 1);
+  input.value = val;
+});
+</script>
 {% endblock %}

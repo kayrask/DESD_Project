@@ -3,6 +3,30 @@
 
 {% block content %}
 <div class="container py-5">
+  <!-- Progress steps -->
+  <div class="d-flex align-items-center mb-5" style="max-width:480px;">
+    <div class="text-center" style="flex:1;">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white" style="width:32px;height:32px;font-size:.8rem;font-weight:700;">
+        <i class="bi bi-check-lg"></i>
+      </div>
+      <div class="small text-muted mt-1">Cart</div>
+    </div>
+    <div style="flex:1;height:2px;background:var(--brand);"></div>
+    <div class="text-center" style="flex:1;">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white" style="width:32px;height:32px;font-size:.8rem;font-weight:700;">
+        <i class="bi bi-check-lg"></i>
+      </div>
+      <div class="small text-muted mt-1">Details</div>
+    </div>
+    <div style="flex:1;height:2px;background:var(--brand);"></div>
+    <div class="text-center" style="flex:1;">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center text-white" style="width:32px;height:32px;font-size:.8rem;font-weight:700;background:var(--brand);">
+        <i class="bi bi-check-lg"></i>
+      </div>
+      <div class="small fw-semibold mt-1" style="color:var(--brand);">Confirmed</div>
+    </div>
+  </div>
+
   <div class="text-center mb-5">
     <i class="bi bi-check-circle-fill text-success" style="font-size:4rem;"></i>
     <h2 class="fw-bold mt-3">Order Confirmed!</h2>
@@ -10,17 +34,20 @@
   </div>
 
   <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-md-9">
+
+      <!-- ── Customer / checkout summary ──────────────────────────────────── -->
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white fw-bold py-3">Order Details</div>
         <div class="card-body">
           <dl class="row mb-0">
-            <dt class="col-sm-4">Order ID</dt>
+            <dt class="col-sm-4">Order Reference</dt>
             <dd class="col-sm-8">
               {% if customer_order_id %}{{ customer_order_id }}{% else %}#{{ order.id }}{% endif %}
               {% if vendor_order_ids and vendor_order_ids|length > 1 %}
               <div class="text-muted small mt-1">
-                Split into vendor orders: {{ vendor_order_ids|join:", " }}
+                Split into {{ vendor_order_ids|length }} producer orders:
+                {{ vendor_order_ids|join:", " }}
               </div>
               {% endif %}
             </dd>
@@ -34,50 +61,115 @@
             <dt class="col-sm-4">Delivery Address</dt>
             <dd class="col-sm-8">{{ order.address }}, {{ order.city }}, {{ order.postal_code }}</dd>
 
-            {% if order.delivery_date %}
-            <dt class="col-sm-4">Delivery Date</dt>
-            <dd class="col-sm-8">{{ order.delivery_date }}</dd>
-            {% endif %}
-
             <dt class="col-sm-4">Payment Method</dt>
             <dd class="col-sm-8">{{ order.get_payment_method_display|default:order.payment_method }}</dd>
 
             <dt class="col-sm-4">Status</dt>
-            <dd class="col-sm-8"><span class="badge bg-warning text-dark">{{ order.status|capfirst }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="badge bg-warning text-dark" data-order-status>{{ order.status|capfirst }}</span>
+            </dd>
           </dl>
         </div>
       </div>
 
-      {% if cart %}
+      <!-- ── Per-producer order breakdown ─────────────────────────────────── -->
+      {% if vendor_orders %}
+        <h5 class="fw-semibold mb-3">
+          {% if vendor_orders|length > 1 %}
+            Producer Orders ({{ vendor_orders|length }})
+          {% else %}
+            Your Order
+          {% endif %}
+        </h5>
+
+        {% for vo in vendor_orders %}
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-white py-3">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <span class="fw-semibold">{{ vo.producer.full_name }}</span>
+              <span class="badge bg-warning text-dark">{{ vo.status }}</span>
+              <span class="text-muted small">Order ID: {{ vo.order_id }}</span>
+              {% if vo.delivery_date %}
+              <span class="text-muted small">
+                <i class="bi bi-calendar3 me-1"></i>Delivery: {{ vo.delivery_date }}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <table class="table mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Product</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-end">Unit Price</th>
+                  <th class="text-end">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for oi in vo.items.all %}
+                <tr>
+                  <td>{{ oi.product.name }}</td>
+                  <td class="text-center">{{ oi.quantity }}</td>
+                  <td class="text-end">£{{ oi.unit_price }}</td>
+                  <td class="text-end">£{{ oi.line_total }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light">
+                <tr>
+                  <th colspan="3" class="text-end">Subtotal</th>
+                  <th class="text-end">£{{ vo.subtotal }}</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        {% endfor %}
+
+      {% elif cart %}
+        {# Fallback: flat item list for sessions without vendor_orders data #}
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white fw-bold py-3">Items Ordered</div>
+          <div class="card-body p-0">
+            <table class="table mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Product</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-end">Unit Price</th>
+                  <th class="text-end">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in cart %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td class="text-center">{{ item.quantity }}</td>
+                  <td class="text-end">£{{ item.price }}</td>
+                  <td class="text-end">£{% widthratio item.price 1 item.quantity %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light">
+                <tr>
+                  <th colspan="3" class="text-end">Total</th>
+                  <th class="text-end text-success">£{{ total }}</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Grand total -->
+      {% if total %}
       <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold py-3">Items Ordered</div>
-        <div class="card-body p-0">
-          <table class="table mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Product</th>
-                <th class="text-center">Qty</th>
-                <th class="text-end">Unit Price</th>
-                <th class="text-end">Line Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in cart %}
-              <tr>
-                <td>{{ item.name }}</td>
-                <td class="text-center">{{ item.quantity }}</td>
-                <td class="text-end">£{{ item.price }}</td>
-                <td class="text-end">£{% widthratio item.price 1 item.quantity %}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot class="table-light">
-              <tr>
-                <th colspan="3" class="text-end">Total</th>
-                <th class="text-end text-success">£{{ total }}</th>
-              </tr>
-            </tfoot>
-          </table>
+        <div class="card-body">
+          <div class="d-flex justify-content-between fw-bold fs-5">
+            <span>Grand Total</span>
+            <span class="text-success">£{{ total }}</span>
+          </div>
         </div>
       </div>
       {% endif %}
@@ -86,6 +178,7 @@
         <a href="{% url 'product_list' %}" class="btn btn-brand">Continue Shopping</a>
         <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-secondary">My Dashboard</a>
       </div>
+
     </div>
   </div>
 </div>
@@ -105,7 +198,7 @@
   const orderIds = {{ vendor_order_ids|default:"[]"|safe }};
   if (!orderIds.length) return;
 
-  const toastEl = document.getElementById('order-toast');
+  const toastEl  = document.getElementById('order-toast');
   const toastMsg = document.getElementById('order-toast-msg');
 
   function showToast(msg) {
@@ -114,22 +207,12 @@
     t.show();
   }
 
-  function updateBadge(orderId, status) {
-    document.querySelectorAll('.badge').forEach(b => {
-      if (b.closest('dd') && b.textContent.trim().toLowerCase() === orderId.toLowerCase()) return;
-    });
-    // Update status badge on this page
-    const badge = document.querySelector('[data-order-status]');
-    if (badge) { badge.textContent = status; }
-    showToast(`Order ${orderId} is now: ${status}`);
-  }
-
   orderIds.forEach(function (orderId) {
     const ws = new WebSocket(`ws://${location.host}/ws/orders/${orderId}/`);
     ws.onmessage = function (e) {
       const data = JSON.parse(e.data);
       if (data.type === 'status_update') {
-        updateBadge(data.order_id, data.status);
+        showToast(`Order ${data.order_id} is now: ${data.status}`);
       }
     };
   });
