@@ -175,6 +175,32 @@
 </div>
 {% endif %}
 
+{% if session_warn and user.is_authenticated %}
+<div id="session-expiry-banner" class="alert alert-warning alert-dismissible mb-0 d-flex align-items-center gap-2 rounded-0 border-0 border-bottom" role="alert" style="font-size:.875rem;">
+  <i class="bi bi-clock-history fs-5"></i>
+  <span>Your session will expire in <strong id="session-countdown">{{ session_expires_in_seconds }}</strong> seconds. <a href="{% url 'login' %}" class="alert-link">Log in again</a> to continue.</span>
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+</div>
+<script>
+(function () {
+  var remaining = {{ session_expires_in_seconds|default:0 }};
+  var el = document.getElementById('session-countdown');
+  if (!el || remaining <= 0) return;
+  var timer = setInterval(function () {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      window.location.href = '/login/?expired=1&next=' + encodeURIComponent(window.location.pathname);
+      return;
+    }
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    el.textContent = m > 0 ? (m + 'm ' + s + 's') : (s + 's');
+  }, 1000);
+}());
+</script>
+{% endif %}
+
 {% block content %}{% endblock %}
 
 <footer>

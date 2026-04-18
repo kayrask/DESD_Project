@@ -58,6 +58,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "api.context_processors.cart_context",
+                "api.context_processors.session_context",
             ],
         },
     },
@@ -88,7 +89,20 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
+# ── Session security (TC-022) ─────────────────────────────────────────────────
+# Sessions expire after 1 hour of inactivity and on browser close.
+SESSION_COOKIE_AGE = 3600          # seconds (1 hour)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+# Keep SESSION_COOKIE_SECURE as False in dev (no HTTPS); set True in production
+SESSION_COOKIE_SECURE = not DEBUG
+# Required so session_context can persist _session_last_activity on every
+# request even when nothing else in the session has changed.
+SESSION_SAVE_EVERY_REQUEST = True
+
 # Custom error handlers
+handler403 = "api.views_web.view_403"
 handler404 = "api.views_web.view_404"
 
 LANGUAGE_CODE = "en-us"
