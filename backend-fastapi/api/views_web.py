@@ -134,6 +134,10 @@ def _broadcast_stock_update(product):
 
 # ── Role-enforcement mixins ───────────────────────────────────────────────────
 
+def _is_ajax(request):
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
 class _RoleMixin(LoginRequiredMixin, UserPassesTestMixin):
     login_url = "/login/"
     _required_role: str = ""
@@ -143,7 +147,20 @@ class _RoleMixin(LoginRequiredMixin, UserPassesTestMixin):
 
     def handle_no_permission(self):
         if not self.request.user.is_authenticated:
-            return redirect("/login/")
+            # AJAX callers get a JSON 401; browser clients get login redirect
+            # with ?next= so they land back after authentication.
+            if _is_ajax(self.request):
+                return JsonResponse(
+                    {"error": "unauthenticated", "message": "Authentication required."},
+                    status=401,
+                )
+            return redirect(f"/login/?next={self.request.path}")
+        # Authenticated but wrong role → 403
+        if _is_ajax(self.request):
+            return JsonResponse(
+                {"error": "forbidden", "message": "You do not have permission to access this page."},
+                status=403,
+            )
         return redirect("/403/")
 
 
@@ -243,7 +260,11 @@ class LoginPageView(View):
 
     def get(self, request):
         if request.user.is_authenticated:
-            return redirect("/")
+            return redirect(request.GET.get("next", "/"))
+        # Show session-expired message only when explicitly triggered by the
+        # JS countdown timer (?expired=1), not every ?next= redirect.
+        if request.GET.get("expired") == "1":
+            messages.warning(request, "Your session has expired. Please log in again.")
         return render(request, self.template_name, {"form": LoginForm()})
 
     def post(self, request):
@@ -257,7 +278,11 @@ class LoginPageView(View):
             if user is not None:
                 login(request, user)
                 messages.success(request, f"Welcome back, {user.full_name}!")
-                return redirect(request.GET.get("next", "/"))
+                next_url = request.GET.get("next", "/")
+                # Guard against open-redirect: only allow relative paths.
+                if not next_url.startswith("/"):
+                    next_url = "/"
+                return redirect(next_url)
             form.add_error(None, "Invalid email or password.")
         return render(request, self.template_name, {"form": form})
 
@@ -304,23 +329,29 @@ class CustomerDashboardView(CustomerRequiredMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
-            email=user.email,
+            customer=user,
             status__in=["pending", "confirmed"],
         ).count()
         ctx["recent_products"] = Product.objects.filter(status="Available").order_by("?")[:4]
-        ctx["recent_orders"] = CheckoutOrder.objects.filter(email=user.email).order_by("-created_at")[:5]
+        ctx["recent_orders"] = CheckoutOrder.objects.filter(customer=user).order_by("-created_at")[:5]
         return ctx
 
 
-class CustomerOrdersView(CustomerRequiredMixin, TemplateView):
+class CustomerOrdersView(CustomerRequiredMixin, ListView):
     template_name = "customer/orders.html"
+    context_object_name = "orders"
+    paginate_by = 10
+
+    def get_queryset(self):
+        qs = CheckoutOrder.objects.filter(customer=self.request.user).order_by("-created_at")
+        status_filter = self.request.GET.get("status", "")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["orders"] = (
-            CheckoutOrder.objects.filter(email=self.request.user.email)
-            .order_by("-created_at")
-        )
+        ctx["status_filter"] = self.request.GET.get("status", "")
         return ctx
 
 
@@ -709,12 +740,20 @@ class CheckoutView(CustomerRequiredMixin, View):
                 # Use the per-producer delivery date submitted from the checkout form.
                 delivery_date = producer_delivery_dates.get(producer_id)
 
+                # Calculate per-producer subtotal and 5% commission.
+                producer_subtotal = sum(
+                    Decimal(str(p.price)) * qty for p, qty in lines
+                )
+                producer_commission = (producer_subtotal * self._commission_rate).quantize(Decimal("0.01"))
+
                 vendor_order = Order.objects.create(
                     order_id=vendor_order_id,
                     customer_name=checkout_order.full_name,
                     delivery_date=delivery_date,
                     status="Pending",
                     producer=producer,
+                    expires_at=timezone.now() + timedelta(hours=48),
+                    commission=producer_commission,
                 )
                 for product, qty in lines:
                     OrderItem.objects.create(
@@ -773,29 +812,34 @@ class OrderConfirmationView(CustomerRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        order = get_object_or_404(CheckoutOrder, pk=self.kwargs["order_id"])
+        order = get_object_or_404(CheckoutOrder, pk=self.kwargs["order_id"], customer=self.request.user)
         ctx["order"] = order
-        ctx["cart"] = self.request.session.get("last_order_cart", [])
-        ctx["total"] = self.request.session.get("last_order_total", 0)
-        ctx["customer_order_id"] = self.request.session.get("last_order_base_id")
-        vendor_ids = self.request.session.get("last_order_vendor_ids", [])
-        ctx["vendor_order_ids"] = vendor_ids
-        # Load per-producer vendor orders with items for the breakdown table.
-        # Annotate each order with pre-computed line totals so the template
-        # avoids widthratio (which does integer rounding and loses decimals).
-        if vendor_ids:
-            vendor_orders = list(
-                Order.objects.filter(order_id__in=vendor_ids)
-                .select_related("producer")
-                .prefetch_related("items__product")
-            )
-            for vo in vendor_orders:
-                subtotal = Decimal("0")
-                for oi in vo.items.all():
-                    oi.line_total = (Decimal(str(oi.unit_price)) * oi.quantity).quantize(Decimal("0.01"))
-                    subtotal += oi.line_total
-                vo.subtotal = subtotal.quantize(Decimal("0.01"))
-            ctx["vendor_orders"] = vendor_orders
+
+        # Base order ID used in vendor order IDs (e.g. "CO-7").
+        base_order_id = f"CO-{order.id}"
+        ctx["customer_order_id"] = base_order_id
+
+        # Always load vendor orders directly from the DB so this page works
+        # both immediately after checkout AND when revisited from order history.
+        vendor_orders = list(
+            Order.objects.filter(order_id__startswith=base_order_id)
+            .select_related("producer")
+            .prefetch_related("items__product")
+        )
+        grand_total = Decimal("0")
+        for vo in vendor_orders:
+            subtotal = Decimal("0")
+            for oi in vo.items.all():
+                oi.line_total = (Decimal(str(oi.unit_price)) * oi.quantity).quantize(Decimal("0.01"))
+                subtotal += oi.line_total
+            vo.subtotal = subtotal.quantize(Decimal("0.01"))
+            grand_total += subtotal
+        ctx["vendor_orders"] = vendor_orders
+        ctx["vendor_order_ids"] = [vo.order_id for vo in vendor_orders]
+
+        # Prefer the live-computed total; fall back to session snapshot if
+        # no items were loaded (edge case: all products deleted after order).
+        ctx["total"] = float(grand_total) if grand_total else self.request.session.get("last_order_total", 0)
         return ctx
 
 

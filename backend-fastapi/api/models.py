@@ -79,6 +79,7 @@ ORDER_STATUS_CHOICES = [
     ("Confirmed", "Confirmed"),
     ("Ready", "Ready"),
     ("Delivered", "Delivered"),
+    ("Cancelled", "Cancelled"),
 ]
 
 
@@ -88,6 +89,9 @@ class Order(models.Model):
     delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=ORDER_STATUS_CHOICES, default="Pending")
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    commission = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["delivery_date"]
