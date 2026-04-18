@@ -218,13 +218,27 @@ def producer_products_update(request, product_id: int):
         product = Product.objects.get(id=product_id)
         if product.producer_id != producer.id:
             return _error_response("forbidden", "You can only edit your own products.", status.HTTP_403_FORBIDDEN)
+        valid_statuses = {choice[0] for choice in Product.PRODUCT_STATUS_CHOICES}
         for field in ("name", "category", "status"):
             if field in request.data:
-                setattr(product, field, str(request.data[field]).strip())
+                value = str(request.data[field]).strip()
+                if field == "status" and value and value not in valid_statuses:
+                    return _error_response(
+                        "validation_error",
+                        f"Invalid status '{value}'.",
+                        status.HTTP_400_BAD_REQUEST,
+                    )
+                setattr(product, field, value)
         if "price" in request.data:
-            product.price = round(float(request.data["price"]), 2)
+            price = round(float(request.data["price"]), 2)
+            if price < 0:
+                return _error_response("validation_error", "price must be zero or greater.", status.HTTP_400_BAD_REQUEST)
+            product.price = price
         if "stock" in request.data:
-            product.stock = int(request.data["stock"])
+            stock = int(request.data["stock"])
+            if stock < 0:
+                return _error_response("validation_error", "stock must be zero or greater.", status.HTTP_400_BAD_REQUEST)
+            product.stock = stock
         if product.stock == 0:
             product.status = "Out of Stock"
         elif product.status.lower() == "out of stock" and product.stock > 0:

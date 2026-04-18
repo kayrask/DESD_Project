@@ -14,6 +14,7 @@ from collections import defaultdict
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse, JsonResponse
@@ -1034,6 +1035,7 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
 
 class AdminReportsView(AdminRequiredMixin, View):
     template_name = "admin_panel/reports.html"
+    _PAGE_SIZE = 10
 
     def get(self, request):
         form = ReportFilterForm(request.GET or None)
@@ -1065,9 +1067,14 @@ class AdminReportsView(AdminRequiredMixin, View):
             }
             for r in qs
         ]
+
+        paginator = Paginator(rows, self._PAGE_SIZE)
+        page_obj = paginator.get_page(request.GET.get("page") or 1)
+
         return render(request, self.template_name, {
             "form": form,
-            "rows": rows,
+            "rows": page_obj.object_list,
+            "page_obj": page_obj,
             "total_orders": sum(r["orders"] for r in rows),
             "total_gross": round(sum(r["gross"] for r in rows), 2),
             "total_commission": round(sum(r["commission"] for r in rows), 2),
