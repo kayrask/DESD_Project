@@ -61,9 +61,16 @@ def assess_product_image(
         )
 
     if result["grade"] == "C":
-        notes = "AI suggests offering this batch at a discount (Grade C quality)."
+        notes = "AI suggests offering this batch at a discount (Grade C quality). 20% discount applied automatically."
+        # Auto-apply 20% discount to the product so customers see reduced price
+        product.discount_pct = 20
+        product.save(update_fields=["discount_pct"])
     elif result["grade"] == "A":
         notes = "Premium quality confirmed. Eligible for featured listing."
+        # Clear any previous discount if product now grades A
+        if product.discount_pct > 0:
+            product.discount_pct = 0
+            product.save(update_fields=["discount_pct"])
 
     assessment = QualityAssessment.objects.create(
         product=product,

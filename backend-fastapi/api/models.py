@@ -66,6 +66,11 @@ class Product(models.Model):
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products")
     allergens = models.TextField(blank=True, default="", help_text="List allergens e.g. Milk, Eggs, Gluten")
     is_organic = models.BooleanField(default=False)
+    discount_pct = models.IntegerField(default=0, help_text="AI-suggested discount percentage (0 = no discount)")
+    harvest_date = models.DateField(null=True, blank=True, help_text="Date produce was harvested")
+    season_start = models.DateField(null=True, blank=True, help_text="Season availability start")
+    season_end = models.DateField(null=True, blank=True, help_text="Season availability end")
+    low_stock_threshold = models.IntegerField(default=5, help_text="Alert when stock falls to or below this level")
 
     class Meta:
         ordering = ["name"]

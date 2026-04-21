@@ -32,7 +32,7 @@
             <th>Address</th>
             <th>Payment</th>
             <th>Status</th>
-            <th></th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -54,9 +54,20 @@
               {% endif %}
             </td>
             <td class="text-end">
-              <a href="{% url 'order_confirmation' order.id %}" class="btn btn-sm btn-outline-secondary">
-                View <i class="bi bi-chevron-right"></i>
-              </a>
+              <div class="d-flex gap-1 justify-content-end flex-wrap">
+                <a href="{% url 'order_confirmation' order.id %}" class="btn btn-sm btn-outline-secondary">
+                  View
+                </a>
+                <a href="{% url 'order_receipt' order.id %}" class="btn btn-sm btn-outline-secondary" title="Download receipt">
+                  <i class="bi bi-file-earmark-text"></i>
+                </a>
+                <form method="post" action="{% url 'order_reorder' order.id %}" style="display:inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-success" title="Reorder">
+                    <i class="bi bi-arrow-repeat"></i>
+                  </button>
+                </form>
+              </div>
             </td>
           </tr>
           {% endfor %}

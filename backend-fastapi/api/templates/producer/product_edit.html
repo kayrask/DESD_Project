@@ -67,6 +67,23 @@
                   </label>
                 </div>
               </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Harvest Date <span class="text-muted fw-normal small">(optional)</span></label>
+                {{ form.harvest_date }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Season Start <span class="text-muted fw-normal small">(optional)</span></label>
+                {{ form.season_start }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Season End <span class="text-muted fw-normal small">(optional)</span></label>
+                {{ form.season_end }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Low Stock Alert Threshold</label>
+                {{ form.low_stock_threshold }}
+                <div class="form-text">Alert shows on dashboard when stock reaches this level.</div>
+              </div>
             </div>
             <div class="d-flex gap-2 mt-4">
               <button type="submit" class="btn btn-brand">Save Changes</button>

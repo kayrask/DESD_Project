@@ -82,9 +82,23 @@ class RegisterForm(forms.Form):
 
 
 class ProductForm(forms.ModelForm):
+    # Override so the field is optional — it defaults to 5 on the model.
+    # The add-product form only shows basic fields and never submits this.
+    low_stock_threshold = forms.IntegerField(
+        required=False,
+        min_value=1,
+        initial=5,
+        widget=forms.NumberInput(attrs={**_field_class, "min": "1"}),
+        help_text="Alert when stock falls to or below this level.",
+    )
+
     class Meta:
         model = Product
-        fields = ["name", "category", "description", "price", "stock", "status", "allergens", "is_organic"]
+        fields = [
+            "name", "category", "description", "price", "stock", "status",
+            "allergens", "is_organic",
+            "harvest_date", "season_start", "season_end", "low_stock_threshold",
+        ]
         widgets = {
             "name": forms.TextInput(attrs={**_field_class, "placeholder": "Product name"}),
             "category": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Vegetable"}),
@@ -94,6 +108,9 @@ class ProductForm(forms.ModelForm):
             "status": forms.Select(attrs=_select_class),
             "allergens": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Milk, Eggs, Gluten (leave blank if none)"}),
             "is_organic": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "harvest_date": forms.DateInput(attrs={**_field_class, "type": "date"}),
+            "season_start": forms.DateInput(attrs={**_field_class, "type": "date"}),
+            "season_end": forms.DateInput(attrs={**_field_class, "type": "date"}),
         }
 
     def clean_price(self):
