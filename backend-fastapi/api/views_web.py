@@ -182,27 +182,46 @@ class HomeView(TemplateView):
     template_name = "home.html"
 
 
-class MarketplaceView(TemplateView):
+class MarketplaceView(ListView):
     template_name = "marketplace.html"
+    context_object_name = "products"
+    paginate_by = 12
+
+    _visible = ("Available", "In Season")
+
+    def get_queryset(self):
+        qs = Product.objects.filter(status__in=self._visible).select_related("producer")
+        q = self.request.GET.get("q", "").strip()
+        category = self.request.GET.get("category", "").strip()
+        organic = self.request.GET.get("organic", "")
+        allergen_free = self.request.GET.get("allergen_free", "")
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q) |
+                Q(description__icontains=q) |
+                Q(producer__full_name__icontains=q)
+            )
+        if category:
+            qs = qs.filter(category=category)
+        if organic:
+            qs = qs.filter(is_organic=True)
+        if allergen_free:
+            qs = qs.filter(Q(allergens="") | Q(allergens__isnull=True))
+        return qs.order_by("name")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        qs = Product.objects.filter(status="Available").select_related("producer")
-        q = self.request.GET.get("q", "").strip()
-        category = self.request.GET.get("category", "").strip()
-        if q:
-            qs = qs.filter(name__icontains=q)
-        if category:
-            qs = qs.filter(category=category)
-
-        ctx["products"] = qs.order_by("name")
-        ctx["categories"] = list(
-            Product.objects.filter(status="Available")
+        raw = (
+            Product.objects.filter(status__in=self._visible)
             .exclude(category__isnull=True)
             .exclude(category="")
             .values_list("category", flat=True)
-            .distinct()
         )
+        ctx["categories"] = sorted(set(c.strip() for c in raw))
+        ctx["q"] = self.request.GET.get("q", "")
+        ctx["selected_category"] = self.request.GET.get("category", "")
+        ctx["organic_filter"] = self.request.GET.get("organic", "")
+        ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
 
         customer_email = None
         if self.request.user.is_authenticated and self.request.user.role == "customer":
@@ -322,23 +341,8 @@ class RegisterPageView(View):
 
 # ── Customer views ────────────────────────────────────────────────────────────
 
-class CustomerDashboardView(CustomerRequiredMixin, TemplateView):
+class CustomerDashboardView(CustomerRequiredMixin, ListView):
     template_name = "customer/dashboard.html"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        user = self.request.user
-        ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
-            customer=user,
-            status__in=["pending", "confirmed"],
-        ).count()
-        ctx["recent_products"] = Product.objects.filter(status="Available").order_by("?")[:4]
-        ctx["recent_orders"] = CheckoutOrder.objects.filter(customer=user).order_by("-created_at")[:5]
-        return ctx
-
-
-class CustomerOrdersView(CustomerRequiredMixin, ListView):
-    template_name = "customer/orders.html"
     context_object_name = "orders"
     paginate_by = 10
 
@@ -351,8 +355,20 @@ class CustomerOrdersView(CustomerRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
+            customer=user,
+            status__in=["pending", "confirmed"],
+        ).count()
+        ctx["total_orders"] = CheckoutOrder.objects.filter(customer=user).count()
         ctx["status_filter"] = self.request.GET.get("status", "")
         return ctx
+
+
+class CustomerOrdersView(CustomerRequiredMixin, View):
+    """Redirects to the dashboard which now contains the full order history."""
+    def get(self, request):
+        return redirect("customer_dashboard")
 
 
 def product_suggest(request):

@@ -21,30 +21,53 @@
   </div>
 
   <!-- Search & filter -->
-  <form method="get" class="row g-2 mb-5 align-items-center">
-    <div class="col-md-5">
-      <input type="text" name="q" class="form-control" placeholder="Search products..." value="{{ request.GET.q|default:'' }}">
+  <form method="get" class="row g-2 mb-4 align-items-end" id="search-form">
+    <div class="col-md-4">
+      <div class="position-relative">
+        <input type="text" name="q" id="search-input" class="form-control"
+               placeholder="Search by name, description or producer..." value="{{ q }}" autocomplete="off">
+        <ul id="search-suggestions"
+            class="list-group position-absolute w-100 shadow"
+            style="z-index:1050;display:none;top:100%;left:0;max-height:320px;overflow-y:auto;border-radius:0 0 .375rem .375rem;">
+        </ul>
+      </div>
     </div>
     <div class="col-md-3">
       <select name="category" class="form-select">
         <option value="">All Categories</option>
         {% for cat in categories %}
-        <option value="{{ cat }}" {% if request.GET.category == cat %}selected{% endif %}>{{ cat }}</option>
+        <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="col-md-2">
+      <div class="form-check mt-1">
+        <input class="form-check-input" type="checkbox" name="organic" value="1" id="organic-filter"
+               {% if organic_filter %}checked{% endif %}>
+        <label class="form-check-label" for="organic-filter">
+          <i class="bi bi-leaf text-success"></i> Organic only
+        </label>
+      </div>
+      <div class="form-check mt-1">
+        <input class="form-check-input" type="checkbox" name="allergen_free" value="1" id="allergen-filter"
+               {% if allergen_free_filter %}checked{% endif %}>
+        <label class="form-check-label" for="allergen-filter">
+          <i class="bi bi-shield-check text-info"></i> Allergen-free
+        </label>
+      </div>
+    </div>
+    <div class="col-md-2">
       <button type="submit" class="btn btn-brand w-100">Search</button>
     </div>
-    {% if request.GET.q or request.GET.category %}
-    <div class="col-md-2">
+    {% if q or selected_category or organic_filter or allergen_free_filter %}
+    <div class="col-md-1">
       <a href="{% url 'marketplace' %}" class="btn btn-outline-secondary w-100">Clear</a>
     </div>
     {% endif %}
   </form>
 
-  <!-- AI recommendations -->
-  {% if recommendations %}
+  <!-- AI recommendations (only shown when no active filter) -->
+  {% if recommendations and not q and not selected_category and not organic_filter and not allergen_free_filter %}
   <div class="mb-5">
     <div class="d-flex align-items-center gap-2 mb-3">
       <span style="background:#fef3c7;color:#d97706;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center">
@@ -94,22 +117,38 @@
 
   <!-- All products -->
   <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1rem">
-    All Products {% if products %}({{ products|length }}){% endif %}
+    All Products {% if page_obj %}({{ paginator.count }}){% endif %}
   </div>
+
   {% if products %}
-  <div class="row g-4">
+  <div class="row g-4" id="product-grid">
     {% for product in products %}
-    <div class="col-md-4 col-lg-3">
+    <div class="col-md-4 col-lg-3" data-product-id="{{ product.id }}">
       <div class="product-card h-100">
         <div class="product-body">
-          <span class="category-pill">{{ product.category }}</span>
-          <h6 style="font-weight:700;margin-bottom:.25rem">{{ product.name }}</h6>
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="category-pill">{{ product.category }}</span>
+            {% if product.status == "In Season" %}
+            <span class="badge" style="background:#dcfce7;color:#15803d;font-size:.68rem">In Season</span>
+            {% endif %}
+          </div>
+          {% if product.is_organic %}
+          <span style="font-size:.7rem;color:#15803d;font-weight:600"><i class="bi bi-leaf me-1"></i>Organic</span>
+          {% endif %}
+          <h6 style="font-weight:700;margin-bottom:.25rem;margin-top:.3rem">
+            <a href="{% url 'product_detail' product.pk %}" class="text-decoration-none text-dark">{{ product.name }}</a>
+          </h6>
           <div style="font-size:.8rem;color:var(--muted);margin-bottom:.25rem">
             <i class="bi bi-person-badge me-1"></i>{{ product.producer.full_name|default:product.producer.email }}
           </div>
           <div style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
             <i class="bi bi-box-seam me-1"></i>{{ product.stock }} in stock
           </div>
+          {% if product.discount_pct > 0 %}
+          <div style="font-size:.75rem;color:#dc2626;font-weight:600;margin-bottom:.2rem">
+            <i class="bi bi-tag me-1"></i>{{ product.discount_pct }}% off (Grade C)
+          </div>
+          {% endif %}
           <div style="font-size:1.25rem;font-weight:800;color:var(--brand-darker)">£{{ product.price }}</div>
         </div>
         <div style="padding:.75rem 1rem;border-top:1px solid var(--border);">
@@ -133,6 +172,26 @@
     </div>
     {% endfor %}
   </div>
+
+  <!-- Pagination -->
+  {% if is_paginated %}
+  <nav class="mt-4 d-flex justify-content-center align-items-center gap-2" aria-label="Products pagination">
+    {% if page_obj.has_previous %}
+    <a href="?{% if q %}q={{ q }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if organic_filter %}organic={{ organic_filter }}&{% endif %}{% if allergen_free_filter %}allergen_free={{ allergen_free_filter }}&{% endif %}page={{ page_obj.previous_page_number }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-chevron-left"></i> Prev
+    </a>
+    {% endif %}
+    <span class="text-muted small">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?{% if q %}q={{ q }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if organic_filter %}organic={{ organic_filter }}&{% endif %}{% if allergen_free_filter %}allergen_free={{ allergen_free_filter }}&{% endif %}page={{ page_obj.next_page_number }}"
+       class="btn btn-sm btn-outline-secondary">
+      Next <i class="bi bi-chevron-right"></i>
+    </a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
   {% else %}
   <div class="text-center py-5 text-muted">
     <i class="bi bi-search" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:1rem"></i>
@@ -141,4 +200,42 @@
   </div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const input = document.getElementById('search-input');
+  const list  = document.getElementById('search-suggestions');
+  if (!input || !list) return;
+  let timer;
+  input.addEventListener('input', function () {
+    clearTimeout(timer);
+    const q = this.value.trim();
+    if (q.length < 2) { list.style.display = 'none'; return; }
+    timer = setTimeout(() => {
+      fetch(`/products/suggest/?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+          list.innerHTML = '';
+          if (!data.results || !data.results.length) { list.style.display = 'none'; return; }
+          data.results.forEach(p => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action py-2';
+            li.style.cursor = 'pointer';
+            li.innerHTML = `<strong>${p.name}</strong> <span class="text-muted small ms-1">${p.category || ''}</span> <span class="float-end text-success fw-bold">£${p.price}</span>`;
+            li.addEventListener('click', () => {
+              input.value = p.name;
+              list.style.display = 'none';
+              input.closest('form').submit();
+            });
+            list.appendChild(li);
+          });
+          list.style.display = 'block';
+        });
+    }, 250);
+  });
+  document.addEventListener('click', e => { if (!list.contains(e.target) && e.target !== input) list.style.display = 'none'; });
+}());
+</script>
 {% endblock %}
