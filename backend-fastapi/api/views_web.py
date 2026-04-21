@@ -386,47 +386,12 @@ def product_suggest(request):
     return JsonResponse({"results": list(qs)})
 
 
-class ProductListView(CustomerRequiredMixin, ListView):
-    template_name = "customer/products.html"
-    context_object_name = "products"
-    paginate_by = 12
-
-    _visible = ("Available", "In Season")
-
-    def get_queryset(self):
-        qs = Product.objects.filter(status__in=self._visible).select_related("producer")
-        q = self.request.GET.get("q", "")
-        category = self.request.GET.get("category", "")
-        organic = self.request.GET.get("organic", "")
-        allergen_free = self.request.GET.get("allergen_free", "")
-        if q:
-            qs = qs.filter(
-                Q(name__icontains=q) |
-                Q(description__icontains=q) |
-                Q(producer__full_name__icontains=q)
-            )
-        if category:
-            qs = qs.filter(category=category)
-        if organic:
-            qs = qs.filter(is_organic=True)
-        if allergen_free:
-            qs = qs.filter(Q(allergens="") | Q(allergens__isnull=True))
-        return qs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        raw = (
-            Product.objects.filter(status__in=self._visible)
-            .exclude(category__isnull=True)
-            .exclude(category="")
-            .values_list("category", flat=True)
-        )
-        ctx["categories"] = sorted(set(c.strip() for c in raw))
-        ctx["q"] = self.request.GET.get("q", "")
-        ctx["selected_category"] = self.request.GET.get("category", "")
-        ctx["organic_filter"] = self.request.GET.get("organic", "")
-        ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
-        return ctx
+class ProductListView(View):
+    """Redirects to marketplace — kept for URL backwards-compatibility only."""
+    def get(self, request):
+        qs = request.GET.urlencode()
+        url = "/marketplace/" + (f"?{qs}" if qs else "")
+        return redirect(url)
 
 
 class ProductDetailView(View):
