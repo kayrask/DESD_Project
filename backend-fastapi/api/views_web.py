@@ -38,13 +38,14 @@ from api.forms import (
 )
 from api.models import (
     CartReservation,
+    CheckoutOrder,
     CommissionReport,
     FarmStory,
     Order,
     OrderItem,
     Product,
     QualityAssessment,
-    CheckoutOrder,
+    QualityOverride,
     Recipe,
     RecurringOrder,
     Review,
@@ -1313,6 +1314,43 @@ class ProducerQualityCheckView(ProducerRequiredMixin, View):
             messages.success(request, f"Deducted {qty} unit(s) from {product.name}.")
             return redirect("/producer/quality-check/")
 
+        # ── Override: producer disputes the AI grade ──────────────────────────
+        if action == "override_grade":
+            assessment_id  = request.POST.get("assessment_id")
+            override_grade = request.POST.get("override_grade", "").strip()
+            reason         = request.POST.get("reason", "other").strip()
+            notes          = request.POST.get("notes", "").strip()
+
+            if not assessment_id or not str(assessment_id).isdigit():
+                messages.error(request, "Missing assessment reference.")
+                return redirect("/producer/quality-check/")
+
+            if override_grade not in ("A", "B", "C"):
+                messages.error(request, "Invalid grade — choose A, B or C.")
+                return redirect("/producer/quality-check/")
+
+            assessment = get_object_or_404(
+                QualityAssessment,
+                id=int(assessment_id),
+                product__producer=request.user,
+            )
+
+            QualityOverride.objects.create(
+                assessment=assessment,
+                producer=request.user,
+                ai_grade=assessment.grade,
+                override_grade=override_grade,
+                reason=reason,
+                notes=notes,
+            )
+            messages.success(
+                request,
+                f"Override recorded: AI said Grade {assessment.grade}, "
+                f"you marked Grade {override_grade}. "
+                "This feedback will be used to improve the model."
+            )
+            return redirect("/producer/quality-check/")
+
         product_id = request.POST.get("product_id")
         image_file = request.FILES.get("image")
         if not product_id or not image_file:
@@ -1656,6 +1694,108 @@ class RecipeDetailView(View):
     def get(self, request, pk):
         recipe = get_object_or_404(Recipe, pk=pk)
         return render(request, "producer/recipe_detail.html", {"recipe": recipe})
+
+
+# ── TC-030: Demand forecast ───────────────────────────────────────────────────
+
+class ProducerDemandForecastView(ProducerRequiredMixin, View):
+    """
+    Simple demand forecast for a producer's products.
+
+    Method
+    ------
+    For each product, count fulfilled OrderItems over the past 6 months,
+    group by calendar month, and project next month using a 3-month moving
+    average.  The harvest season window (season_start/season_end) is overlaid
+    to flag products approaching or leaving their season.
+
+    Design choice: an intentionally transparent, interpretable approach —
+    a simple moving average rather than a black-box model — so producers can
+    understand and trust the forecast.  It can be upgraded to Prophet/ARIMA
+    once sufficient order history accumulates.
+    """
+
+    def get(self, request):
+        from collections import defaultdict
+        from calendar import month_abbr
+
+        producer       = request.user
+        today          = date.today()
+        six_months_ago = today.replace(day=1) - timedelta(days=180)
+
+        products = Product.objects.filter(producer=producer).order_by("name")
+        result   = []
+
+        for product in products:
+            items = (
+                OrderItem.objects.filter(
+                    product=product,
+                    order__status="Delivered",
+                    order__delivery_date__gte=six_months_ago,
+                ).select_related("order")
+            )
+
+            monthly: dict[str, int] = defaultdict(int)
+            for item in items:
+                if item.order.delivery_date:
+                    key = item.order.delivery_date.strftime("%Y-%m")
+                    monthly[key] += item.quantity
+
+            sorted_months = sorted(monthly.keys())[-3:]
+            recent_totals = [monthly[m] for m in sorted_months]
+            forecast = round(sum(recent_totals) / len(recent_totals)) if recent_totals else 0
+
+            in_season    = True
+            season_label = "Year round"
+            if product.season_start and product.season_end:
+                start_md = (product.season_start.month, product.season_start.day)
+                end_md   = (product.season_end.month,   product.season_end.day)
+                today_md = (today.month, today.day)
+                if start_md <= end_md:
+                    in_season = start_md <= today_md <= end_md
+                else:
+                    in_season = today_md >= start_md or today_md <= end_md
+                season_label = (
+                    f"{month_abbr[product.season_start.month]} – "
+                    f"{month_abbr[product.season_end.month]}"
+                )
+
+            result.append({
+                "id":                  product.id,
+                "name":                product.name,
+                "category":            product.category,
+                "current_stock":       product.stock,
+                "monthly_orders":      dict(sorted(monthly.items())),
+                "forecast_next_month": forecast,
+                "in_season":           in_season,
+                "season_label":        season_label,
+            })
+
+        return JsonResponse({"products": result})
+
+
+# ── TC-031: Admin override review ─────────────────────────────────────────────
+
+class AdminOverrideReviewView(AdminRequiredMixin, View):
+    """
+    Admin view showing all producer grade overrides for fairness monitoring.
+
+    If one producer consistently overrides in one direction, that may signal
+    systematic model bias against their produce type, warranting investigation.
+    """
+
+    def get(self, request):
+        from collections import Counter
+        overrides = (
+            QualityOverride.objects
+            .select_related("assessment__product", "producer")
+            .order_by("-created_at")[:200]
+        )
+        producer_counts = Counter(o.producer.full_name for o in overrides)
+        return render(request, "admin_panel/override_review.html", {
+            "overrides":       overrides,
+            "producer_counts": dict(producer_counts.most_common(10)),
+        })
 
 
 # ── Error views ───────────────────────────────────────────────────────────────

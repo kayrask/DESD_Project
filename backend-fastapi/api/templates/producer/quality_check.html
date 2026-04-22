@@ -161,6 +161,51 @@
             {% if result.notes %}
             <div class="alert alert-success mt-3 py-2" style="font-size:.82rem">{{ result.notes }}</div>
             {% endif %}
+
+            <!-- Grade Override -->
+            <div class="mt-4 pt-3" style="border-top:1px solid var(--border)">
+              <h6 style="font-weight:700;font-size:.85rem;margin-bottom:.75rem">
+                <i class="bi bi-pencil-square me-1"></i>Disagree with the AI grade?
+              </h6>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="override_grade">
+                <input type="hidden" name="assessment_id" value="{{ result.assessment_id }}">
+                <div class="row g-2">
+                  <div class="col-sm-4">
+                    <label class="form-label" style="font-size:.8rem">Your Grade</label>
+                    <select name="override_grade" class="form-select form-select-sm" required>
+                      <option value="">-- select --</option>
+                      <option value="A">A – Premium</option>
+                      <option value="B">B – Standard</option>
+                      <option value="C">C – Discounted</option>
+                    </select>
+                  </div>
+                  <div class="col-sm-8">
+                    <label class="form-label" style="font-size:.8rem">Reason</label>
+                    <select name="reason" class="form-select form-select-sm" required>
+                      <option value="">-- select --</option>
+                      <option value="wrong_grade">AI grade was incorrect</option>
+                      <option value="context">Context the model could not see (variety, age…)</option>
+                      <option value="image_quality">Poor image quality affected the result</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" style="font-size:.8rem">Notes (optional)</label>
+                    <input type="text" name="notes" class="form-control form-control-sm" maxlength="500" placeholder="Extra context for the admin review…">
+                  </div>
+                  <div class="col-12">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                      <i class="bi bi-send me-1"></i>Submit Override
+                    </button>
+                    <span class="ms-2" style="font-size:.75rem;color:var(--muted)">
+                      Your feedback helps improve the AI model.
+                    </span>
+                  </div>
+                </div>
+              </form>
+            </div>
           </div>
           {% else %}
           <div class="card p-4 d-flex align-items-center justify-content-center" style="min-height:280px;border-style:dashed!important;">

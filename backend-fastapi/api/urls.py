@@ -70,6 +70,7 @@ web_patterns = [
     path("producer/payments/", views_web.ProducerPaymentsView.as_view(), name="producer_payments"),
     path("producer/quality-check/", views_web.ProducerQualityCheckView.as_view(), name="producer_quality_check"),
     path("producer/content/", views_web.ProducerRecipesView.as_view(), name="producer_content"),
+    path("producer/demand-forecast/", views_web.ProducerDemandForecastView.as_view(), name="producer_demand_forecast"),
     path("recipes/<int:pk>/", views_web.RecipeDetailView.as_view(), name="recipe_detail"),
 
     # Customer recurring orders
@@ -86,6 +87,7 @@ web_patterns = [
     path("admin-panel/ai-monitoring/export-interactions/", views_web.AdminInteractionExportView.as_view(), name="admin_interaction_export"),
     path("admin-panel/ai-monitoring/<int:pk>/", views_web.AdminAIAssessmentDetailView.as_view(), name="admin_ai_assessment_detail"),
     path("admin-panel/ai-confusion-matrix/", views_web.AdminConfusionMatrixView.as_view(), name="admin_ai_confusion_matrix"),
+    path("admin-panel/override-review/", views_web.AdminOverrideReviewView.as_view(), name="admin_override_review"),
 
     # Errors
     path("401/", views_web.view_401, name="unauthorized"),
