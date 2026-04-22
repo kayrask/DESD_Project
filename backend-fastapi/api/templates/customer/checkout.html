@@ -141,6 +141,14 @@
                 </div>
               </div>
               <div class="col-12">
+                <label class="form-label fw-semibold">
+                  Special Instructions
+                  <span class="text-muted fw-normal" style="font-size:.85rem">(optional — bulk delivery notes, access info, dietary needs)</span>
+                </label>
+                {{ form.special_instructions }}
+                {% if form.special_instructions.errors %}<div class="text-danger small">{{ form.special_instructions.errors }}</div>{% endif %}
+              </div>
+              <div class="col-12">
                 <div class="form-check">
                   {{ form.accept_terms }}
                   <label class="form-check-label" for="{{ form.accept_terms.id_for_label }}">

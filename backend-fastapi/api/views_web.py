@@ -336,11 +336,19 @@ class RegisterPageView(View):
             if User.objects.filter(email=email).exists():
                 form.add_error("email", "An account with this email already exists.")
                 return render(request, self.template_name, {"form": form})
+            role = form.cleaned_data["role"]
+            account_type = form.cleaned_data.get("account_type") or "individual"
+            organization_name = form.cleaned_data.get("organization_name", "")
+            if role != "customer":
+                account_type = "individual"
+                organization_name = ""
             User.objects.create_user(
                 email=email,
                 password=form.cleaned_data["password"],
                 full_name=form.cleaned_data["full_name"],
-                role=form.cleaned_data["role"],
+                role=role,
+                account_type=account_type,
+                organization_name=organization_name,
             )
             messages.success(request, "Account created! You can now log in.")
             return redirect("/login/")

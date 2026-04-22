@@ -23,6 +23,12 @@ ROLE_CHOICES = [
     ("producer", "Producer"),
 ]
 
+ACCOUNT_TYPE_CHOICES = [
+    ("individual", "Individual"),
+    ("community_group", "Community Group"),
+    ("restaurant", "Restaurant"),
+]
+
 PAYMENT_METHOD_CHOICES = [
     ("card", "Credit / Debit Card"),
     ("bank_transfer", "Bank Transfer"),
@@ -60,6 +66,16 @@ class RegisterForm(forms.Form):
     role = forms.ChoiceField(
         choices=ROLE_CHOICES,
         widget=forms.Select(attrs=_select_class),
+    )
+    account_type = forms.ChoiceField(
+        choices=ACCOUNT_TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs=_select_class),
+    )
+    organization_name = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={**_field_class, "placeholder": "Organisation name"}),
     )
 
     def clean_password(self):
@@ -154,7 +170,7 @@ class CheckoutForm(forms.ModelForm):
         model = CheckoutOrder
         # delivery_date is omitted — each producer has its own delivery date
         # submitted as delivery_date_<producer_id> POST fields handled in the view.
-        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method"]
+        fields = ["full_name", "email", "address", "city", "postal_code", "payment_method", "special_instructions"]
         widgets = {
             "full_name": forms.TextInput(attrs={**_field_class, "placeholder": "Full name"}),
             "email": forms.EmailInput(attrs={**_field_class, "placeholder": "Email address"}),
@@ -164,6 +180,7 @@ class CheckoutForm(forms.ModelForm):
             "payment_method": forms.Select(
                 choices=PAYMENT_METHOD_CHOICES, attrs=_select_class
             ),
+            "special_instructions": forms.Textarea(attrs={**_field_class, "rows": 3, "placeholder": "Bulk delivery notes, dietary requirements, access instructions…"}),
         }
 
     def validate_email(self, value):

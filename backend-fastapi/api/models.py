@@ -31,6 +31,12 @@ STATUS_CHOICES = [
     ("suspended", "Suspended"),
 ]
 
+ACCOUNT_TYPE_CHOICES = [
+    ("individual", "Individual"),
+    ("community_group", "Community Group"),
+    ("restaurant", "Restaurant"),
+]
+
 
 class User(AbstractUser):
     username = None
@@ -39,6 +45,8 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=200, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     postal_code = models.CharField(max_length=20, blank=True, default="")
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default="individual")
+    organization_name = models.CharField(max_length=200, blank=True, default="")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name", "role"]
@@ -135,6 +143,7 @@ class CheckoutOrder(models.Model):
     postal_code = models.CharField(max_length=20)
     payment_method = models.CharField(max_length=50)
     delivery_date = models.DateField(null=True, blank=True)
+    special_instructions = models.TextField(blank=True, default="")
     status = models.CharField(max_length=50, choices=CHECKOUT_STATUS_CHOICES, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
     customer = models.ForeignKey(
