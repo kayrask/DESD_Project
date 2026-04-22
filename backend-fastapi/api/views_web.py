@@ -1429,7 +1429,20 @@ class AdminModelUploadView(AdminRequiredMixin, View):
         import ml.inference as _inf
         _inf._model = None
 
-        messages.success(request, f"Model '{uploaded.name}' uploaded successfully. Cache cleared.")
+        # Save optional metrics JSON
+        metrics_file = request.FILES.get("metrics_file")
+        if metrics_file:
+            try:
+                import json as _json
+                metrics_data = _json.loads(metrics_file.read())
+                metrics_path = self._model_path.parent / "model_metrics.json"
+                with open(metrics_path, "w") as f:
+                    _json.dump(metrics_data, f, indent=2)
+                messages.success(request, f"Model '{uploaded.name}' and metrics uploaded successfully. Cache cleared.")
+            except Exception as exc:
+                messages.warning(request, f"Model uploaded but metrics file was invalid: {exc}")
+        else:
+            messages.success(request, f"Model '{uploaded.name}' uploaded successfully. Cache cleared.")
         return redirect("admin_ai_monitoring")
 
 

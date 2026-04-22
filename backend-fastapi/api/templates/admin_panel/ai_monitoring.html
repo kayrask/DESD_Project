@@ -37,20 +37,6 @@
       {% endfor %}
       {% endif %}
 
-      <!-- Model upload card -->
-      <div class="card p-4 mb-4">
-        <h6 style="font-weight:700;margin-bottom:1rem"><i class="bi bi-cloud-upload me-2"></i>Upload New Model</h6>
-        <p class="text-muted" style="font-size:.875rem">Replace the active ML model with a newly trained <code>.pt</code> file. The previous model is automatically backed up.</p>
-        <form method="post" action="{% url 'admin_model_upload' %}" enctype="multipart/form-data" class="d-flex gap-2 align-items-end flex-wrap">
-          {% csrf_token %}
-          <div>
-            <label class="form-label fw-semibold" style="font-size:.875rem">Model file (.pt)</label>
-            <input type="file" name="model_file" accept=".pt" class="form-control form-control-sm" required style="width:280px">
-          </div>
-          <button type="submit" class="btn btn-brand btn-sm">Upload &amp; Activate</button>
-        </form>
-      </div>
-
       <!-- Stats row -->
       <div class="row g-3 mb-4">
         <div class="col-md-3">
