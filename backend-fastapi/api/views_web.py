@@ -1429,20 +1429,18 @@ class AdminModelUploadView(AdminRequiredMixin, View):
         import ml.inference as _inf
         _inf._model = None
 
-        # Save optional metrics JSON
-        metrics_file = request.FILES.get("metrics_file")
-        if metrics_file:
-            try:
-                import json as _json
-                metrics_data = _json.loads(metrics_file.read())
-                metrics_path = self._model_path.parent / "model_metrics.json"
-                with open(metrics_path, "w") as f:
-                    _json.dump(metrics_data, f, indent=2)
-                messages.success(request, f"Model '{uploaded.name}' and metrics uploaded successfully. Cache cleared.")
-            except Exception as exc:
-                messages.warning(request, f"Model uploaded but metrics file was invalid: {exc}")
-        else:
-            messages.success(request, f"Model '{uploaded.name}' uploaded successfully. Cache cleared.")
+        # Derive a version label from the filename (strip .pt extension)
+        version_label = uploaded.name.removesuffix(".pt") or "mobilenetv2-v2"
+
+        # Kick off background evaluation — metrics card updates automatically
+        from api.tasks import evaluate_model_after_upload
+        evaluate_model_after_upload.delay(version_label)
+
+        messages.success(
+            request,
+            f"Model '{uploaded.name}' uploaded and activated. "
+            "Evaluation is running in the background — refresh this page in ~30 seconds to see updated metrics.",
+        )
         return redirect("admin_ai_monitoring")
 
 
