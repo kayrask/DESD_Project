@@ -14,7 +14,10 @@ def evaluate_model_after_upload(model_version: str):
 
     Running as a subprocess keeps PyTorch memory isolated from the Celery
     worker process — avoids OOM when multiple uploads happen concurrently.
+    After evaluation succeeds, writes a ModelEvaluation row so the admin
+    chart tracks accuracy over time across model versions.
     """
+    import json
     import subprocess
     import sys
 
@@ -30,6 +33,20 @@ def evaluate_model_after_upload(model_version: str):
     )
     if result.returncode != 0:
         raise RuntimeError(f"ml.evaluate failed:\n{result.stderr}")
+
+    # Record this evaluation run for the accuracy-over-time chart
+    if _METRICS_PATH.exists():
+        with open(_METRICS_PATH) as f:
+            m = json.load(f)
+        from api.models import ModelEvaluation
+        ModelEvaluation.objects.create(
+            version=m.get("model_version", model_version),
+            accuracy=m.get("accuracy", 0.0),
+            precision=m.get("precision", 0.0),
+            recall=m.get("recall", 0.0),
+            f1_score=m.get("f1_score", 0.0),
+        )
+
     return f"Evaluation complete for {model_version}"
 
 

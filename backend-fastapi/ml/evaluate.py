@@ -22,19 +22,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.metrics import classification_report, confusion_matrix
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
+from torch.utils.data import DataLoader
 
+
+from ml.data.preprocess import build_splits, SEED, VAL_SPLIT
 from ml.model import load_model
-from ml.train import HealthyRottenDataset, SEED
 
-MODEL_PATH = pathlib.Path(__file__).parent / "saved_models" / "quality_classifier.pt"
+MODEL_PATH   = pathlib.Path(__file__).parent / "saved_models" / "quality_classifier.pt"
 CM_SAVE_PATH = pathlib.Path(__file__).parent / "saved_models" / "confusion_matrix.png"
-IMG_SIZE = 224
-BATCH_SIZE = 32
-VAL_SPLIT = 0.2   # must match the fraction used in train.py
+BATCH_SIZE   = 32
 
-_IN_DOCKER = pathlib.Path("/.dockerenv").exists()
+_IN_DOCKER  = pathlib.Path("/.dockerenv").exists()
 NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 
 
@@ -105,22 +103,8 @@ def evaluate(data_dir: str, model_version: str = "mobilenetv2-v2") -> None:
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"No trained model at {MODEL_PATH}. Run ml/train.py first.")
 
-    tf = transforms.Compose([
-        transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-    full_dataset = HealthyRottenDataset(root=data_dir, transform=tf)
-    n_val = max(1, int(VAL_SPLIT * len(full_dataset)))
-    n_train = len(full_dataset) - n_val
-    _, val_set = random_split(
-        full_dataset,
-        [n_train, n_val],
-        generator=torch.Generator().manual_seed(SEED),
-    )
-
-    print(f"Evaluating on {len(val_set)} held-out samples ({VAL_SPLIT:.0%} split, seed={SEED})")
+    _, val_set, n_train, n_val = build_splits(data_dir)
+    print(f"Evaluating on {n_val} held-out samples ({VAL_SPLIT:.0%} split, seed={SEED})")
 
     loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 

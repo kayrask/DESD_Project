@@ -1359,6 +1359,13 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
         # Check if confusion matrix image exists
         cm_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "confusion_matrix.png"
         ctx["has_confusion_matrix"] = cm_path.exists()
+        # Accuracy-over-time history for the line chart
+        from api.models import ModelEvaluation
+        ctx["eval_history"] = list(
+            ModelEvaluation.objects.values(
+                "version", "accuracy", "precision", "recall", "f1_score", "evaluated_at"
+            ).order_by("evaluated_at")
+        )
         return ctx
 
 
