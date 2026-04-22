@@ -1,6 +1,36 @@
+import pathlib
+
 from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
+
+_DATASET_PATH = pathlib.Path(__file__).resolve().parent.parent / "ml" / "Fruit And Vegetable Diseases Dataset"
+_METRICS_PATH = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "model_metrics.json"
+
+
+@shared_task(max_retries=0)
+def evaluate_model_after_upload(model_version: str):
+    """Run ml.evaluate in a subprocess after a new model is uploaded.
+
+    Running as a subprocess keeps PyTorch memory isolated from the Celery
+    worker process — avoids OOM when multiple uploads happen concurrently.
+    """
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "ml.evaluate",
+            "--data_dir", str(_DATASET_PATH),
+            "--model_version", model_version,
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(pathlib.Path(__file__).resolve().parent.parent),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ml.evaluate failed:\n{result.stderr}")
+    return f"Evaluation complete for {model_version}"
 
 
 @shared_task

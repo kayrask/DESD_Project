@@ -37,20 +37,6 @@
       {% endfor %}
       {% endif %}
 
-      <!-- Model upload card -->
-      <div class="card p-4 mb-4">
-        <h6 style="font-weight:700;margin-bottom:1rem"><i class="bi bi-cloud-upload me-2"></i>Upload New Model</h6>
-        <p class="text-muted" style="font-size:.875rem">Replace the active ML model with a newly trained <code>.pt</code> file. The previous model is automatically backed up.</p>
-        <form method="post" action="{% url 'admin_model_upload' %}" enctype="multipart/form-data" class="d-flex gap-2 align-items-end flex-wrap">
-          {% csrf_token %}
-          <div>
-            <label class="form-label fw-semibold" style="font-size:.875rem">Model file (.pt)</label>
-            <input type="file" name="model_file" accept=".pt" class="form-control form-control-sm" required style="width:280px">
-          </div>
-          <button type="submit" class="btn btn-brand btn-sm">Upload &amp; Activate</button>
-        </form>
-      </div>
-
       <!-- Stats row -->
       <div class="row g-3 mb-4">
         <div class="col-md-3">
@@ -226,7 +212,7 @@
           <div class="card p-4">
             <h6 style="font-weight:700;margin-bottom:.25rem"><i class="bi bi-upload me-1"></i>Upload New Model</h6>
             <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">Upload a new trained <code>.pt</code> file to replace the current model. The model will reload immediately — no server restart needed. Optionally upload a metrics <code>.json</code> file to update the evaluation display above.</p>
-            <form method="post" action="{% url 'admin_ai_upload_model' %}" enctype="multipart/form-data">
+            <form method="post" action="{% url 'admin_model_upload' %}" enctype="multipart/form-data">
               {% csrf_token %}
               <div class="mb-2">
                 <label style="font-size:.82rem;font-weight:600;margin-bottom:.3rem;display:block">Model file (.pt)</label>
@@ -244,7 +230,7 @@
           <div class="card p-4">
             <h6 style="font-weight:700;margin-bottom:.25rem"><i class="bi bi-download me-1"></i>Export Interaction Data</h6>
             <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">Download all quality assessment records as a CSV file. Use this data to retrain or fine-tune the model. Includes product name, producer, grade, all pixel scores, model confidence, and image paths.</p>
-            <a href="{% url 'admin_ai_export' %}" class="btn btn-outline-secondary btn-sm">
+            <a href="{% url 'admin_interaction_export' %}" class="btn btn-outline-secondary btn-sm">
               <i class="bi bi-file-earmark-spreadsheet me-1"></i>Download assessments CSV
             </a>
           </div>

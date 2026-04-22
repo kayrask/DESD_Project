@@ -1429,7 +1429,18 @@ class AdminModelUploadView(AdminRequiredMixin, View):
         import ml.inference as _inf
         _inf._model = None
 
-        messages.success(request, f"Model '{uploaded.name}' uploaded successfully. Cache cleared.")
+        # Derive a version label from the filename (strip .pt extension)
+        version_label = uploaded.name.removesuffix(".pt") or "mobilenetv2-v2"
+
+        # Kick off background evaluation — metrics card updates automatically
+        from api.tasks import evaluate_model_after_upload
+        evaluate_model_after_upload.delay(version_label)
+
+        messages.success(
+            request,
+            f"Model '{uploaded.name}' uploaded and activated. "
+            "Evaluation is running in the background — refresh this page in ~30 seconds to see updated metrics.",
+        )
         return redirect("admin_ai_monitoring")
 
 
