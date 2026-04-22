@@ -84,7 +84,7 @@ class RegisterForm(forms.Form):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ["name", "category", "description", "price", "stock", "status", "allergens", "is_organic"]
+        fields = ["name", "category", "description", "price", "stock", "status", "allergens", "is_organic", "discount_percentage"]
         widgets = {
             "name": forms.TextInput(attrs={**_field_class, "placeholder": "Product name"}),
             "category": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Vegetable"}),
@@ -94,6 +94,7 @@ class ProductForm(forms.ModelForm):
             "status": forms.Select(attrs=_select_class),
             "allergens": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Milk, Eggs, Gluten (leave blank if none)"}),
             "is_organic": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "discount_percentage": forms.NumberInput(attrs={**_field_class, "min": "0", "max": "50", "placeholder": "0"}),
         }
 
     def clean_price(self):
@@ -107,6 +108,12 @@ class ProductForm(forms.ModelForm):
         if stock is not None and stock < 0:
             raise forms.ValidationError("Stock must be zero or greater.")
         return stock
+
+    def clean_discount_percentage(self):
+        discount = self.cleaned_data.get("discount_percentage")
+        if discount is not None and not (0 <= discount <= 50):
+            raise forms.ValidationError("Discount must be between 0% and 50%.")
+        return discount
 
 
 class ReviewForm(forms.ModelForm):

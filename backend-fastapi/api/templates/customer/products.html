@@ -81,7 +81,12 @@
               Stock: <span class="stock-count">{{ product.stock }}</span>
             {% endif %}
           </p>
+          {% if product.discounted_price %}
+          <span class="badge bg-danger mb-1">{{ product.discount_percentage }}% off</span>
+          <p class="fw-bold text-danger fs-5 mb-0">£{{ product.discounted_price }} <small class="text-muted text-decoration-line-through fs-6">£{{ product.price }}</small></p>
+          {% else %}
           <p class="fw-bold text-success fs-5 mb-0">£{{ product.price }}</p>
+          {% endif %}
         </div>
         <div class="card-footer bg-white border-0 pb-3 cart-action">
           {% if product.stock > 0 %}

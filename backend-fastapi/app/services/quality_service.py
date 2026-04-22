@@ -62,6 +62,10 @@ def assess_product_image(
 
     if result["grade"] == "C":
         notes = "AI suggests offering this batch at a discount (Grade C quality)."
+        # Auto-apply 20% surplus discount if none already set
+        if product.discount_percentage == 0:
+            product.discount_percentage = 20
+            product.save(update_fields=["discount_percentage"])
     elif result["grade"] == "A":
         notes = "Premium quality confirmed. Eligible for featured listing."
 

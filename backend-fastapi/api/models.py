@@ -66,6 +66,13 @@ class Product(models.Model):
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products")
     allergens = models.TextField(blank=True, default="", help_text="List allergens e.g. Milk, Eggs, Gluten")
     is_organic = models.BooleanField(default=False)
+    discount_percentage = models.IntegerField(default=0, help_text="Surplus/quality discount 0–50%")
+
+    @property
+    def discounted_price(self):
+        if self.discount_percentage > 0:
+            return round(float(self.price) * (1 - self.discount_percentage / 100), 2)
+        return None
 
     class Meta:
         ordering = ["name"]

@@ -74,6 +74,8 @@ web_patterns = [
     path("admin-panel/users/", views_web.AdminUsersView.as_view(), name="admin_users"),
     path("admin-panel/database/", views_web.AdminDatabaseView.as_view(), name="admin_database"),
     path("admin-panel/ai-monitoring/", views_web.AdminAIMonitoringView.as_view(), name="admin_ai_monitoring"),
+    path("admin-panel/ai-monitoring/upload-model/", views_web.AdminModelUploadView.as_view(), name="admin_model_upload"),
+    path("admin-panel/ai-monitoring/export-interactions/", views_web.AdminInteractionExportView.as_view(), name="admin_interaction_export"),
 
     # Errors
     path("401/", views_web.view_401, name="unauthorized"),
