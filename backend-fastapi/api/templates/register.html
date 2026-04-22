@@ -40,6 +40,18 @@
               {% if form.role.errors %}<div class="text-danger small mt-1">{{ form.role.errors }}</div>{% endif %}
             </div>
 
+            <div class="mb-3" id="account-type-group" style="display:none">
+              <label for="{{ form.account_type.id_for_label }}" class="form-label fw-semibold">Account Type</label>
+              {{ form.account_type }}
+              {% if form.account_type.errors %}<div class="text-danger small mt-1">{{ form.account_type.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3" id="org-name-group" style="display:none">
+              <label for="{{ form.organization_name.id_for_label }}" class="form-label fw-semibold">Organisation Name</label>
+              {{ form.organization_name }}
+              {% if form.organization_name.errors %}<div class="text-danger small mt-1">{{ form.organization_name.errors }}</div>{% endif %}
+            </div>
+
             <div class="mb-3">
               <label for="{{ form.password.id_for_label }}" class="form-label fw-semibold">Password</label>
               {{ form.password }}
@@ -67,4 +79,24 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const roleSelect = document.getElementById('{{ form.role.id_for_label }}');
+  const acctGroup  = document.getElementById('account-type-group');
+  const acctSelect = document.getElementById('{{ form.account_type.id_for_label }}');
+  const orgGroup   = document.getElementById('org-name-group');
+
+  function update() {
+    const isCustomer = roleSelect.value === 'customer';
+    acctGroup.style.display = isCustomer ? 'block' : 'none';
+    const needsOrg = isCustomer && (acctSelect.value === 'community_group' || acctSelect.value === 'restaurant');
+    orgGroup.style.display = needsOrg ? 'block' : 'none';
+  }
+
+  roleSelect.addEventListener('change', update);
+  acctSelect.addEventListener('change', update);
+  update();
+}());
+</script>
 {% endblock %}
