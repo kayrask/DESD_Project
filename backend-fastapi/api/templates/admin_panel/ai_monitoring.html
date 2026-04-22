@@ -166,17 +166,103 @@
         </div>
       </div>
 
+      <!-- Model metrics + confusion matrix -->
+      {% if model_metrics %}
+      <div class="row g-4 mb-4">
+        <div class="col-md-7">
+          <div class="card p-4 h-100">
+            <h6 style="font-weight:700;margin-bottom:1.25rem">
+              <i class="bi bi-clipboard-data me-1"></i>Model Evaluation Metrics
+              <span class="badge ms-2" style="background:#f1f5f9;color:#475569;font-size:.7rem;font-weight:500">{{ model_metrics.model_version }}</span>
+            </h6>
+            <div class="row g-3 mb-3">
+              <div class="col-6 col-md-3 text-center">
+                <div style="font-size:1.75rem;font-weight:800;color:#16a34a">{{ model_metrics.accuracy|floatformat:2 }}</div>
+                <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;font-weight:600">Accuracy</div>
+              </div>
+              <div class="col-6 col-md-3 text-center">
+                <div style="font-size:1.75rem;font-weight:800;color:#2563eb">{{ model_metrics.precision|floatformat:2 }}</div>
+                <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;font-weight:600">Precision</div>
+              </div>
+              <div class="col-6 col-md-3 text-center">
+                <div style="font-size:1.75rem;font-weight:800;color:#d97706">{{ model_metrics.recall|floatformat:2 }}</div>
+                <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;font-weight:600">Recall</div>
+              </div>
+              <div class="col-6 col-md-3 text-center">
+                <div style="font-size:1.75rem;font-weight:800;color:#7c3aed">{{ model_metrics.f1_score|floatformat:2 }}</div>
+                <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;font-weight:600">F1 Score</div>
+              </div>
+            </div>
+            <div class="row g-2" style="font-size:.8rem;color:var(--muted)">
+              <div class="col-6"><strong>Dataset:</strong> {{ model_metrics.dataset }}</div>
+              <div class="col-3"><strong>Train:</strong> {{ model_metrics.train_samples }} samples</div>
+              <div class="col-3"><strong>Val:</strong> {{ model_metrics.val_samples }} samples</div>
+              {% if model_metrics.auc_roc %}<div class="col-6"><strong>AUC-ROC:</strong> {{ model_metrics.auc_roc }}</div>{% endif %}
+              <div class="col-12"><strong>Updated:</strong> {{ model_metrics.updated_at }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <div class="card p-4 h-100 text-center">
+            <h6 style="font-weight:700;margin-bottom:1rem"><i class="bi bi-grid-3x3 me-1"></i>Confusion Matrix</h6>
+            {% if has_confusion_matrix %}
+            <img src="{% url 'admin_ai_confusion_matrix' %}" alt="Confusion matrix"
+                 style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
+            {% else %}
+            <div class="text-muted" style="font-size:.875rem;padding:2rem 0">
+              <i class="bi bi-image fs-2 d-block mb-2"></i>
+              Not generated yet.<br>
+              Run <code>python -m ml.evaluate --data_dir /path/to/dataset</code>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Upload model + Export data -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-6">
+          <div class="card p-4">
+            <h6 style="font-weight:700;margin-bottom:.25rem"><i class="bi bi-upload me-1"></i>Upload New Model</h6>
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">Upload a new trained <code>.pt</code> file to replace the current model. The model will reload immediately — no server restart needed. Optionally upload a metrics <code>.json</code> file to update the evaluation display above.</p>
+            <form method="post" action="{% url 'admin_ai_upload_model' %}" enctype="multipart/form-data">
+              {% csrf_token %}
+              <div class="mb-2">
+                <label style="font-size:.82rem;font-weight:600;margin-bottom:.3rem;display:block">Model file (.pt)</label>
+                <input type="file" name="model_file" accept=".pt" class="form-control form-control-sm">
+              </div>
+              <div class="mb-3">
+                <label style="font-size:.82rem;font-weight:600;margin-bottom:.3rem;display:block">Metrics file (.json) <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+                <input type="file" name="metrics_file" accept=".json" class="form-control form-control-sm">
+              </div>
+              <button type="submit" class="btn btn-brand btn-sm"><i class="bi bi-cloud-upload me-1"></i>Upload</button>
+            </form>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card p-4">
+            <h6 style="font-weight:700;margin-bottom:.25rem"><i class="bi bi-download me-1"></i>Export Interaction Data</h6>
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">Download all quality assessment records as a CSV file. Use this data to retrain or fine-tune the model. Includes product name, producer, grade, all pixel scores, model confidence, and image paths.</p>
+            <a href="{% url 'admin_ai_export' %}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-file-earmark-spreadsheet me-1"></i>Download assessments CSV
+            </a>
+          </div>
+        </div>
+      </div>
+
       <!-- Recent assessments table -->
       <div class="card">
         <div class="card-body p-0">
           <div class="p-3 pb-0 d-flex justify-content-between align-items-center">
             <h6 style="font-weight:700;margin:0">Recent Assessments</h6>
+            <span style="font-size:.8rem;color:var(--muted)">Click XAI to view heatmap explanation</span>
           </div>
           <div class="table-responsive">
             <table class="table table-hover mb-0">
               <thead>
                 <tr>
-                  <th>Product</th><th>Producer</th><th>Grade</th><th>Colour</th><th>Size</th><th>Ripeness</th><th>Confidence</th><th>Model</th><th>Date</th>
+                  <th>Product</th><th>Producer</th><th>Grade</th><th>Colour</th><th>Size</th><th>Ripeness</th><th>Confidence</th><th>Model</th><th>Date</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -188,9 +274,9 @@
                     <span class="badge" style="background:{% if a.grade == 'A' %}#dcfce7;color:#15803d{% elif a.grade == 'B' %}#fef3c7;color:#b45309{% else %}#fee2e2;color:#dc2626{% endif %}">{{ a.grade }}</span>
                     {% if not a.is_healthy %}<i class="bi bi-exclamation-circle text-danger ms-1" title="Rotten detected"></i>{% endif %}
                   </td>
-                  <td>{{ a.color_score }}%</td>
-                  <td>{{ a.size_score }}%</td>
-                  <td>{{ a.ripeness_score }}%</td>
+                  <td>{{ a.color_score|floatformat:0 }}%</td>
+                  <td>{{ a.size_score|floatformat:0 }}%</td>
+                  <td>{{ a.ripeness_score|floatformat:0 }}%</td>
                   <td>
                     {% widthratio a.model_confidence 1 100 as conf_pct %}
                     {% if a.model_confidence < 0.6 %}
@@ -199,9 +285,14 @@
                   </td>
                   <td style="color:var(--muted)">{{ a.model_version }}</td>
                   <td style="color:var(--muted)">{{ a.assessed_at|date:"d M Y H:i" }}</td>
+                  <td>
+                    <a href="{% url 'admin_ai_assessment_detail' a.id %}" class="btn btn-xs btn-outline-secondary" style="font-size:.72rem;padding:.15rem .5rem">
+                      XAI <i class="bi bi-heatgrid"></i>
+                    </a>
+                  </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="9" class="text-center text-muted py-4">No assessments yet.</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No assessments yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>

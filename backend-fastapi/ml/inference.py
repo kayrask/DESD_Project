@@ -43,6 +43,13 @@ def _load_model_once():
     return _model
 
 
+def reload_model():
+    """Force the in-memory model cache to reload from disk on next inference call.
+    Called after an AI engineer uploads a new .pt file via the admin panel."""
+    global _model
+    _model = None
+
+
 def _preprocess(image_bytes: bytes):
     """Convert raw image bytes to a normalised [1, 3, 224, 224] tensor."""
     import torch

@@ -141,6 +141,39 @@
         <p class="mt-2">No report data found for the selected period.</p>
       </div>
       {% endif %}
+
+      <!-- Per-producer breakdown (TC-025) -->
+      {% if producer_rows %}
+      <h5 class="fw-bold mt-5 mb-3">Per-Producer Payment Breakdown</h5>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Producer</th>
+                <th>Email</th>
+                <th class="text-center">Orders</th>
+                <th class="text-end">Gross Revenue</th>
+                <th class="text-end">Commission (5%)</th>
+                <th class="text-end">Net Payout</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in producer_rows %}
+              <tr>
+                <td class="fw-semibold">{{ row.name }}</td>
+                <td class="text-muted small">{{ row.email }}</td>
+                <td class="text-center">{{ row.orders }}</td>
+                <td class="text-end">£{{ row.gross }}</td>
+                <td class="text-end text-muted">£{{ row.commission }}</td>
+                <td class="text-end fw-semibold text-success">£{{ row.net_payout }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>

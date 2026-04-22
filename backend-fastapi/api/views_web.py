@@ -17,7 +17,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -184,27 +184,46 @@ class HomeView(TemplateView):
     template_name = "home.html"
 
 
-class MarketplaceView(TemplateView):
+class MarketplaceView(ListView):
     template_name = "marketplace.html"
+    context_object_name = "products"
+    paginate_by = 12
+
+    _visible = ("Available", "In Season")
+
+    def get_queryset(self):
+        qs = Product.objects.filter(status__in=self._visible).select_related("producer")
+        q = self.request.GET.get("q", "").strip()
+        category = self.request.GET.get("category", "").strip()
+        organic = self.request.GET.get("organic", "")
+        allergen_free = self.request.GET.get("allergen_free", "")
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q) |
+                Q(description__icontains=q) |
+                Q(producer__full_name__icontains=q)
+            )
+        if category:
+            qs = qs.filter(category=category)
+        if organic:
+            qs = qs.filter(is_organic=True)
+        if allergen_free:
+            qs = qs.filter(Q(allergens="") | Q(allergens__isnull=True))
+        return qs.order_by("name")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        qs = Product.objects.filter(status="Available").select_related("producer")
-        q = self.request.GET.get("q", "").strip()
-        category = self.request.GET.get("category", "").strip()
-        if q:
-            qs = qs.filter(name__icontains=q)
-        if category:
-            qs = qs.filter(category=category)
-
-        ctx["products"] = qs.order_by("name")
-        ctx["categories"] = list(
-            Product.objects.filter(status="Available")
+        raw = (
+            Product.objects.filter(status__in=self._visible)
             .exclude(category__isnull=True)
             .exclude(category="")
             .values_list("category", flat=True)
-            .distinct()
         )
+        ctx["categories"] = sorted(set(c.strip() for c in raw))
+        ctx["q"] = self.request.GET.get("q", "")
+        ctx["selected_category"] = self.request.GET.get("category", "")
+        ctx["organic_filter"] = self.request.GET.get("organic", "")
+        ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
 
         customer_email = None
         if self.request.user.is_authenticated and self.request.user.role == "customer":
@@ -324,23 +343,8 @@ class RegisterPageView(View):
 
 # ── Customer views ────────────────────────────────────────────────────────────
 
-class CustomerDashboardView(CustomerRequiredMixin, TemplateView):
+class CustomerDashboardView(CustomerRequiredMixin, ListView):
     template_name = "customer/dashboard.html"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        user = self.request.user
-        ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
-            customer=user,
-            status__in=["pending", "confirmed"],
-        ).count()
-        ctx["recent_products"] = Product.objects.filter(status="Available").order_by("?")[:4]
-        ctx["recent_orders"] = CheckoutOrder.objects.filter(customer=user).order_by("-created_at")[:5]
-        return ctx
-
-
-class CustomerOrdersView(CustomerRequiredMixin, ListView):
-    template_name = "customer/orders.html"
     context_object_name = "orders"
     paginate_by = 10
 
@@ -353,8 +357,20 @@ class CustomerOrdersView(CustomerRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
+            customer=user,
+            status__in=["pending", "confirmed"],
+        ).count()
+        ctx["total_orders"] = CheckoutOrder.objects.filter(customer=user).count()
         ctx["status_filter"] = self.request.GET.get("status", "")
         return ctx
+
+
+class CustomerOrdersView(CustomerRequiredMixin, View):
+    """Redirects to the dashboard which now contains the full order history."""
+    def get(self, request):
+        return redirect("customer_dashboard")
 
 
 def product_suggest(request):
@@ -363,45 +379,21 @@ def product_suggest(request):
     if len(q) < 2:
         return JsonResponse({"results": []})
     qs = (
-        Product.objects.filter(name__icontains=q, status="Available")
+        Product.objects.filter(
+            Q(name__icontains=q) | Q(description__icontains=q) | Q(producer__full_name__icontains=q),
+            status="Available",
+        )
         .values("id", "name", "category", "price")[:8]
     )
     return JsonResponse({"results": list(qs)})
 
 
-class ProductListView(CustomerRequiredMixin, ListView):
-    template_name = "customer/products.html"
-    context_object_name = "products"
-    paginate_by = 12
-
-    _visible = ("Available", "In Season")
-
-    def get_queryset(self):
-        qs = Product.objects.filter(status__in=self._visible)
-        q = self.request.GET.get("q", "")
-        category = self.request.GET.get("category", "")
-        organic = self.request.GET.get("organic", "")
-        if q:
-            qs = qs.filter(name__icontains=q)
-        if category:
-            qs = qs.filter(category=category)
-        if organic:
-            qs = qs.filter(is_organic=True)
-        return qs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        raw = (
-            Product.objects.filter(status__in=self._visible)
-            .exclude(category__isnull=True)
-            .exclude(category="")
-            .values_list("category", flat=True)
-        )
-        ctx["categories"] = sorted(set(c.strip() for c in raw))
-        ctx["q"] = self.request.GET.get("q", "")
-        ctx["selected_category"] = self.request.GET.get("category", "")
-        ctx["organic_filter"] = self.request.GET.get("organic", "")
-        return ctx
+class ProductListView(View):
+    """Redirects to marketplace — kept for URL backwards-compatibility only."""
+    def get(self, request):
+        qs = request.GET.urlencode()
+        url = "/marketplace/" + (f"?{qs}" if qs else "")
+        return redirect(url)
 
 
 class ProductDetailView(View):
@@ -850,14 +842,12 @@ class OrderConfirmationView(CustomerRequiredMixin, TemplateView):
 class ProducerDashboardView(ProducerRequiredMixin, View):
     template_name = "producer/dashboard.html"
 
-    _LOW_STOCK_THRESHOLD = 5
-
     def get(self, request):
         producer = request.user
         low_stock_qs = Product.objects.filter(
             producer=producer,
             stock__gt=0,
-            stock__lte=self._LOW_STOCK_THRESHOLD,
+            stock__lte=F("low_stock_threshold"),
         ).order_by("stock")
         ctx = {
             "summary": {
@@ -928,6 +918,9 @@ class ProducerProductEditView(ProducerRequiredMixin, View):
                 updated.status = "Out of Stock"
             elif updated.status == "Out of Stock" and updated.stock > 0:
                 updated.status = "Available"
+            # low_stock_threshold is optional in the form; keep the existing value if blank
+            if form.cleaned_data.get("low_stock_threshold") is None:
+                updated.low_stock_threshold = product.low_stock_threshold
             updated.save()
             _broadcast_stock_update(updated)
             messages.success(request, "Product updated.")
@@ -1153,6 +1146,41 @@ class AdminReportsView(AdminRequiredMixin, View):
         paginator = Paginator(rows, self._PAGE_SIZE)
         page_obj = paginator.get_page(request.GET.get("page") or 1)
 
+        # Per-producer breakdown from Order/OrderItem data
+        item_qs = OrderItem.objects.select_related("order__producer")
+        if form.is_valid():
+            df = form.cleaned_data.get("date_from")
+            dt = form.cleaned_data.get("date_to")
+            if df:
+                item_qs = item_qs.filter(order__created_at__date__gte=df)
+            if dt:
+                item_qs = item_qs.filter(order__created_at__date__lte=dt)
+        producer_breakdown = (
+            item_qs
+            .values("order__producer__full_name", "order__producer__email")
+            .annotate(
+                order_count=Count("order_id", distinct=True),
+                gross=Sum(
+                    ExpressionWrapper(
+                        F("unit_price") * F("quantity"),
+                        output_field=DecimalField(max_digits=12, decimal_places=2),
+                    )
+                ),
+            )
+            .order_by("-gross")
+        )
+        producer_rows = [
+            {
+                "name": r["order__producer__full_name"] or r["order__producer__email"],
+                "email": r["order__producer__email"],
+                "orders": r["order_count"],
+                "gross": round(float(r["gross"] or 0), 2),
+                "commission": round(float(r["gross"] or 0) * 0.05, 2),
+                "net_payout": round(float(r["gross"] or 0) * 0.95, 2),
+            }
+            for r in producer_breakdown
+        ]
+
         return render(request, self.template_name, {
             "form": form,
             "rows": page_obj.object_list,
@@ -1160,6 +1188,7 @@ class AdminReportsView(AdminRequiredMixin, View):
             "total_orders": sum(r["orders"] for r in rows),
             "total_gross": round(sum(r["gross"] for r in rows), 2),
             "total_commission": round(sum(r["commission"] for r in rows), 2),
+            "producer_rows": producer_rows,
         })
 
 
@@ -1289,6 +1318,7 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
     template_name = "admin_panel/ai_monitoring.html"
 
     def get_context_data(self, **kwargs):
+        import json, pathlib
         ctx = super().get_context_data(**kwargs)
         ctx["stats"] = get_ai_monitoring_stats()
         ctx["recent_assessments"] = (
@@ -1296,7 +1326,44 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
             .select_related("product", "assessed_by")
             .order_by("-assessed_at")[:20]
         )
+        # Load model metrics JSON if it exists
+        metrics_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "model_metrics.json"
+        if metrics_path.exists():
+            with open(metrics_path) as f:
+                ctx["model_metrics"] = json.load(f)
+        # Check if confusion matrix image exists
+        cm_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "confusion_matrix.png"
+        ctx["has_confusion_matrix"] = cm_path.exists()
         return ctx
+
+
+class AdminAIAssessmentDetailView(AdminRequiredMixin, View):
+    """Shows XAI heatmap + explanation for a single quality assessment."""
+    template_name = "admin_panel/ai_assessment_detail.html"
+
+    def get(self, request, pk):
+        assessment = get_object_or_404(
+            QualityAssessment.objects.select_related("product", "assessed_by"),
+            pk=pk,
+        )
+        xai_heatmap = None
+        xai_explanation = None
+        # Re-run inference on stored image to get heatmap
+        try:
+            from ml.inference import classify_image
+            image_path = assessment.image.path
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+            result = classify_image(image_bytes, explain=True)
+            xai_heatmap = result.get("xai_heatmap")
+            xai_explanation = result.get("xai_explanation")
+        except Exception:
+            pass
+        return render(request, self.template_name, {
+            "assessment": assessment,
+            "xai_heatmap": xai_heatmap,
+            "xai_explanation": xai_explanation,
+        })
 
 
 class AdminModelUploadView(AdminRequiredMixin, View):
@@ -1349,9 +1416,10 @@ class AdminInteractionExportView(AdminRequiredMixin, View):
         response["Content-Disposition"] = 'attachment; filename="ai_interactions.csv"'
         writer = csv.writer(response)
         writer.writerow([
-            "assessment_id", "assessed_at", "producer_email", "product_name",
-            "grade", "color_score", "size_score", "ripeness_score",
-            "model_confidence", "is_healthy", "model_version", "notes",
+            "id", "product_name", "producer_email", "grade",
+            "color_score", "size_score", "ripeness_score",
+            "model_confidence", "model_version", "is_healthy",
+            "notes", "quantity_lost", "assessed_at", "image_path",
         ])
         qs = (
             QualityAssessment.objects
@@ -1361,19 +1429,114 @@ class AdminInteractionExportView(AdminRequiredMixin, View):
         for a in qs:
             writer.writerow([
                 a.id,
-                str(a.assessed_at),
+                a.product.name,
                 a.assessed_by.email if a.assessed_by else "",
-                a.product.name if a.product else "",
                 a.grade,
-                a.color_score,
-                a.size_score,
-                a.ripeness_score,
-                f"{float(a.model_confidence):.4f}",
-                a.is_healthy,
+                round(a.color_score, 2),
+                round(a.size_score, 2),
+                round(a.ripeness_score, 2),
+                round(a.model_confidence, 4),
                 a.model_version,
-                a.notes,
+                a.is_healthy,
+                a.notes.replace("\n", " "),
+                a.quantity_lost,
+                a.assessed_at.isoformat(),
+                a.image.name if a.image else "",
             ])
         return response
+
+
+class AdminConfusionMatrixView(AdminRequiredMixin, View):
+    """Serves the confusion_matrix.png generated by ml/evaluate.py."""
+
+    def get(self, request):
+        import pathlib
+        cm_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "confusion_matrix.png"
+        if not cm_path.exists():
+            return HttpResponse("Confusion matrix not found. Run ml/evaluate.py to generate it.", status=404)
+        with open(cm_path, "rb") as f:
+            return HttpResponse(f.read(), content_type="image/png")
+
+
+class ReorderView(CustomerRequiredMixin, View):
+    """Re-adds all available items from a past order into the current cart."""
+
+    def post(self, request, order_id):
+        order = get_object_or_404(CheckoutOrder, pk=order_id, customer=request.user)
+        base_order_id = f"CO-{order.id}"
+        session_key = _ensure_session_key(request)
+        vendor_orders = (
+            Order.objects.filter(order_id__startswith=base_order_id)
+            .prefetch_related("items__product__producer")
+        )
+        cart = request.session.get("cart", [])
+        added = 0
+        updated = 0
+        skipped = 0
+        for vo in vendor_orders:
+            for oi in vo.items.all():
+                product = oi.product
+                if product.status not in ("Available", "In Season") or product.stock < 1:
+                    skipped += 1
+                    continue
+                qty = min(oi.quantity, product.stock)
+                for item in cart:
+                    if item["product_id"] == product.id:
+                        item["quantity"] = min(item["quantity"] + qty, product.stock)
+                        _upsert_reservation(session_key, product.id, item["quantity"])
+                        updated += 1
+                        break
+                else:
+                    cart.append({
+                        "product_id": product.id,
+                        "name": product.name,
+                        "price": float(product.price),
+                        "quantity": qty,
+                        "producer_id": product.producer_id,
+                        "producer_name": product.producer.full_name,
+                    })
+                    _upsert_reservation(session_key, product.id, qty)
+                    added += 1
+        request.session["cart"] = cart
+        if added > 0 or updated > 0:
+            msg = []
+            if added:
+                msg.append(f"{added} new item(s) added")
+            if updated:
+                msg.append(f"{updated} item(s) updated")
+            messages.success(request, f"{', '.join(msg)} in your cart from {base_order_id}.")
+        elif skipped > 0:
+            messages.warning(request, "No items could be re-added — all are currently out of stock.")
+        else:
+            messages.info(request, "That order had no items to re-add.")
+        return redirect("/cart/")
+
+
+class OrderReceiptView(CustomerRequiredMixin, View):
+    """Renders a printable HTML receipt for a past order."""
+
+    def get(self, request, order_id):
+        order = get_object_or_404(CheckoutOrder, pk=order_id, customer=request.user)
+        base_order_id = f"CO-{order.id}"
+        vendor_orders = list(
+            Order.objects.filter(order_id__startswith=base_order_id)
+            .select_related("producer")
+            .prefetch_related("items__product")
+        )
+        grand_total = Decimal("0")
+        for vo in vendor_orders:
+            subtotal = Decimal("0")
+            for oi in vo.items.all():
+                oi.line_total = (Decimal(str(oi.unit_price)) * oi.quantity).quantize(Decimal("0.01"))
+                subtotal += oi.line_total
+            vo.subtotal = subtotal.quantize(Decimal("0.01"))
+            grand_total += subtotal
+        return render(request, "customer/order_receipt.html", {
+            "order": order,
+            "base_order_id": base_order_id,
+            "vendor_orders": vendor_orders,
+            "grand_total": grand_total,
+        })
 
 
 # ── Error views ───────────────────────────────────────────────────────────────

@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Receipt {{ base_order_id }} – DESD{% endblock %}
+
+{% block extra_head %}
+<style>
+  @media print {
+    .navbar, .no-print { display: none !important; }
+    body { background: white !important; }
+    .card { border: 1px solid #ddd !important; box-shadow: none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5" style="max-width:700px">
+  <div class="d-flex justify-content-between align-items-start mb-4 no-print">
+    <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Orders
+    </a>
+    <button onclick="window.print()" class="btn btn-brand btn-sm">
+      <i class="bi bi-printer me-1"></i>Print Receipt
+    </button>
+  </div>
+
+  <!-- Header -->
+  <div class="text-center mb-4">
+    <h2 class="fw-bold mb-1">DESD Fresh Marketplace</h2>
+    <p class="text-muted mb-0">Order Receipt</p>
+    <p class="text-muted small">Printed: {{ order.created_at|date:"d M Y, H:i" }}</p>
+  </div>
+
+  <!-- Order details -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-2" style="font-size:.9rem">
+        <div class="col-6"><strong>Order Reference:</strong></div>
+        <div class="col-6">{{ base_order_id }}</div>
+        <div class="col-6"><strong>Customer:</strong></div>
+        <div class="col-6">{{ order.full_name }}</div>
+        <div class="col-6"><strong>Email:</strong></div>
+        <div class="col-6">{{ order.email }}</div>
+        <div class="col-6"><strong>Delivery Address:</strong></div>
+        <div class="col-6">{{ order.address }}, {{ order.city }}, {{ order.postal_code }}</div>
+        <div class="col-6"><strong>Payment Method:</strong></div>
+        <div class="col-6">{{ order.get_payment_method_display|default:order.payment_method }}</div>
+        <div class="col-6"><strong>Order Status:</strong></div>
+        <div class="col-6">{{ order.status|capfirst }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items per producer -->
+  {% for vo in vendor_orders %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-light py-2">
+      <strong>{{ vo.producer.full_name }}</strong>
+      <span class="text-muted small ms-2">Order: {{ vo.order_id }}</span>
+      {% if vo.delivery_date %}
+      <span class="text-muted small ms-2"><i class="bi bi-calendar3 me-1"></i>Delivery: {{ vo.delivery_date }}</span>
+      {% endif %}
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Product</th>
+            <th class="text-center">Qty</th>
+            <th class="text-end">Unit Price</th>
+            <th class="text-end">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for oi in vo.items.all %}
+          <tr>
+            <td>{{ oi.product.name }}</td>
+            <td class="text-center">{{ oi.quantity }}</td>
+            <td class="text-end">£{{ oi.unit_price }}</td>
+            <td class="text-end">£{{ oi.line_total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="3" class="text-end">Subtotal</th>
+            <th class="text-end">£{{ vo.subtotal }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- Grand total -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between fw-bold fs-5">
+        <span>Grand Total</span>
+        <span class="text-success">£{{ grand_total }}</span>
+      </div>
+      <div class="d-flex justify-content-between text-muted small mt-1">
+        <span>Includes 5% marketplace commission</span>
+        <span>£{{ grand_total|floatformat:2 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-center text-muted small">Thank you for shopping with DESD Fresh Marketplace.</p>
+</div>
+{% endblock %}

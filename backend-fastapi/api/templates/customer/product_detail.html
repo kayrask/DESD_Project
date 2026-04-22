@@ -5,7 +5,7 @@
 <div class="container py-5">
   <nav aria-label="breadcrumb" class="mb-4">
     <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{% url 'product_list' %}">Products</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'marketplace' %}">Marketplace</a></li>
       <li class="breadcrumb-item active">{{ product.name }}</li>
     </ol>
   </nav>
@@ -63,6 +63,14 @@
 
           <p class="text-muted mb-1"><strong>Status:</strong> {{ product.status }}</p>
           <p class="text-muted mb-1"><strong>Sold by:</strong> {{ product.producer.full_name }}</p>
+          {% if product.harvest_date %}
+          <p class="text-muted mb-1"><strong>Harvested:</strong> {{ product.harvest_date|date:"d M Y" }}</p>
+          {% endif %}
+          {% if product.season_start and product.season_end %}
+          <p class="text-muted mb-1">
+            <strong>In season:</strong> {{ product.season_start|date:"d M" }} – {{ product.season_end|date:"d M" }}
+          </p>
+          {% endif %}
 
           {# ── TC-015: Allergen warnings ─────────────────────────────────── #}
           {% if product.allergens %}

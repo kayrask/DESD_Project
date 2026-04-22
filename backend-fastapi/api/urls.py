@@ -57,6 +57,8 @@ web_patterns = [
     path("cart/update/<int:product_id>/", views_web.UpdateCartView.as_view(), name="cart_update"),
     path("checkout/", views_web.CheckoutView.as_view(), name="checkout"),
     path("orders/<int:order_id>/confirmation/", views_web.OrderConfirmationView.as_view(), name="order_confirmation"),
+    path("orders/<int:order_id>/receipt/", views_web.OrderReceiptView.as_view(), name="order_receipt"),
+    path("orders/<int:order_id>/reorder/", views_web.ReorderView.as_view(), name="order_reorder"),
 
     # Producer
     path("producer/", views_web.ProducerDashboardView.as_view(), name="producer_dashboard"),
@@ -76,6 +78,8 @@ web_patterns = [
     path("admin-panel/ai-monitoring/", views_web.AdminAIMonitoringView.as_view(), name="admin_ai_monitoring"),
     path("admin-panel/ai-monitoring/upload-model/", views_web.AdminModelUploadView.as_view(), name="admin_model_upload"),
     path("admin-panel/ai-monitoring/export-interactions/", views_web.AdminInteractionExportView.as_view(), name="admin_interaction_export"),
+    path("admin-panel/ai-monitoring/<int:pk>/", views_web.AdminAIAssessmentDetailView.as_view(), name="admin_ai_assessment_detail"),
+    path("admin-panel/ai-confusion-matrix/", views_web.AdminConfusionMatrixView.as_view(), name="admin_ai_confusion_matrix"),
 
     # Errors
     path("401/", views_web.view_401, name="unauthorized"),

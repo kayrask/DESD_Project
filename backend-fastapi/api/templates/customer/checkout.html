@@ -106,6 +106,40 @@
                 {{ form.payment_method }}
                 {% if form.payment_method.errors %}<div class="text-danger small">{{ form.payment_method.errors }}</div>{% endif %}
               </div>
+              <!-- Payment sandbox — shown only when card is selected -->
+              <div class="col-12" id="card-sandbox" style="display:none">
+                <div class="card border border-secondary-subtle p-3" style="background:#f8fafc">
+                  <div class="d-flex align-items-center gap-2 mb-3">
+                    <i class="bi bi-credit-card-2-front fs-5 text-primary"></i>
+                    <span class="fw-semibold">Sandbox Card Payment</span>
+                    <span class="badge bg-warning text-dark ms-1">Test Mode</span>
+                  </div>
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <label class="form-label small fw-semibold">Card Number</label>
+                      <input type="text" class="form-control" placeholder="4242 4242 4242 4242"
+                             maxlength="19" id="sandbox-card-number" autocomplete="cc-number">
+                      <div class="form-text">Use <code>4242 4242 4242 4242</code> for a successful payment.</div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label small fw-semibold">Expiry Date</label>
+                      <input type="text" class="form-control" placeholder="MM / YY"
+                             maxlength="7" id="sandbox-expiry" autocomplete="cc-exp">
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label small fw-semibold">CVV</label>
+                      <input type="text" class="form-control" placeholder="123"
+                             maxlength="4" id="sandbox-cvv" autocomplete="cc-csc">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small fw-semibold">Cardholder Name</label>
+                      <input type="text" class="form-control" placeholder="Name on card"
+                             id="sandbox-name" autocomplete="cc-name">
+                    </div>
+                  </div>
+                  <p class="text-muted small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>This is a simulated payment sandbox. No real charges are made.</p>
+                </div>
+              </div>
               <div class="col-12">
                 <div class="form-check">
                   {{ form.accept_terms }}
@@ -205,6 +239,36 @@
 </div>
 
 <script>
+(function () {
+  // Payment sandbox — show card fields when card is selected
+  const paymentSelect = document.getElementById('{{ form.payment_method.id_for_label }}');
+  const cardSandbox = document.getElementById('card-sandbox');
+  function toggleSandbox() {
+    cardSandbox.style.display = paymentSelect.value === 'card' ? 'block' : 'none';
+  }
+  if (paymentSelect) {
+    paymentSelect.addEventListener('change', toggleSandbox);
+    toggleSandbox();
+  }
+
+  // Card number formatting (spaces every 4 digits)
+  const cardInput = document.getElementById('sandbox-card-number');
+  if (cardInput) {
+    cardInput.addEventListener('input', function () {
+      let v = this.value.replace(/\D/g, '').substring(0, 16);
+      this.value = v.replace(/(.{4})/g, '$1 ').trim();
+    });
+  }
+  const expiryInput = document.getElementById('sandbox-expiry');
+  if (expiryInput) {
+    expiryInput.addEventListener('input', function () {
+      let v = this.value.replace(/\D/g, '').substring(0, 4);
+      if (v.length >= 2) v = v.substring(0, 2) + ' / ' + v.substring(2);
+      this.value = v;
+    });
+  }
+}());
+
 (function () {
   const addressInput = document.getElementById('{{ form.address.id_for_label }}');
   const cityInput    = document.getElementById('{{ form.city.id_for_label }}');

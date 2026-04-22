@@ -67,6 +67,10 @@ class Product(models.Model):
     allergens = models.TextField(blank=True, default="", help_text="List allergens e.g. Milk, Eggs, Gluten")
     is_organic = models.BooleanField(default=False)
     discount_percentage = models.IntegerField(default=0, help_text="Surplus/quality discount 0–50%")
+    harvest_date = models.DateField(null=True, blank=True, help_text="Date produce was harvested")
+    season_start = models.DateField(null=True, blank=True, help_text="Season availability start")
+    season_end = models.DateField(null=True, blank=True, help_text="Season availability end")
+    low_stock_threshold = models.IntegerField(default=5, help_text="Alert when stock falls to or below this level")
 
     @property
     def discounted_price(self):
