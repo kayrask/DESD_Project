@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from django import forms
 
-from api.models import CheckoutOrder, Product, Review
+from api.models import CheckoutOrder, FarmStory, Product, Recipe, Review
 
 PRODUCT_STATUS_CHOICES = [
     ("Available", "Available"),
@@ -170,6 +170,29 @@ class CheckoutForm(forms.ModelForm):
         if "@" not in value:
             raise forms.ValidationError("Enter a valid email address.")
         return value
+
+
+class RecipeForm(forms.ModelForm):
+    class Meta:
+        model = Recipe
+        fields = ["title", "description", "ingredients", "instructions", "seasonal_tag"]
+        widgets = {
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "ingredients": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "One ingredient per line"}),
+            "instructions": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
+            "seasonal_tag": forms.Select(attrs={"class": "form-select"}),
+        }
+
+
+class FarmStoryForm(forms.ModelForm):
+    class Meta:
+        model = FarmStory
+        fields = ["title", "content"]
+        widgets = {
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "content": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+        }
 
 
 class OrderStatusForm(forms.Form):

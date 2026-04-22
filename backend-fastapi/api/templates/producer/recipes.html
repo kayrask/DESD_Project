@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block title %}Recipes & Farm Stories – DESD{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
+
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);padding:.25rem .75rem;margin-bottom:.75rem">Producer</div>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list"></i> Orders</a>
+      <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
+      <span class="sidebar-label">AI Tools</span>
+      <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
+      <span class="sidebar-label">Content</span>
+      <a href="{% url 'producer_content' %}" class="active"><i class="bi bi-journal-richtext"></i> Recipes &amp; Stories</a>
+    </div>
+
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header mb-4">
+        <h3 class="fw-bold mb-1">Recipes &amp; Farm Stories</h3>
+        <p class="text-muted mb-0">Share recipes using your produce and tell your farm's story</p>
+      </div>
+
+      <div class="row g-4">
+        <!-- Add Recipe form -->
+        <div class="col-lg-6">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold py-3">
+              <i class="bi bi-journal-plus me-2 text-success"></i>Add New Recipe
+            </div>
+            <div class="card-body p-4">
+              <form method="post" novalidate>
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>
+                {% endif %}
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Title</label>
+                  {{ form.title }}
+                  {% if form.title.errors %}<div class="text-danger small">{{ form.title.errors }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Description</label>
+                  {{ form.description }}
+                  {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Ingredients <span class="text-muted fw-normal small">(one per line)</span></label>
+                  {{ form.ingredients }}
+                  {% if form.ingredients.errors %}<div class="text-danger small">{{ form.ingredients.errors }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Instructions</label>
+                  {{ form.instructions }}
+                  {% if form.instructions.errors %}<div class="text-danger small">{{ form.instructions.errors }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Seasonal Tag</label>
+                  {{ form.seasonal_tag }}
+                  {% if form.seasonal_tag.errors %}<div class="text-danger small">{{ form.seasonal_tag.errors }}</div>{% endif %}
+                </div>
+                {% if products %}
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Link to Your Products <span class="text-muted fw-normal small">(optional)</span></label>
+                  <div class="border rounded p-2" style="max-height:150px;overflow-y:auto">
+                    {% for p in products %}
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="linked_products" value="{{ p.id }}" id="prod_{{ p.id }}">
+                      <label class="form-check-label small" for="prod_{{ p.id }}">{{ p.name }}</label>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                {% endif %}
+                <button type="submit" name="add_recipe" class="btn btn-brand">
+                  <i class="bi bi-plus me-1"></i>Publish Recipe
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Farm Story form -->
+        <div class="col-lg-6">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold py-3">
+              <i class="bi bi-tree me-2 text-success"></i>Add Farm Story
+            </div>
+            <div class="card-body p-4">
+              <form method="post" novalidate>
+                {% csrf_token %}
+                {% if story_form.non_field_errors %}
+                <div class="alert alert-danger">{% for e in story_form.non_field_errors %}{{ e }}{% endfor %}</div>
+                {% endif %}
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Title</label>
+                  {{ story_form.title }}
+                  {% if story_form.title.errors %}<div class="text-danger small">{{ story_form.title.errors }}</div>{% endif %}
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Content</label>
+                  {{ story_form.content }}
+                  {% if story_form.content.errors %}<div class="text-danger small">{{ story_form.content.errors }}</div>{% endif %}
+                </div>
+                <button type="submit" name="add_story" class="btn btn-brand">
+                  <i class="bi bi-send me-1"></i>Publish Story
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Existing farm stories -->
+          {% if stories %}
+          <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white fw-semibold py-3">
+              <i class="bi bi-collection me-2 text-success"></i>Your Farm Stories
+            </div>
+            <div class="list-group list-group-flush">
+              {% for story in stories %}
+              <div class="list-group-item border-0 py-3">
+                <div class="fw-semibold">{{ story.title }}</div>
+                <div class="text-muted small">{{ story.published_at|date:"d M Y" }}</div>
+                <p class="text-secondary small mt-1 mb-0">{{ story.content|truncatewords:20 }}</p>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Existing recipes list -->
+      {% if recipes %}
+      <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-white fw-semibold py-3">
+          <i class="bi bi-journal-richtext me-2 text-success"></i>Your Recipes
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Title</th>
+                <th>Season</th>
+                <th>Published</th>
+                <th>Linked Products</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for recipe in recipes %}
+              <tr>
+                <td class="align-middle fw-semibold">{{ recipe.title }}</td>
+                <td class="align-middle">
+                  <span class="badge bg-light text-dark">{{ recipe.get_seasonal_tag_display }}</span>
+                </td>
+                <td class="align-middle text-muted small">{{ recipe.published_at|date:"d M Y" }}</td>
+                <td class="align-middle small text-muted">
+                  {% for p in recipe.products.all %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+                </td>
+                <td class="align-middle text-end">
+                  <a href="{% url 'recipe_detail' recipe.pk %}" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-eye me-1"></i>View
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}
