@@ -42,17 +42,23 @@ import time
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
 
+from ml.data.preprocess import (
+    HealthyRottenDataset,
+    build_splits,
+    get_transforms,
+    report_class_imbalance,
+    scan_for_corrupt,
+    SEED,
+    IMG_SIZE,
+)
 from ml.model import build_model, unfreeze_top_layers
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 SAVE_PATH   = pathlib.Path(__file__).parent / "saved_models" / "quality_classifier.pt"
 BACKUP_PATH = pathlib.Path(__file__).parent / "saved_models" / "quality_classifier_prev.pt"
-IMG_SIZE    = 224
 BATCH_SIZE  = 32
-SEED        = 42
 _IN_DOCKER  = pathlib.Path("/.dockerenv").exists()
 NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 
@@ -60,69 +66,6 @@ NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 # Rationale: classifying rotten produce as healthy is a food-safety risk;
 # the asymmetric cost is an intentional responsible-AI design decision.
 CLASS_WEIGHTS = [1.0, 2.0]   # [Healthy, Rotten]
-
-
-def get_transforms():
-    """
-    Return (train_tf, val_tf) transform pipelines.
-
-    Training augmentations are chosen to mimic real-world produce photography
-    conditions: varied lighting (ColorJitter), orientation (flips, rotation),
-    and partial occlusion (RandomErasing).  Val/inference uses only resize +
-    normalise so metrics are not inflated by augmentation luck.
-    """
-    train_tf = transforms.Compose([
-        transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(p=0.2),
-        transforms.RandomRotation(20),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.05),
-        transforms.RandomGrayscale(p=0.05),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.RandomErasing(p=0.1, scale=(0.02, 0.1)),
-    ])
-    val_tf = transforms.Compose([
-        transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    return train_tf, val_tf
-
-
-class HealthyRottenDataset(torch.utils.data.Dataset):
-    """
-    Wraps a torchvision ImageFolder, remapping class indices so that
-    any folder containing 'Healthy'/'Fresh' maps to label 0 (Healthy)
-    and any folder containing 'Rotten' maps to label 1 (Rotten).
-
-    Supports dataset layouts:
-      - <Fruit>__Healthy / <Fruit>__Rotten
-      - Healthy / Rotten
-      - Fresh / Rotten
-    """
-
-    def __init__(self, root: str, transform=None):
-        self._inner = datasets.ImageFolder(root=root, transform=transform)
-        self._remap = {}
-        for class_name, idx in self._inner.class_to_idx.items():
-            normalized = class_name.strip().lower()
-            if "healthy" in normalized or "fresh" in normalized:
-                self._remap[idx] = 0
-            elif "rotten" in normalized:
-                self._remap[idx] = 1
-            else:
-                raise ValueError(
-                    f"Unrecognized class folder name for binary mapping: {class_name!r}. "
-                    "Expected folder names containing 'Healthy'/'Fresh' or 'Rotten'."
-                )
-
-    def __len__(self):
-        return len(self._inner)
-
-    def __getitem__(self, index):
-        image, label = self._inner[index]
-        return image, self._remap[label]
 
 
 def _validate_epoch(model, loader, device):
@@ -151,23 +94,16 @@ def train(
     print(f"Training on {device}  |  {warmup_epochs} warmup + {finetune_epochs} fine-tune = {total_epochs} total epochs")
     print(f"Class weights: Healthy={CLASS_WEIGHTS[0]}, Rotten={CLASS_WEIGHTS[1]} (food-safety weighting)")
 
-    train_tf, val_tf = get_transforms()
+    # ── Data pipeline: validate then split ───────────────────────────────────
+    print("Scanning for corrupt images...")
+    scan_for_corrupt(data_dir)
 
-    # Two dataset instances with separate transforms — same deterministic index split.
-    train_dataset = HealthyRottenDataset(root=data_dir, transform=train_tf)
-    val_dataset   = HealthyRottenDataset(root=data_dir, transform=val_tf)
-
-    n_val   = max(1, int(0.2 * len(train_dataset)))
-    n_train = len(train_dataset) - n_val
-    indices = torch.randperm(
-        len(train_dataset), generator=torch.Generator().manual_seed(SEED)
-    ).tolist()
-    train_indices, val_indices = indices[:n_train], indices[n_train:]
-
-    train_set = Subset(train_dataset, train_indices)
-    val_set   = Subset(val_dataset,   val_indices)
-
+    train_set, val_set, n_train, n_val = build_splits(data_dir)
     print(f"Dataset: {n_train} train / {n_val} val samples")
+
+    # Report class imbalance on the full (un-split) dataset
+    full_ds = HealthyRottenDataset(root=data_dir, transform=None)
+    report_class_imbalance(full_ds)
 
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True,  num_workers=NUM_WORKERS)
     val_loader   = DataLoader(val_set,   batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
