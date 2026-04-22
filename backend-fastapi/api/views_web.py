@@ -231,26 +231,25 @@ class MarketplaceView(ListView):
         ctx["organic_filter"] = self.request.GET.get("organic", "")
         ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
 
-        customer_email = None
-        if self.request.user.is_authenticated and self.request.user.role == "customer":
-            customer_email = self.request.user.email
+        ctx["recommendations"] = []
+        ctx["rec_model_version"] = ""
 
-        try:
-            recs = recommend_products(limit=4, customer_email=customer_email)
-            items = recs.get("items", []) or []
-            rec_ids = [i.get("id") for i in items if isinstance(i, dict) and isinstance(i.get("id"), int)]
-            prod_name_by_id = {
-                p.id: (p.producer.full_name or p.producer.email)
-                for p in Product.objects.filter(id__in=rec_ids).select_related("producer")
-            }
-            for i in items:
-                if isinstance(i, dict) and isinstance(i.get("id"), int):
-                    i["producer_name"] = prod_name_by_id.get(i["id"], "")
-            ctx["recommendations"] = items
-            ctx["rec_model_version"] = recs.get("model_version", "")
-        except Exception:
-            ctx["recommendations"] = []
-            ctx["rec_model_version"] = ""
+        if self.request.user.is_authenticated and self.request.user.role == "customer":
+            try:
+                recs = recommend_products(limit=4, customer_email=self.request.user.email)
+                items = recs.get("items", []) or []
+                rec_ids = [i.get("id") for i in items if isinstance(i, dict) and isinstance(i.get("id"), int)]
+                prod_name_by_id = {
+                    p.id: (p.producer.full_name or p.producer.email)
+                    for p in Product.objects.filter(id__in=rec_ids).select_related("producer")
+                }
+                for i in items:
+                    if isinstance(i, dict) and isinstance(i.get("id"), int):
+                        i["producer_name"] = prod_name_by_id.get(i["id"], "")
+                ctx["recommendations"] = items
+                ctx["rec_model_version"] = recs.get("model_version", "")
+            except Exception:
+                pass
         return ctx
 
 
