@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: desd-db
     restart: unless-stopped
     environment:
@@ -20,9 +20,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: desd-redis
     restart: unless-stopped
+    command: ["redis-server", "--ignore-warnings", "ARM64-COW-BUG"]
     ports:
       - "6379:6379"
     healthcheck:
@@ -35,7 +36,7 @@ services:
     build:
       context: ./backend-fastapi
       dockerfile: Dockerfile
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: desd-backend
     ports:
       - "8000:8000"
@@ -54,14 +55,13 @@ services:
       sh -c "python manage.py migrate &&
              python manage.py seed_db &&
              python manage.py collectstatic --noinput &&
-             python manage.py setup_periodic_tasks &&
              daphne -b 0.0.0.0 -p 8000 desd_backend.asgi:application"
 
   celery_worker:
     build:
       context: ./backend-fastapi
       dockerfile: Dockerfile
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: desd-celery-worker
     restart: unless-stopped
     env_file:
@@ -81,7 +81,7 @@ services:
     build:
       context: ./backend-fastapi
       dockerfile: Dockerfile
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: desd-celery-beat
     restart: unless-stopped
     env_file:
@@ -99,7 +99,7 @@ services:
 
   web:
     image: nginx:1.25-alpine
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: desd-nginx
     restart: unless-stopped
     ports:

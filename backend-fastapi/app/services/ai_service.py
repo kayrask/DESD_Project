@@ -57,7 +57,7 @@ def recommend_products_v1(limit: int = 6, category: str | None = None) -> dict:
     scored = [(_baseline_score(p, category_counts), p) for p in candidates]
     top = sorted(scored, reverse=True)[: max(1, min(limit, 20))]
     return {
-        "items": [_format_product(p, s) for s, p in top],
+        "items": [_format_product(p, s, _build_reason(p, 0, 0, 0)) for s, p in top],
         "model_version": "baseline-v1",
     }
 
@@ -145,11 +145,14 @@ def recommend_products_v2(
         collab_score = sum(cooccur[product.id].get(pid, 0) for pid in top_popular) * 0.1
 
         total = pop_score + baseline + personal_boost + collab_score
-        scored.append((total, product))
+        scored.append((total, product, pop_score, personal_boost, collab_score))
 
-    top = sorted(scored, reverse=True)[: max(1, min(limit, 20))]
+    top = sorted(scored, key=lambda x: -x[0])[: max(1, min(limit, 20))]
     return {
-        "items": [_format_product(p, s) for s, p in top],
+        "items": [
+            _format_product(p, s, _build_reason(p, pop, pers, collab))
+            for s, p, pop, pers, collab in top
+        ],
         "model_version": "collab-v2",
     }
 
@@ -171,14 +174,42 @@ def recommend_products(
     return result
 
 
-def _format_product(product: Product, score: float) -> dict:
+def _build_reason(
+    product: Product,
+    pop_score: float,
+    personal_boost: float,
+    collab_score: float,
+) -> str:
+    """Plain-language explanation of why this product was recommended."""
+    reasons = []
+    if personal_boost > 0.3:
+        reasons.append(f"matches your frequent {product.category.lower()} purchases")
+    if pop_score > 2.0:
+        reasons.append("popular with other customers")
+    if collab_score > 0.5:
+        reasons.append("often bought alongside your other choices")
+    if not reasons:
+        if _safe_int(product.stock) > 20:
+            reasons.append("well stocked by a local producer")
+        else:
+            reasons.append("available from a local producer")
+    return "Recommended because: " + "; ".join(reasons) + "."
+
+
+def _format_product(product: Product, score: float, reason: str = "") -> dict:
+    discount = _safe_int(product.discount_percentage) if hasattr(product, "discount_percentage") else 0
+    price = _safe_float(product.price)
+    discounted = round(price * (1 - discount / 100), 2) if discount > 0 else None
     return {
         "id": product.id,
         "name": product.name,
         "category": product.category,
-        "price": _safe_float(product.price),
+        "price": price,
+        "discount_percentage": discount,
+        "discounted_price": discounted,
         "stock": _safe_int(product.stock),
         "status": product.status,
         "producer_id": product.producer_id,
         "score": round(score, 3),
+        "reason": reason,
     }

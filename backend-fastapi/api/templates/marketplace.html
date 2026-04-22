@@ -6,45 +6,62 @@
   .rec-card { border-radius: 12px; border: 1.5px solid #bbf7d0; background: linear-gradient(135deg, #f0fdf4, #dcfce7); padding: 1.1rem; transition: transform .15s, box-shadow .15s; }
   .rec-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(22,163,74,.15); }
   .rec-score { font-size: .7rem; font-weight: 700; color: var(--brand); background: rgba(22,163,74,.12); border-radius: 20px; padding: .2em .6em; }
-  .product-card { border-radius: 12px; border: 1px solid var(--border); background: #fff; transition: transform .15s, box-shadow .15s; }
-  .product-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .product-body { padding: 1rem; }
-  .category-pill { font-size: .72rem; font-weight: 600; background: #f1f5f9; color: var(--muted); border-radius: 20px; padding: .2em .65em; display: inline-block; margin-bottom: .5rem; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container py-5">
-  <div class="page-header">
-    <h2>Marketplace</h2>
-    <p>Fresh, locally grown produce from verified producers near you.</p>
-  </div>
+  <h2 class="fw-bold mb-1">Marketplace</h2>
+  <p class="text-muted mb-4">Fresh, locally grown produce from verified producers near you.</p>
 
-  <!-- Search & filter -->
-  <form method="get" class="row g-2 mb-5 align-items-center">
-    <div class="col-md-5">
-      <input type="text" name="q" class="form-control" placeholder="Search products..." value="{{ request.GET.q|default:'' }}">
+  <!-- Search & filter form -->
+  <form method="get" class="row g-3 mb-4" id="search-form">
+    <div class="col-md-4">
+      <div class="position-relative">
+        <input type="text" name="q" id="search-input" class="form-control"
+               placeholder="Search by name, description or producer..." value="{{ q }}" autocomplete="off">
+        <ul id="search-suggestions"
+            class="list-group position-absolute w-100 shadow"
+            style="z-index:1050;display:none;top:100%;left:0;max-height:320px;overflow-y:auto;border-radius:0 0 .375rem .375rem;">
+        </ul>
+      </div>
     </div>
     <div class="col-md-3">
       <select name="category" class="form-select">
         <option value="">All Categories</option>
         {% for cat in categories %}
-        <option value="{{ cat }}" {% if request.GET.category == cat %}selected{% endif %}>{{ cat }}</option>
+        <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="col-md-2">
-      <button type="submit" class="btn btn-brand w-100">Search</button>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" name="organic" value="1" id="organic-filter"
+               {% if organic_filter %}checked{% endif %}>
+        <label class="form-check-label" for="organic-filter">
+          <i class="bi bi-leaf text-success"></i> Organic only
+        </label>
+      </div>
+      <div class="form-check mt-1">
+        <input class="form-check-input" type="checkbox" name="allergen_free" value="1" id="allergen-filter"
+               {% if allergen_free_filter %}checked{% endif %}>
+        <label class="form-check-label" for="allergen-filter">
+          <i class="bi bi-shield-check text-info"></i> Allergen-free
+        </label>
+      </div>
     </div>
-    {% if request.GET.q or request.GET.category %}
     <div class="col-md-2">
+      <button type="submit" class="btn btn-brand w-100">Filter</button>
+    </div>
+    {% if q or selected_category or organic_filter or allergen_free_filter %}
+    <div class="col-md-1">
       <a href="{% url 'marketplace' %}" class="btn btn-outline-secondary w-100">Clear</a>
     </div>
     {% endif %}
   </form>
 
-  <!-- AI recommendations -->
-  {% if recommendations %}
+  <!-- AI recommendations — hidden when filters are active -->
+  {% if recommendations and not q and not selected_category and not organic_filter and not allergen_free_filter %}
   <div class="mb-5">
     <div class="d-flex align-items-center gap-2 mb-3">
       <span style="background:#fef3c7;color:#d97706;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center">
@@ -60,16 +77,31 @@
       <div class="col-md-3">
         <div class="rec-card">
           <div class="d-flex justify-content-between align-items-start mb-2">
-            <span class="category-pill">{{ rec.category }}</span>
+            <span class="badge bg-light text-dark">{{ rec.category }}</span>
             <span class="rec-score">Score {{ rec.score }}</span>
           </div>
-          <h6 style="font-weight:700;margin-bottom:.25rem">{{ rec.name }}</h6>
+          <h6 style="font-weight:700;margin-bottom:.25rem">
+            <a href="{% url 'product_detail' rec.id %}" class="text-decoration-none text-dark">{{ rec.name }}</a>
+          </h6>
+          {% if rec.reason %}
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:.35rem;font-style:italic">
+            <i class="bi bi-info-circle me-1"></i>{{ rec.reason }}
+          </div>
+          {% endif %}
           {% if rec.producer_name %}
           <div style="font-size:.8rem;color:var(--muted);margin-bottom:.25rem">
             <i class="bi bi-person-badge me-1"></i>{{ rec.producer_name }}
           </div>
           {% endif %}
+          {% if rec.discounted_price %}
+          <div style="margin-bottom:.75rem">
+            <span class="badge bg-danger" style="font-size:.7rem">{{ rec.discount_percentage }}% off</span>
+            <div style="font-size:1.1rem;font-weight:800;color:#dc3545">£{{ rec.discounted_price }}</div>
+            <div style="font-size:.85rem;color:var(--muted);text-decoration:line-through">£{{ rec.price }}</div>
+          </div>
+          {% else %}
           <div style="font-size:1.1rem;font-weight:800;color:var(--brand-darker);margin-bottom:.75rem">£{{ rec.price }}</div>
+          {% endif %}
           {% if user.is_authenticated and user.role == "customer" %}
           <form data-cart-form method="post" action="{% url 'cart_add' rec.id %}">
             {% csrf_token %}
@@ -92,53 +124,239 @@
   </div>
   {% endif %}
 
-  <!-- All products -->
-  <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1rem">
-    All Products {% if products %}({{ products|length }}){% endif %}
-  </div>
+  <!-- Product grid -->
   {% if products %}
-  <div class="row g-4">
+  <div class="row g-4" id="product-grid">
     {% for product in products %}
-    <div class="col-md-4 col-lg-3">
-      <div class="product-card h-100">
-        <div class="product-body">
-          <span class="category-pill">{{ product.category }}</span>
-          <h6 style="font-weight:700;margin-bottom:.25rem">{{ product.name }}</h6>
-          <div style="font-size:.8rem;color:var(--muted);margin-bottom:.25rem">
+    <div class="col-md-4 col-lg-3" data-product-id="{{ product.id }}">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <div class="d-flex gap-1 flex-wrap mb-2">
+            <span class="badge bg-light text-dark">{{ product.category }}</span>
+            {% if product.status == "In Season" %}
+            <span class="badge bg-success">In Season</span>
+            {% endif %}
+            {% if product.is_organic %}
+            <span class="badge bg-success"><i class="bi bi-leaf me-1"></i>Organic</span>
+            {% endif %}
+            {% if product.allergens %}
+            <span class="badge bg-warning text-dark" title="Contains: {{ product.allergens }}">
+              <i class="bi bi-exclamation-triangle me-1"></i>Allergens
+            </span>
+            {% endif %}
+          </div>
+          <h6 class="fw-bold">
+            <a href="{% url 'product_detail' product.id %}" class="text-dark text-decoration-none stretched-link">{{ product.name }}</a>
+          </h6>
+          {% if product.description %}
+          <p class="text-muted small mb-2" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ product.description }}</p>
+          {% endif %}
+          <p class="text-muted small mb-1">
             <i class="bi bi-person-badge me-1"></i>{{ product.producer.full_name|default:product.producer.email }}
-          </div>
-          <div style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
-            <i class="bi bi-box-seam me-1"></i>{{ product.stock }} in stock
-          </div>
+          </p>
+          <p class="text-muted small stock-info mb-1">
+            {% if product.stock <= 0 %}
+              <span class="text-danger fw-semibold">Out of Stock</span>
+            {% elif product.stock <= 5 %}
+              <span class="stock-count">{{ product.stock }}</span> left
+              <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">Low Stock</span>
+            {% else %}
+              Stock: <span class="stock-count">{{ product.stock }}</span>
+            {% endif %}
+          </p>
+          {% if product.discounted_price %}
+          <span class="badge bg-danger" style="font-size:.7rem">{{ product.discount_percentage }}% off</span>
+          <div style="font-size:1.25rem;font-weight:800;color:#dc3545">£{{ product.discounted_price }} <span style="font-size:.85rem;color:var(--muted);text-decoration:line-through;font-weight:400">£{{ product.price }}</span></div>
+          {% else %}
           <div style="font-size:1.25rem;font-weight:800;color:var(--brand-darker)">£{{ product.price }}</div>
+          {% endif %}
         </div>
-        <div style="padding:.75rem 1rem;border-top:1px solid var(--border);">
+        <div class="card-footer bg-white border-0 pb-3 cart-action">
+          {% if product.stock > 0 %}
           {% if user.is_authenticated and user.role == "customer" %}
-          <form data-cart-form method="post" action="{% url 'cart_add' product.id %}">
+          <form data-cart-form method="post" action="{% url 'cart_add' product.id %}" style="position:relative;z-index:1;">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <div class="d-flex gap-2 align-items-center">
+            <div class="input-group input-group-sm mb-2">
+              <button type="button" class="btn btn-outline-secondary qty-dec">−</button>
               <input type="number" name="quantity" value="1" min="1" max="{{ product.stock }}"
-                class="form-control form-control-sm text-center" style="width:64px;flex-shrink:0;">
-              <button type="submit" class="btn btn-brand btn-sm flex-grow-1">
-                <i class="bi bi-cart-plus me-1"></i>Add
-              </button>
+                     class="form-control text-center qty-input" style="max-width:54px;">
+              <button type="button" class="btn btn-outline-secondary qty-inc">+</button>
             </div>
+            <button type="submit" class="btn btn-brand btn-sm w-100">
+              <i class="bi bi-cart-plus me-1"></i>Add to Cart
+            </button>
           </form>
           {% else %}
-          <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-sm w-100">Sign in to order</a>
+          <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-sm w-100" style="position:relative;z-index:1;">Sign in to order</a>
+          {% endif %}
+          {% else %}
+          <button class="btn btn-secondary btn-sm w-100" disabled>Out of Stock</button>
           {% endif %}
         </div>
       </div>
     </div>
     {% endfor %}
   </div>
+
+  <!-- Pagination -->
+  {% if is_paginated %}
+  <nav class="mt-4 d-flex justify-content-center align-items-center gap-2" aria-label="Products pagination">
+    {% if page_obj.has_previous %}
+    <a href="?{% if q %}q={{ q }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if organic_filter %}organic={{ organic_filter }}&{% endif %}{% if allergen_free_filter %}allergen_free={{ allergen_free_filter }}&{% endif %}page={{ page_obj.previous_page_number }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-chevron-left"></i> Prev
+    </a>
+    {% endif %}
+    <span class="text-muted small">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      &nbsp;·&nbsp; {{ page_obj.paginator.count }} products
+    </span>
+    {% if page_obj.has_next %}
+    <a href="?{% if q %}q={{ q }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if organic_filter %}organic={{ organic_filter }}&{% endif %}{% if allergen_free_filter %}allergen_free={{ allergen_free_filter }}&{% endif %}page={{ page_obj.next_page_number }}"
+       class="btn btn-sm btn-outline-secondary">
+      Next <i class="bi bi-chevron-right"></i>
+    </a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
   {% else %}
   <div class="text-center py-5 text-muted">
-    <i class="bi bi-search" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:1rem"></i>
-    <p>No products found. Try adjusting your search.</p>
-    <a href="{% url 'marketplace' %}" class="btn btn-outline-secondary btn-sm">Clear filters</a>
+    <i class="bi bi-search fs-1"></i>
+    <p class="mt-2">No products match your search.</p>
+    <a href="{% url 'marketplace' %}" class="btn btn-outline-success">View all products</a>
   </div>
   {% endif %}
 </div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script>
+/* ── Quantity +/- buttons ────────────────────────────────────────────────── */
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.qty-dec, .qty-inc');
+  if (!btn) return;
+  const form  = btn.closest('form');
+  const input = form.querySelector('.qty-input');
+  const max   = parseInt(input.max) || 9999;
+  let val = parseInt(input.value) || 1;
+  if (btn.classList.contains('qty-inc')) val = Math.min(val + 1, max);
+  else                                   val = Math.max(val - 1, 1);
+  input.value = val;
+});
+
+/* ── Live search autocomplete ────────────────────────────────────────────── */
+(function () {
+  const input       = document.getElementById('search-input');
+  const suggestions = document.getElementById('search-suggestions');
+  let timer = null;
+
+  if (!input) return;
+
+  input.addEventListener('input', function () {
+    clearTimeout(timer);
+    const q = this.value.trim();
+    if (q.length < 2) { hide(); return; }
+    timer = setTimeout(() => fetchSuggestions(q), 250);
+  });
+
+  input.addEventListener('keydown', function (e) {
+    const items = suggestions.querySelectorAll('.suggest-item');
+    const active = suggestions.querySelector('.suggest-item.active');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = active ? active.nextElementSibling : items[0];
+      if (next) { active?.classList.remove('active'); next.classList.add('active'); }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = active ? active.previousElementSibling : items[items.length - 1];
+      if (prev) { active?.classList.remove('active'); prev.classList.add('active'); }
+    } else if (e.key === 'Enter' && active) {
+      e.preventDefault();
+      window.location.href = active.dataset.url;
+    } else if (e.key === 'Escape') {
+      hide();
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!input.contains(e.target) && !suggestions.contains(e.target)) hide();
+  });
+
+  function fetchSuggestions(q) {
+    fetch(`/products/suggest/?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(data => render(data.results, q))
+      .catch(() => hide());
+  }
+
+  function render(results, q) {
+    suggestions.innerHTML = '';
+    if (!results.length) { hide(); return; }
+    results.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item list-group-item-action suggest-item d-flex justify-content-between align-items-center py-2 px-3';
+      li.dataset.url = `/products/${p.id}/`;
+      li.style.cursor = 'pointer';
+      const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      const highlighted = p.name.replace(regex, '<strong>$1</strong>');
+      li.innerHTML = `
+        <div>
+          <span>${highlighted}</span>
+          <span class="text-muted small ms-2">${p.category || ''}</span>
+        </div>
+        <span class="text-success fw-semibold small">£${parseFloat(p.price).toFixed(2)}</span>`;
+      li.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        window.location.href = this.dataset.url;
+      });
+      suggestions.appendChild(li);
+    });
+    suggestions.style.display = 'block';
+  }
+
+  function hide() {
+    suggestions.style.display = 'none';
+    suggestions.innerHTML = '';
+  }
+}());
+
+/* ── Real-time stock WebSocket ───────────────────────────────────────────── */
+(function () {
+  const ws = new WebSocket(`ws://${location.host}/ws/stock/`);
+  ws.onmessage = function (e) {
+    const data = JSON.parse(e.data);
+    if (data.type !== 'stock_update') return;
+    const card = document.querySelector(`[data-product-id="${data.product_id}"]`);
+    if (!card) return;
+    const stockInfo  = card.querySelector('.stock-info');
+    const cartAction = card.querySelector('.cart-action');
+    const inStock    = data.stock > 0;
+    if (stockInfo) {
+      stockInfo.innerHTML = inStock
+        ? `Stock: <span class="stock-count">${data.stock}</span>`
+        : '<span class="text-danger">Out of Stock</span>';
+    }
+    if (!inStock && cartAction) {
+      cartAction.innerHTML = '<button class="btn btn-secondary btn-sm w-100" disabled>Out of Stock</button>';
+    } else if (inStock && cartAction && cartAction.querySelector('button[disabled]')) {
+      const csrf = window.getCartCsrf ? window.getCartCsrf() : '';
+      cartAction.innerHTML = `
+        <form data-cart-form method="post" action="/cart/add/${data.product_id}/" style="position:relative;z-index:1;">
+          <input type="hidden" name="csrfmiddlewaretoken" value="${csrf}">
+          <div class="input-group input-group-sm mb-2">
+            <button type="button" class="btn btn-outline-secondary qty-dec">−</button>
+            <input type="number" name="quantity" value="1" min="1" max="${data.stock}"
+                   class="form-control text-center qty-input" style="max-width:54px;">
+            <button type="button" class="btn btn-outline-secondary qty-inc">+</button>
+          </div>
+          <button type="submit" class="btn btn-brand btn-sm w-100">
+            <i class="bi bi-cart-plus me-1"></i>Add to Cart
+          </button>
+        </form>`;
+    }
+  };
+}());
+</script>
 {% endblock %}

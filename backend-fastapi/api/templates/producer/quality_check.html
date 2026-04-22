@@ -112,9 +112,31 @@
               </div>
             </div>
 
+            {% if result.xai_heatmap %}
+            <div class="mt-3 mb-3">
+              <div style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em">
+                <i class="bi bi-heatmap me-1"></i>AI Explanation – Grad-CAM Heatmap
+              </div>
+              <img src="data:image/png;base64,{{ result.xai_heatmap }}"
+                   alt="Grad-CAM heatmap highlighting regions that influenced the AI grade"
+                   style="width:100%;border-radius:8px;border:1px solid var(--border)">
+              <p style="font-size:.72rem;color:var(--muted);margin-top:.4rem">
+                Red/orange areas had the strongest influence on the AI decision. Blue areas were less relevant.
+              </p>
+            </div>
+            {% endif %}
+
+            {% if result.xai_explanation %}
+            <div class="alert alert-light py-2 mb-3" style="font-size:.82rem;border-left:3px solid var(--brand)">
+              <i class="bi bi-info-circle me-1 text-primary"></i>
+              <strong>Why this grade?</strong> {{ result.xai_explanation }}
+            </div>
+            {% endif %}
+
             <div class="d-flex justify-content-between" style="font-size:.8rem;color:var(--muted)">
               <span><i class="bi bi-cpu me-1"></i>Model: {{ result.model_version }}</span>
-              <span>Confidence: {{ result.model_confidence|floatformat:1 }}%</span>
+              {% widthratio result.model_confidence 1 100 as result_conf_pct %}
+              <span>Confidence: {{ result_conf_pct }}%</span>
             </div>
 
             {% if result.is_healthy == False %}
@@ -171,7 +193,7 @@
                   <td>{{ a.color_score }}%</td>
                   <td>{{ a.size_score }}%</td>
                   <td>{{ a.ripeness_score }}%</td>
-                  <td>{{ a.model_confidence|floatformat:1 }}%</td>
+                  <td>{% widthratio a.model_confidence 1 100 %}%</td>
                   <td>{{ a.quantity_lost }}</td>
                   <td style="color:var(--muted)">{{ a.model_version }}</td>
                   <td style="color:var(--muted)">{{ a.assessed_at|date:"d M Y" }}</td>

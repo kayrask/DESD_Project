@@ -9,7 +9,8 @@ from decimal import Decimal
 from django.test import TestCase, Client
 from django.urls import reverse
 
-from api.models import CheckoutOrder, Order, OrderItem, Product, User
+from api.models import CheckoutOrder, CommissionReport, Order, OrderItem, Product, User
+from app.core.security import issue_token
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -200,3 +201,68 @@ class MultiProducerCheckoutTest(TestCase):
                          "Product A stock should decrease by 2 (ordered qty).")
         self.assertEqual(self.product_b.stock, 9,
                          "Product B stock should decrease by 1 (ordered qty).")
+
+
+# ── Producer product update validation (Sprint 2 Matthew scope) ─────────────
+
+class ProducerProductUpdateValidationTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.producer = _make_producer("producer_update@test.com")
+        self.product = _make_product(self.producer, name="Spinach", price="1.90", stock=12)
+        self.token = issue_token(self.producer)
+
+    def test_patch_product_rejects_negative_stock(self):
+        response = self.client.patch(
+            f"/producer/products/{self.product.id}",
+            data={"stock": -1},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 12)
+
+    def test_patch_product_rejects_invalid_status(self):
+        response = self.client.patch(
+            f"/producer/products/{self.product.id}",
+            data={"status": "NotARealStatus"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+# ── Admin reports pagination (Sprint 3 Matthew scope) ───────────────────────
+
+class AdminReportsPaginationTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_user(
+            email="admin_reports@test.com",
+            password="Test1234",
+            full_name="Admin Reports",
+            role="admin",
+        )
+        self.client.login(username=self.admin.email, password="Test1234")
+
+        for idx in range(15):
+            CommissionReport.objects.create(
+                report_date=date.today() - timedelta(days=idx),
+                total_orders=idx + 1,
+                gross_amount=Decimal("100.00") + idx,
+                commission_amount=Decimal("5.00") + (Decimal(idx) / Decimal("10")),
+            )
+
+    def test_admin_reports_first_page_has_page_size(self):
+        response = self.client.get(reverse("admin_reports"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("page_obj", response.context)
+        self.assertEqual(len(response.context["rows"]), 10)
+        self.assertEqual(response.context["page_obj"].number, 1)
+
+    def test_admin_reports_second_page_has_remaining_rows(self):
+        response = self.client.get(reverse("admin_reports"), {"page": 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["rows"]), 5)
+        self.assertEqual(response.context["page_obj"].number, 2)

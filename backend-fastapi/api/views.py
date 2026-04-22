@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, timedelta
 
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -218,13 +219,27 @@ def producer_products_update(request, product_id: int):
         product = Product.objects.get(id=product_id)
         if product.producer_id != producer.id:
             return _error_response("forbidden", "You can only edit your own products.", status.HTTP_403_FORBIDDEN)
+        valid_statuses = {choice[0] for choice in Product.PRODUCT_STATUS_CHOICES}
         for field in ("name", "category", "status"):
             if field in request.data:
-                setattr(product, field, str(request.data[field]).strip())
+                value = str(request.data[field]).strip()
+                if field == "status" and value and value not in valid_statuses:
+                    return _error_response(
+                        "validation_error",
+                        f"Invalid status '{value}'.",
+                        status.HTTP_400_BAD_REQUEST,
+                    )
+                setattr(product, field, value)
         if "price" in request.data:
-            product.price = round(float(request.data["price"]), 2)
+            price = round(float(request.data["price"]), 2)
+            if price < 0:
+                return _error_response("validation_error", "price must be zero or greater.", status.HTTP_400_BAD_REQUEST)
+            product.price = price
         if "stock" in request.data:
-            product.stock = int(request.data["stock"])
+            stock = int(request.data["stock"])
+            if stock < 0:
+                return _error_response("validation_error", "stock must be zero or greater.", status.HTTP_400_BAD_REQUEST)
+            product.stock = stock
         if product.stock == 0:
             product.status = "Out of Stock"
         elif product.status.lower() == "out of stock" and product.stock > 0:
@@ -470,9 +485,14 @@ def _checkout_error(code: str, message: str, details: dict, http_status: int) ->
 @csrf_exempt
 @api_view(["POST"])
 def orders_create(request):
-    from datetime import date, timedelta
     from collections import defaultdict
     from decimal import Decimal
+
+    # TC-022: authenticate before any input validation — unauthenticated
+    # requests must receive 401 not 400.
+    user = _require_user(request)
+    if isinstance(user, Response):
+        return user
 
     delivery_date_raw = request.data.get("deliveryDate") or request.data.get("delivery_date")
 
@@ -549,17 +569,22 @@ def orders_create(request):
         grouped[product.producer_id].append((product, quantity))
         gross_total += (Decimal(str(product.price)) * quantity)
 
+    commission_rate = Decimal("0.05")
     base_order_id = f"CO-{order.id}"
     is_multi_vendor = len(grouped) > 1
     for producer_id, lines in grouped.items():
         producer = lines[0][0].producer
         vendor_order_id = base_order_id if not is_multi_vendor else f"{base_order_id}-{producer_id}"
+        producer_subtotal = sum(Decimal(str(p.price)) * qty for p, qty in lines)
+        producer_commission = (producer_subtotal * commission_rate).quantize(Decimal("0.01"))
         vendor_order = Order.objects.create(
             order_id=vendor_order_id,
             customer_name=order.full_name,
             delivery_date=order.delivery_date,
             status="Pending",
             producer=producer,
+            expires_at=timezone.now() + timedelta(hours=48),
+            commission=producer_commission,
         )
         for product, quantity in lines:
             OrderItem.objects.create(
@@ -577,7 +602,6 @@ def orders_create(request):
         product.save()
 
     # Update today's commission report (automatic 5% network commission)
-    commission_rate = Decimal("0.05")
     commission_amount = (gross_total * commission_rate).quantize(Decimal("0.01"))
     report, _ = CommissionReport.objects.get_or_create(
         report_date=date.today(),
@@ -650,9 +674,9 @@ def ai_recommendations(request):
 def ai_quality_check(request):
     from app.services.quality_service import assess_product_image
     try:
-        user_data = user_from_token(request)
+        user_data = user_from_token(_auth_header(request))
     except ApiAuthError as exc:
-        return _error_response("auth_error", str(exc), status.HTTP_401_UNAUTHORIZED)
+        return _error_response(exc.error, exc.message, exc.status_code)
     if user_data.get("role") != "producer":
         return _error_response("forbidden", "Only producers can run quality checks.", status.HTTP_403_FORBIDDEN)
     product_id = request.data.get("product_id")

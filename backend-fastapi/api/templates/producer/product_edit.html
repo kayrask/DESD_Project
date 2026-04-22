@@ -59,6 +59,15 @@
                 <div class="form-text">List all allergens e.g. "Milk, Eggs, Gluten". Leave blank if none.</div>
                 {% if form.allergens.errors %}<div class="text-danger small">{{ form.allergens.errors }}</div>{% endif %}
               </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">
+                  Surplus Discount (%)
+                  <span class="text-muted fw-normal small">0–50%</span>
+                </label>
+                {{ form.discount_percentage }}
+                <div class="form-text">Set a discount for surplus or lower-grade stock. 0 = no discount.</div>
+                {% if form.discount_percentage.errors %}<div class="text-danger small">{{ form.discount_percentage.errors }}</div>{% endif %}
+              </div>
               <div class="col-12">
                 <div class="form-check">
                   {{ form.is_organic }}
@@ -66,6 +75,23 @@
                     <i class="bi bi-leaf text-success me-1"></i>Certified Organic Product
                   </label>
                 </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Harvest Date <span class="text-muted fw-normal small">(optional)</span></label>
+                {{ form.harvest_date }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Season Start <span class="text-muted fw-normal small">(optional)</span></label>
+                {{ form.season_start }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Season End <span class="text-muted fw-normal small">(optional)</span></label>
+                {{ form.season_end }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Low Stock Alert Threshold</label>
+                {{ form.low_stock_threshold }}
+                <div class="form-text">Alert shows on dashboard when stock reaches this level.</div>
               </div>
             </div>
             <div class="d-flex gap-2 mt-4">

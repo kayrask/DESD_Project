@@ -5,7 +5,7 @@
 <div class="container py-5">
   <nav aria-label="breadcrumb" class="mb-4">
     <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{% url 'product_list' %}">Products</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'marketplace' %}">Marketplace</a></li>
       <li class="breadcrumb-item active">{{ product.name }}</li>
     </ol>
   </nav>
@@ -24,7 +24,13 @@
             {% endif %}
           </div>
           <h2 class="fw-bold mb-3">{{ product.name }}</h2>
+          {% if product.discounted_price %}
+          <p class="fs-3 fw-bold text-danger mb-0">£{{ product.discounted_price }}</p>
+          <p class="text-muted text-decoration-line-through mb-1" style="font-size:1rem">£{{ product.price }}</p>
+          <span class="badge bg-danger mb-2">{{ product.discount_percentage }}% off — Surplus stock</span>
+          {% else %}
           <p class="fs-3 fw-bold text-success mb-1">£{{ product.price }}</p>
+          {% endif %}
 
           {% if avg_rating %}
           <div class="mb-2">
@@ -57,6 +63,14 @@
 
           <p class="text-muted mb-1"><strong>Status:</strong> {{ product.status }}</p>
           <p class="text-muted mb-1"><strong>Sold by:</strong> {{ product.producer.full_name }}</p>
+          {% if product.harvest_date %}
+          <p class="text-muted mb-1"><strong>Harvested:</strong> {{ product.harvest_date|date:"d M Y" }}</p>
+          {% endif %}
+          {% if product.season_start and product.season_end %}
+          <p class="text-muted mb-1">
+            <strong>In season:</strong> {{ product.season_start|date:"d M" }} – {{ product.season_end|date:"d M" }}
+          </p>
+          {% endif %}
 
           {# ── TC-015: Allergen warnings ─────────────────────────────────── #}
           {% if product.allergens %}
@@ -144,6 +158,11 @@
       </div>
       {% elif existing_review %}
       <div class="alert alert-info">You have already reviewed this product.</div>
+      {% elif not request.user.is_authenticated %}
+      <div class="alert alert-warning d-flex align-items-center gap-2">
+        <i class="bi bi-lock-fill"></i>
+        <span><a href="{% url 'login' %}?next={{ request.path }}" class="alert-link">Sign in</a> to leave a review.</span>
+      </div>
       {% endif %}
 
       {% if reviews %}
