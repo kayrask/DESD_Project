@@ -75,13 +75,107 @@
       {% endif %}
 
       <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Quick Actions</div>
-      <div class="d-flex gap-2 flex-wrap">
+      <div class="d-flex gap-2 flex-wrap mb-4">
         <a href="{% url 'producer_products' %}" class="btn btn-brand"><i class="bi bi-box-seam me-1"></i> Manage Products</a>
         <a href="{% url 'producer_orders' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-clipboard-list me-1"></i> View Orders</a>
         <a href="{% url 'producer_payments' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-cash-stack me-1"></i> Payments</a>
         <a href="{% url 'producer_quality_check' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-stars me-1"></i> Quality Check</a>
       </div>
+
+      {# ── Demand Forecast card ──────────────────────────────────────────── #}
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+          <div>
+            <h6 style="font-weight:700;margin:0"><i class="bi bi-graph-up-arrow me-1 text-success"></i>Demand Forecast</h6>
+            <p style="font-size:.8rem;color:var(--muted);margin:.3rem 0 0">3-month moving-average based on delivered orders</p>
+          </div>
+          <a href="{% url 'producer_demand_forecast' %}" class="btn btn-outline-secondary btn-sm">Full data (JSON)</a>
+        </div>
+
+        {% if forecast.high_demand_alert %}
+        <div class="alert alert-warning py-2 mb-3" style="font-size:.83rem">
+          <i class="bi bi-lightning-charge-fill me-1"></i><strong>{{ forecast.high_demand_alert }}</strong>
+        </div>
+        {% endif %}
+
+        {% if forecast.products %}
+        <!-- Product selector -->
+        <div class="mb-3">
+          <label class="form-label" style="font-size:.8rem">Show product</label>
+          <select id="forecastSelect" class="form-select form-select-sm" style="max-width:260px">
+            {% for p in forecast.products %}
+            <option value="{{ forloop.counter0 }}">{{ p.name }}{% if p.high_demand %} ⚡{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <canvas id="forecastChart" style="max-height:240px"></canvas>
+        <div id="forecastTrend" class="mt-2" style="font-size:.8rem;color:var(--muted)"></div>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:.875rem">
+          <i class="bi bi-graph-up" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.75rem"></i>
+          No delivered order history yet. Forecasts appear after your first orders are delivered.
+        </div>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if forecast.products %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const forecast = {{ forecast_json|safe }};
+const ctx = document.getElementById('forecastChart').getContext('2d');
+let chart;
+
+function renderChart(idx) {
+  const p = forecast.products[idx];
+  const labels = [...forecast.labels, 'Forecast'];
+  const salesData = [...p.monthly_sales, null];
+  const forecastData = [...Array(forecast.labels.length).fill(null), p.forecast];
+
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Units sold',
+          data: salesData,
+          borderColor: '#16a34a',
+          backgroundColor: 'rgba(22,163,74,.1)',
+          tension: 0.3,
+          pointRadius: 4,
+          fill: true,
+        },
+        {
+          label: 'Forecast',
+          data: forecastData,
+          borderColor: '#d97706',
+          borderDash: [6, 3],
+          pointRadius: 6,
+          pointStyle: 'triangle',
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { y: { beginAtZero: true, ticks: { font: { size: 11 } } } },
+    },
+  });
+  document.getElementById('forecastTrend').textContent =
+    `Trend: ${p.trend_label} | Next month forecast: ${p.forecast} units${p.high_demand ? ' ⚡ High demand expected' : ''}`;
+}
+
+renderChart(0);
+document.getElementById('forecastSelect').addEventListener('change', function () {
+  renderChart(parseInt(this.value));
+});
+</script>
+{% endif %}
 {% endblock %}

@@ -1,19 +1,17 @@
 """
 Inference module – loaded by quality_service.py at runtime.
 
-Responsible for:
-  1. Loading the trained MobileNetV2 model (once, cached in memory).
-  2. Pre-processing uploaded images to the correct tensor format.
-  3. Running inference and returning confidence scores.
-  4. Computing interpretable Color / Size / Ripeness scores from image pixels.
-  5. Generating Grad-CAM heatmaps for Explainable AI (XAI).
+Model priority chain:
+  1. fruit_quality_ai — EfficientNet-B0, 28-class, TTA, trained checkpoint
+  2. MobileNetV2 (legacy) — binary Healthy/Rotten, quality_classifier.pt
+  3. KMeans colour clustering — unsupervised fallback (no trained weights needed)
+  4. Greenness heuristic — zero-dependency last resort
 
-Fallback chain (used when no trained model file exists):
-  1. KMeans colour clustering (unsupervised ML — Task 1 baseline)
-  2. Simple greenness heuristic (zero dependencies beyond PIL/numpy)
+The public interface (classify_image) is unchanged — all callers continue
+to receive the same dict regardless of which backend is active.
 
 Author (ai-integration): Kayra
-Evidence prefix: ai-integration
+New model integration: Nazli (fruit_quality_ai EfficientNet-B0)
 """
 
 from __future__ import annotations
@@ -21,41 +19,158 @@ from __future__ import annotations
 import base64
 import io
 import pathlib
+import sys
 
-MODEL_PATH = pathlib.Path(__file__).parent / "saved_models" / "quality_classifier.pt"
+# ── Paths ─────────────────────────────────────────────────────────────────────
+_BASE = pathlib.Path(__file__).parent
+_FRUIT_AI_DIR   = _BASE.parent / "fruit_quality_ai"
+_CHECKPOINT     = _FRUIT_AI_DIR / "checkpoints" / "best_model.pth"
+_LEGACY_MODEL   = _BASE / "saved_models" / "quality_classifier.pt"
 IMG_SIZE = 224
 
-# Module-level cache — model is loaded only once per process.
-_model = None
+# Module-level caches
+_fruit_predictor = None   # QualityPredictor instance (new model)
+_legacy_model    = None   # MobileNetV2 (old model)
 _device = "cpu"
 
 
-# ── Model loading ─────────────────────────────────────────────────────────────
+# ── New model: fruit_quality_ai EfficientNet-B0 ───────────────────────────────
 
-def _load_model_once():
-    global _model, _device
-    if _model is not None:
-        return _model
+def _load_fruit_predictor():
+    """Load the EfficientNet-B0 QualityPredictor (once, cached)."""
+    global _fruit_predictor
+    if _fruit_predictor is not None:
+        return _fruit_predictor
+    if not _CHECKPOINT.exists():
+        return None
+    try:
+        import torch
+
+        # Use a temporary sys.path extension rather than permanently inserting
+        # at index 0, to avoid shadowing top-level Django modules named 'config'.
+        _fai = str(_FRUIT_AI_DIR)
+        _added = _fai not in sys.path
+        if _added:
+            sys.path.append(_fai)   # append, not insert(0)
+        try:
+            from models.classifier import build_model
+            from inference.predictor import QualityPredictor
+        finally:
+            if _added:
+                sys.path.remove(_fai)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Build with pretrained=False — checkpoint already has fine-tuned weights,
+        # no need to download ImageNet weights on every cold start.
+        model = build_model(pretrained=False)
+        model.load_state_dict(torch.load(_CHECKPOINT, map_location=device, weights_only=True))
+        model.eval()
+        _fruit_predictor = QualityPredictor(
+            model=model,
+            device=device,
+            generate_xai=True,
+            xai_output_dir=_FRUIT_AI_DIR / "results" / "xai",
+        )
+        print(f"[Predictor] EfficientNet-B0 loaded from {_CHECKPOINT}")
+        return _fruit_predictor
+    except Exception as exc:
+        print(f"[Predictor] Failed to load fruit_quality_ai model: {exc}")
+        return None
+
+
+def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
+    """
+    Run inference through the new EfficientNet-B0 model.
+
+    Returns the standard classify_image dict, or None if the model
+    couldn't be loaded so the caller can fall through to the legacy path.
+    """
+    import tempfile, os
+    predictor = _load_fruit_predictor()
+    if predictor is None:
+        return None
+    try:
+        # QualityPredictor needs a file path — write bytes to a temp file
+        suffix = ".jpg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(image_bytes)
+            tmp_path = tmp.name
+
+        try:
+            result = predictor.predict(tmp_path)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        # Read Grad-CAM PNG → base64 for the template <img> tag, then delete
+        xai_heatmap = None
+        if result.explanation_path:
+            try:
+                with open(result.explanation_path, "rb") as f:
+                    raw = f.read()
+                if explain:
+                    xai_heatmap = base64.b64encode(raw).decode("utf-8")
+                os.unlink(result.explanation_path)   # don't accumulate PNGs on disk
+            except Exception:
+                pass
+
+        # Strip verbose dataset suffixes from class names in the reasoning text
+        _STRIP = "_fruit_and_vegetable_diseases_dataset"
+        reasoning = result.reasoning.replace(_STRIP, "")
+
+        # Derive colour/size/ripeness from image pixels (independent of CNN)
+        img_scores = _compute_image_scores(image_bytes)
+
+        # Blend pixel scores with CNN quality_score for smoother output
+        q = float(result.quality_score)          # 0.5–1.0 fresh, 0.0–0.5 rotten
+        w_cnn, w_img = 0.65, 0.35
+        color_s    = round(img_scores["color_score"]    * w_img + q * 100 * w_cnn, 1)
+        size_s     = round(img_scores["size_score"]     * w_img + q * 100 * w_cnn, 1)
+        ripeness_s = round(img_scores["ripeness_score"] * w_img + q * 100 * w_cnn, 1)
+
+        is_healthy = result.condition == "fresh"
+
+        return {
+            "grade":            result.grade,
+            "color_score":      color_s,
+            "size_score":       size_s,
+            "ripeness_score":   ripeness_s,
+            "model_confidence": round(result.confidence, 4),
+            "is_healthy":       is_healthy,
+            "model_version":    "efficientnet-b0-v1",
+            "xai_heatmap":      xai_heatmap,
+            "xai_explanation":  reasoning,
+        }
+    except Exception:
+        return None
+
+
+# ── Legacy model: MobileNetV2 ─────────────────────────────────────────────────
+
+def _load_legacy_once():
+    global _legacy_model, _device
+    if _legacy_model is not None:
+        return _legacy_model
     import torch
     from ml.model import load_model
     _device = "cuda" if torch.cuda.is_available() else "cpu"
-    _model = load_model(str(MODEL_PATH), device=_device)
-    return _model
+    _legacy_model = load_model(str(_LEGACY_MODEL), device=_device)
+    return _legacy_model
 
 
 def reload_model():
-    """Force the in-memory model cache to reload from disk on next inference call.
-    Called after an AI engineer uploads a new .pt file via the admin panel."""
-    global _model
-    _model = None
+    """Force both model caches to reload (called after admin model upload)."""
+    global _fruit_predictor, _legacy_model
+    _fruit_predictor = None
+    _legacy_model = None
 
 
 def _preprocess(image_bytes: bytes):
-    """Convert raw image bytes to a normalised [1, 3, 224, 224] tensor."""
     import torch
     from PIL import Image
     from torchvision import transforms
-
     tf = transforms.Compose([
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
         transforms.ToTensor(),
@@ -65,22 +180,9 @@ def _preprocess(image_bytes: bytes):
     return tf(img).unsqueeze(0)
 
 
-# ── Interpretable image-level feature extraction ─────────────────────────────
+# ── Pixel-level quality scores (architecture-independent) ─────────────────────
 
 def _compute_image_scores(image_bytes: bytes) -> dict:
-    """
-    Compute interpretable quality scores directly from image pixels.
-
-    These scores are derived independently of the CNN and provide the
-    'explainable' breakdown shown in the XAI panel.
-
-    color_score   – HSV-based freshness indicator:
-                    high green/yellow → fresh; high brown → rotten.
-    ripeness_score – Surface texture smoothness:
-                    low edge density → smoother surface → fresher produce.
-    size_score    – Subject presence in frame:
-                    ratio of centre-crop variance to background variance.
-    """
     from PIL import Image
     import numpy as np
 
@@ -90,244 +192,135 @@ def _compute_image_scores(image_bytes: bytes) -> dict:
     g = arr[:, :, 1] / 255.0
     b = arr[:, :, 2] / 255.0
 
-    # ── Color score ──────────────────────────────────────────────────────────
     cmax = np.maximum(np.maximum(r, g), b)
     delta = cmax - np.minimum(np.minimum(r, g), b) + 1e-6
     saturation = np.where(cmax > 0, delta / cmax, 0.0)
-
-    # Brown pixels: R dominant over G and B; moderate saturation
     brown_mask = (r > g * 1.15) & (r > b * 1.15) & (saturation > 0.15)
-    # Fresh pixels: green at least equal to red; decent saturation; not too dark
     fresh_mask = (g >= r * 0.85) & (saturation > 0.10) & (cmax > 0.15)
-
     total = float(r.size)
-    brown_ratio = float(brown_mask.sum()) / total
-    fresh_ratio = float(fresh_mask.sum()) / total
+    color_score = float(
+        np.clip(50.0 + (fresh_mask.sum() / total - brown_mask.sum() / total) * 100.0, 10.0, 100.0)
+    )
 
-    color_score = float(np.clip(50.0 + (fresh_ratio - brown_ratio) * 100.0, 10.0, 100.0))
-
-    # ── Ripeness score ───────────────────────────────────────────────────────
     gray = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
     gx = float(np.abs(gray[:, 1:] - gray[:, :-1]).mean())
     gy = float(np.abs(gray[1:, :] - gray[:-1, :]).mean())
-    edge_density = (gx + gy) / 2.0
-    # Lower edge density (smoother surface) correlates with freshness.
-    # Typical edge density range: 5–25; map to 20–100.
-    ripeness_score = float(np.clip(100.0 - (edge_density / 15.0) * 50.0, 20.0, 100.0))
+    ripeness_score = float(np.clip(100.0 - ((gx + gy) / 2.0 / 15.0) * 50.0, 20.0, 100.0))
 
-    # ── Size score ───────────────────────────────────────────────────────────
     gray_n = gray / 255.0
     centre = gray_n[32:96, 32:96]
     corners = np.concatenate([
-        gray_n[:20, :20].ravel(),
-        gray_n[:20, -20:].ravel(),
-        gray_n[-20:, :20].ravel(),
-        gray_n[-20:, -20:].ravel(),
+        gray_n[:20, :20].ravel(), gray_n[:20, -20:].ravel(),
+        gray_n[-20:, :20].ravel(), gray_n[-20:, -20:].ravel(),
     ])
-    centre_var = float(centre.var())
-    corner_var = float(corners.var()) + 1e-6
-    size_score = float(np.clip(
-        50.0 + (centre_var / (corner_var + centre_var)) * 50.0, 40.0, 100.0
-    ))
+    cv = float(centre.var())
+    corner_v = float(corners.var()) + 1e-6
+    size_score = float(np.clip(50.0 + (cv / (corner_v + cv)) * 50.0, 40.0, 100.0))
 
     return {
-        "color_score": round(color_score, 1),
-        "size_score": round(size_score, 1),
+        "color_score":    round(color_score, 1),
+        "size_score":     round(size_score, 1),
         "ripeness_score": round(ripeness_score, 1),
     }
 
 
-# ── Grading ───────────────────────────────────────────────────────────────────
-
-def _grade_from_scores(color: float, size: float, ripeness: float) -> tuple[str, bool]:
-    """
-    Apply the case-study grading thresholds.
-
-    Grade A: Color ≥ 85, Size ≥ 90, Ripeness ≥ 80
-    Grade B: Color ≥ 75, Size ≥ 80, Ripeness ≥ 70
-    Grade C: otherwise
-    """
+def _grade_from_scores(color, size, ripeness):
     if color >= 85 and size >= 90 and ripeness >= 80:
         return "A", True
-    elif color >= 75 and size >= 80 and ripeness >= 70:
+    if color >= 75 and size >= 80 and ripeness >= 70:
         return "B", True
-    else:
-        return "C", False
+    return "C", False
 
 
-# ── XAI: natural-language explanation ────────────────────────────────────────
-
-def _build_explanation(grade: str, color: float, size: float, ripeness: float) -> str:
-    """
-    Construct a plain-language explanation of the grade decision.
-
-    This is the textual XAI output — it explains which dimension(s) drove
-    the grade and what they mean for the produce.
-    """
+def _build_explanation(grade, color, size, ripeness):
     parts = []
-
-    if color >= 85:
-        parts.append("excellent colour uniformity indicating optimal freshness")
-    elif color >= 75:
-        parts.append("acceptable colour with minor discolouration detected")
-    else:
-        parts.append("notable discolouration or browning detected")
-
-    if size >= 90:
-        parts.append("uniform shape and size consistent with premium quality")
-    elif size >= 80:
-        parts.append("adequate size characteristics with minor irregularities")
-    else:
-        parts.append("irregular shape or insufficient subject fill detected")
-
-    if ripeness >= 80:
-        parts.append("smooth surface texture indicating optimal ripeness")
-    elif ripeness >= 70:
-        parts.append("surface texture within acceptable ripeness range")
-    else:
-        parts.append("surface irregularities suggest over-ripeness or rot")
-
-    grade_labels = {"A": "Premium (Grade A)", "B": "Standard (Grade B)", "C": "Below standard (Grade C)"}
-    return f"{grade_labels[grade]} — {'; '.join(parts)}."
+    parts.append(
+        "excellent colour uniformity" if color >= 85
+        else "acceptable colour with minor discolouration" if color >= 75
+        else "notable discolouration or browning detected"
+    )
+    parts.append(
+        "uniform shape consistent with premium quality" if size >= 90
+        else "adequate size with minor irregularities" if size >= 80
+        else "irregular shape or insufficient subject fill"
+    )
+    parts.append(
+        "smooth surface indicating optimal ripeness" if ripeness >= 80
+        else "surface texture within acceptable range" if ripeness >= 70
+        else "surface irregularities suggest over-ripeness or rot"
+    )
+    labels = {"A": "Premium (Grade A)", "B": "Standard (Grade B)", "C": "Below standard (Grade C)"}
+    return f"{labels[grade]} — {'; '.join(parts)}."
 
 
-# ── XAI: Grad-CAM heatmap ─────────────────────────────────────────────────────
-
-def _grad_cam_heatmap(model, tensor, image_bytes: bytes) -> str | None:
-    """
-    Generate a Grad-CAM saliency map overlaid on the original image.
-
-    Grad-CAM weights the last convolutional feature maps by the gradient
-    of the Healthy-class score, producing a coarse localisation map that
-    shows which image regions drove the prediction.
-
-    Returns a base64-encoded PNG (ready for use as a data: URI), or None
-    if generation fails.
-
-    Reference: Selvaraju et al., "Grad-CAM: Visual Explanations from Deep
-    Networks via Gradient-based Localization", ICCV 2017.
-    """
+def _grad_cam_heatmap(model, tensor, image_bytes):
     import numpy as np
     from PIL import Image
-
     try:
-        # Hook onto the last convolutional block of MobileNetV2
         target_layer = model.features[-1]
-        activations: dict = {}
-        gradients: dict = {}
-
-        def fwd_hook(module, inp, out):
-            activations["v"] = out.detach()
-
-        def bwd_hook(module, grad_in, grad_out):
-            gradients["v"] = grad_out[0].detach()
-
-        h_fwd = target_layer.register_forward_hook(fwd_hook)
-        h_bwd = target_layer.register_full_backward_hook(bwd_hook)
-
+        activations, gradients = {}, {}
+        h_fwd = target_layer.register_forward_hook(lambda m, i, o: activations.__setitem__("v", o.detach()))
+        h_bwd = target_layer.register_full_backward_hook(lambda m, gi, go: gradients.__setitem__("v", go[0].detach()))
         try:
-            # Fresh forward pass with gradient tracking
             t = tensor.clone().requires_grad_(True)
             logits = model(t)
             model.zero_grad()
-            # Backpropagate through the Healthy-class score (class 0)
             logits[0, 0].backward()
-
-            acts = activations["v"].cpu().numpy()[0]   # [C, H, W]
-            grads = gradients["v"].cpu().numpy()[0]    # [C, H, W]
-
-            # Global average pool gradients → channel weights
-            weights = grads.mean(axis=(1, 2))          # [C]
-            cam = np.zeros(acts.shape[1:], dtype=np.float32)
-            for i, w in enumerate(weights):
-                cam += w * acts[i]
-
-            cam = np.maximum(cam, 0)   # ReLU
+            acts = activations["v"].cpu().numpy()[0]
+            grads = gradients["v"].cpu().numpy()[0]
+            weights = grads.mean(axis=(1, 2))
+            cam = np.maximum(np.sum(weights[:, None, None] * acts, axis=0), 0)
             if cam.max() > 0:
-                cam = cam / cam.max()  # Normalise to [0, 1]
-
-            # Upsample to 224×224
-            cam_img = Image.fromarray((cam * 255).astype(np.uint8)).resize(
-                (IMG_SIZE, IMG_SIZE), Image.BILINEAR
-            )
+                cam /= cam.max()
+            cam_img = Image.fromarray((cam * 255).astype(np.uint8)).resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
             cam_arr = np.array(cam_img, dtype=np.float32) / 255.0
-
-            # Apply hot colormap: black → red → yellow → white
-            red   = np.clip(cam_arr * 3.0,       0.0, 1.0)
-            green = np.clip(cam_arr * 3.0 - 1.0, 0.0, 1.0)
-            blue  = np.clip(cam_arr * 3.0 - 2.0, 0.0, 1.0)
-            heat  = np.stack([red, green, blue], axis=-1)
-            heat_img = Image.fromarray((heat * 255).astype(np.uint8)).convert("RGB")
-
-            # Blend with resized original image
-            orig = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize(
-                (IMG_SIZE, IMG_SIZE), Image.BILINEAR
-            )
-            blended = Image.blend(orig, heat_img, alpha=0.45)
-
+            red   = np.clip(cam_arr * 3.0, 0, 1)
+            green = np.clip(cam_arr * 3.0 - 1.0, 0, 1)
+            blue  = np.clip(cam_arr * 3.0 - 2.0, 0, 1)
+            heat  = Image.fromarray((np.stack([red, green, blue], axis=-1) * 255).astype("uint8"))
+            orig  = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((IMG_SIZE, IMG_SIZE))
+            blended = Image.blend(orig, heat, alpha=0.45)
             buf = io.BytesIO()
             blended.save(buf, format="PNG")
             return base64.b64encode(buf.getvalue()).decode("utf-8")
-
         finally:
             h_fwd.remove()
             h_bwd.remove()
-
     except Exception:
         return None
 
 
-# ── Fallback: KMeans clustering (Task 1 — unsupervised baseline) ──────────────
+# ── KMeans fallback ───────────────────────────────────────────────────────────
 
-def _kmeans_fallback(image_bytes: bytes) -> dict:
-    """
-    Unsupervised ML fallback used when no trained model is available.
-
-    Clusters pixel colours with KMeans; the proportion of 'green' vs 'brown'
-    cluster members estimates freshness confidence.  Returns the same dict
-    shape as the CNN path so the rest of the system is unaffected.
-    """
+def _kmeans_fallback(image_bytes):
     from PIL import Image
     import numpy as np
     from sklearn.cluster import KMeans
 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((128, 128))
-    arr = np.array(img, dtype=np.float32)
-    pixels = arr.reshape(-1, 3)
-
+    pixels = np.array(img, dtype=np.float32).reshape(-1, 3)
     rng = np.random.default_rng(42)
     sample = pixels[rng.choice(pixels.shape[0], size=min(5000, pixels.shape[0]), replace=False)]
-
-    kmeans = KMeans(n_clusters=3, n_init="auto", random_state=42)
-    labels = kmeans.fit_predict(sample)
-    centers = kmeans.cluster_centers_
-
+    km = KMeans(n_clusters=3, n_init="auto", random_state=42)
+    labels = km.fit_predict(sample)
+    centers = km.cluster_centers_
     green_idx = int(np.argmax(centers[:, 1]))
-    brown_scores = (centers[:, 0] - centers[:, 2]) - (centers[:, 1] * 0.25)
+    brown_scores = (centers[:, 0] - centers[:, 2]) - centers[:, 1] * 0.25
     brown_idx = int(np.argmax(brown_scores))
-
-    green_prop = float(np.mean(labels == green_idx))
-    brown_prop = float(np.mean(labels == brown_idx))
-    cnn_conf = float(np.clip(green_prop - brown_prop * 0.8 + 0.5, 0.0, 1.0))
-
-    # Blend KMeans confidence with pixel-level feature analysis
+    cnn_conf = float(np.clip(
+        np.mean(labels == green_idx) - np.mean(labels == brown_idx) * 0.8 + 0.5, 0.0, 1.0
+    ))
     img_scores = _compute_image_scores(image_bytes)
     w_cnn, w_img = 0.4, 0.6
-    color_s    = round(img_scores["color_score"]    * w_img + cnn_conf * 100 * w_cnn, 1)
-    size_s     = round(img_scores["size_score"]     * w_img + cnn_conf * 100 * w_cnn, 1)
-    ripeness_s = round(img_scores["ripeness_score"] * w_img + cnn_conf * 100 * w_cnn, 1)
-    grade, is_healthy = _grade_from_scores(color_s, size_s, ripeness_s)
-
+    cs = round(img_scores["color_score"]    * w_img + cnn_conf * 100 * w_cnn, 1)
+    ss = round(img_scores["size_score"]     * w_img + cnn_conf * 100 * w_cnn, 1)
+    rs = round(img_scores["ripeness_score"] * w_img + cnn_conf * 100 * w_cnn, 1)
+    grade, is_healthy = _grade_from_scores(cs, ss, rs)
     return {
-        "grade": grade,
-        "color_score": color_s,
-        "size_score": size_s,
-        "ripeness_score": ripeness_s,
-        "model_confidence": round(cnn_conf, 4),
-        "is_healthy": is_healthy,
-        "model_version": "kmeans-fallback-v1",
-        "xai_heatmap": None,
-        "xai_explanation": _build_explanation(grade, color_s, size_s, ripeness_s),
+        "grade": grade, "color_score": cs, "size_score": ss, "ripeness_score": rs,
+        "model_confidence": round(cnn_conf, 4), "is_healthy": is_healthy,
+        "model_version": "kmeans-fallback-v1", "xai_heatmap": None,
+        "xai_explanation": _build_explanation(grade, cs, ss, rs),
     }
 
 
@@ -335,90 +328,72 @@ def _kmeans_fallback(image_bytes: bytes) -> dict:
 
 def classify_image(image_bytes: bytes, explain: bool = False) -> dict:
     """
-    Classify a produce image as Healthy / Rotten and return quality scores.
+    Classify a produce image and return quality scores.
 
-    Args:
-        image_bytes: Raw bytes of the uploaded image.
-        explain:     If True, generate a Grad-CAM heatmap for XAI.
-                     Adds a small overhead (~50–100 ms on CPU).
+    Model priority:
+      1. EfficientNet-B0 (fruit_quality_ai) — if checkpoint exists
+      2. MobileNetV2 (legacy quality_classifier.pt) — if checkpoint exists
+      3. KMeans unsupervised fallback
+      4. Greenness heuristic
 
-    Returns a dict with:
-        grade              – "A", "B", or "C"
-        color_score        – colour uniformity score 0–100
-        size_score         – shape/subject-fill score 0–100
-        ripeness_score     – surface texture score 0–100
-        model_confidence   – CNN softmax probability for Healthy class (0–1)
-        is_healthy         – bool (confidence ≥ 0.5)
-        model_version      – string identifier stored with each assessment
-        xai_heatmap        – base64 PNG string or None
-        xai_explanation    – plain-language grade rationale
+    Returns dict with: grade, color_score, size_score, ripeness_score,
+    model_confidence, is_healthy, model_version, xai_heatmap, xai_explanation.
     """
-    if not MODEL_PATH.exists():
+    # ── 1. Try new EfficientNet-B0 model ─────────────────────────────────────
+    if _CHECKPOINT.exists():
+        result = _fruit_classify(image_bytes, explain)
+        if result is not None:
+            return result
+
+    # ── 2. Try legacy MobileNetV2 ─────────────────────────────────────────────
+    if _LEGACY_MODEL.exists():
         try:
-            return _kmeans_fallback(image_bytes)
-        except Exception:
-            # Minimal heuristic when scikit-learn is unavailable
-            from PIL import Image
-            import numpy as np
-
-            img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((128, 128))
-            arr = np.array(img, dtype=np.float32)
-            g = arr[:, :, 1] / 255.0
-            r = arr[:, :, 0] / 255.0
-            b = arr[:, :, 2] / 255.0
-            greenness = float(g.mean())
-            brownness = float(np.clip(r - b, 0, None).mean())
-            cnn_conf = float(np.clip(greenness - brownness * 0.5, 0.0, 1.0))
-
+            import torch
+            model = _load_legacy_once()
+            tensor = _preprocess(image_bytes).to(_device)
+            with torch.no_grad():
+                logits = model(tensor)
+                probs = torch.softmax(logits, dim=1)[0]
+            healthy_conf = float(probs[0])
             img_scores = _compute_image_scores(image_bytes)
-            cs = round(img_scores["color_score"] * 0.5 + cnn_conf * 100 * 0.5, 1)
-            ss = round(img_scores["size_score"]  * 0.5 + cnn_conf * 100 * 0.5, 1)
-            rs = round(img_scores["ripeness_score"] * 0.5 + cnn_conf * 100 * 0.5, 1)
+            w_cnn, w_img = 0.6, 0.4
+            cs = round(img_scores["color_score"]    * w_img + healthy_conf * 100 * w_cnn, 1)
+            ss = round(img_scores["size_score"]     * w_img + healthy_conf * 100 * w_cnn, 1)
+            rs = round(img_scores["ripeness_score"] * w_img + healthy_conf * 100 * w_cnn, 1)
             grade, is_healthy = _grade_from_scores(cs, ss, rs)
+            xai_heatmap = _grad_cam_heatmap(model, tensor, image_bytes) if explain else None
             return {
-                "grade": grade,
-                "color_score": cs,
-                "size_score": ss,
-                "ripeness_score": rs,
-                "model_confidence": round(cnn_conf, 4),
-                "is_healthy": is_healthy,
-                "model_version": "heuristic-fallback-v1",
-                "xai_heatmap": None,
+                "grade": grade, "color_score": cs, "size_score": ss, "ripeness_score": rs,
+                "model_confidence": round(healthy_conf, 4), "is_healthy": is_healthy,
+                "model_version": "mobilenetv2-v1", "xai_heatmap": xai_heatmap,
                 "xai_explanation": _build_explanation(grade, cs, ss, rs),
             }
+        except Exception:
+            pass
 
-    import torch
-    model = _load_model_once()
-    tensor = _preprocess(image_bytes).to(_device)
+    # ── 3. KMeans fallback ────────────────────────────────────────────────────
+    try:
+        return _kmeans_fallback(image_bytes)
+    except Exception:
+        pass
 
-    with torch.no_grad():
-        logits = model(tensor)
-        probs = torch.softmax(logits, dim=1)[0]
-
-    healthy_confidence = float(probs[0])
-
-    # Blend CNN confidence with independent pixel-level analysis.
-    # CNN captures semantic patterns; image scores capture visual attributes.
+    # ── 4. Greenness heuristic (zero dependencies) ────────────────────────────
+    from PIL import Image
+    import numpy as np
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((128, 128))
+    arr = np.array(img, dtype=np.float32)
+    g = arr[:, :, 1] / 255.0
+    r = arr[:, :, 0] / 255.0
+    b = arr[:, :, 2] / 255.0
+    cnn_conf = float(np.clip(g.mean() - np.clip(r - b, 0, None).mean() * 0.5, 0.0, 1.0))
     img_scores = _compute_image_scores(image_bytes)
-    w_cnn, w_img = 0.6, 0.4
-
-    color_s    = round(img_scores["color_score"]    * w_img + healthy_confidence * 100 * w_cnn, 1)
-    size_s     = round(img_scores["size_score"]     * w_img + healthy_confidence * 100 * w_cnn, 1)
-    ripeness_s = round(img_scores["ripeness_score"] * w_img + healthy_confidence * 100 * w_cnn, 1)
-
-    grade, is_healthy = _grade_from_scores(color_s, size_s, ripeness_s)
-
-    # GradCAM requires a fresh forward pass with gradient tracking
-    xai_heatmap = _grad_cam_heatmap(model, tensor, image_bytes) if explain else None
-
+    cs = round(img_scores["color_score"]    * 0.5 + cnn_conf * 100 * 0.5, 1)
+    ss = round(img_scores["size_score"]     * 0.5 + cnn_conf * 100 * 0.5, 1)
+    rs = round(img_scores["ripeness_score"] * 0.5 + cnn_conf * 100 * 0.5, 1)
+    grade, is_healthy = _grade_from_scores(cs, ss, rs)
     return {
-        "grade": grade,
-        "color_score": color_s,
-        "size_score": size_s,
-        "ripeness_score": ripeness_s,
-        "model_confidence": round(healthy_confidence, 4),
-        "is_healthy": is_healthy,
-        "model_version": "mobilenetv2-v1",
-        "xai_heatmap": xai_heatmap,
-        "xai_explanation": _build_explanation(grade, color_s, size_s, ripeness_s),
+        "grade": grade, "color_score": cs, "size_score": ss, "ripeness_score": rs,
+        "model_confidence": round(cnn_conf, 4), "is_healthy": is_healthy,
+        "model_version": "heuristic-fallback-v1", "xai_heatmap": None,
+        "xai_explanation": _build_explanation(grade, cs, ss, rs),
     }

@@ -370,6 +370,8 @@ class CustomerDashboardView(CustomerRequiredMixin, ListView):
         return qs
 
     def get_context_data(self, **kwargs):
+        from app.services.reorder_service import predict_reorder_items
+
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
@@ -378,6 +380,7 @@ class CustomerDashboardView(CustomerRequiredMixin, ListView):
         ).count()
         ctx["total_orders"] = CheckoutOrder.objects.filter(customer=user).count()
         ctx["status_filter"] = self.request.GET.get("status", "")
+        ctx["reorder_suggestions"] = predict_reorder_items(getattr(user, "email", ""))
         return ctx
 
 
@@ -869,12 +872,18 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
     template_name = "producer/dashboard.html"
 
     def get(self, request):
+        import json as _json
+        from app.services.forecast_service import get_demand_forecast_dashboard
+
         producer = request.user
         low_stock_qs = Product.objects.filter(
             producer=producer,
             stock__gt=0,
             stock__lte=F("low_stock_threshold"),
         ).order_by("stock")
+
+        forecast = get_demand_forecast_dashboard(producer)
+
         ctx = {
             "summary": {
                 "orders_today": Order.objects.filter(
@@ -884,6 +893,8 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
                 "low_stock_count": low_stock_qs.count(),
             },
             "low_stock_products": low_stock_qs,
+            "forecast": forecast,
+            "forecast_json": _json.dumps(forecast),
         }
         return render(request, self.template_name, ctx)
 
@@ -1401,32 +1412,59 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
 
 
 class AdminAIAssessmentDetailView(AdminRequiredMixin, View):
-    """Shows XAI heatmap + explanation for a single quality assessment."""
+    """Shows XAI heatmap + explanation for a single quality assessment.
+    Admins can also submit a grade override directly from this page."""
     template_name = "admin_panel/ai_assessment_detail.html"
 
-    def get(self, request, pk):
-        assessment = get_object_or_404(
+    def _get_assessment(self, pk):
+        return get_object_or_404(
             QualityAssessment.objects.select_related("product", "assessed_by"),
             pk=pk,
         )
-        xai_heatmap = None
-        xai_explanation = None
-        # Re-run inference on stored image to get heatmap
+
+    def _build_xai(self, assessment):
         try:
             from ml.inference import classify_image
-            image_path = assessment.image.path
-            with open(image_path, "rb") as f:
+            with open(assessment.image.path, "rb") as f:
                 image_bytes = f.read()
             result = classify_image(image_bytes, explain=True)
-            xai_heatmap = result.get("xai_heatmap")
-            xai_explanation = result.get("xai_explanation")
+            return result.get("xai_heatmap"), result.get("xai_explanation")
         except Exception:
-            pass
+            return None, None
+
+    def get(self, request, pk):
+        assessment = self._get_assessment(pk)
+        xai_heatmap, xai_explanation = self._build_xai(assessment)
+        overrides = assessment.overrides.select_related("producer").order_by("-created_at")
         return render(request, self.template_name, {
             "assessment": assessment,
             "xai_heatmap": xai_heatmap,
             "xai_explanation": xai_explanation,
+            "overrides": overrides,
         })
+
+    def post(self, request, pk):
+        assessment = self._get_assessment(pk)
+        override_grade = request.POST.get("override_grade", "").strip()
+        reason = request.POST.get("reason", "other").strip()
+        notes = request.POST.get("notes", "").strip()
+
+        if override_grade not in ("A", "B", "C"):
+            messages.error(request, "Invalid grade — choose A, B or C.")
+        else:
+            QualityOverride.objects.create(
+                assessment=assessment,
+                producer=request.user,
+                ai_grade=assessment.grade,
+                override_grade=override_grade,
+                reason=reason,
+                notes=notes,
+            )
+            messages.success(
+                request,
+                f"Admin override recorded: AI={assessment.grade} → Override={override_grade}."
+            )
+        return redirect("admin_ai_assessment_detail", pk=pk)
 
 
 class AdminModelUploadView(AdminRequiredMixin, View):
@@ -1472,7 +1510,8 @@ class AdminModelUploadView(AdminRequiredMixin, View):
 
 
 class AdminInteractionExportView(AdminRequiredMixin, View):
-    """Export all QualityAssessment interaction records as CSV for model refinement."""
+    """Export all QualityAssessment interaction records as CSV for model refinement.
+    Override columns are included so the file can serve directly as retraining data."""
 
     def get(self, request):
         response = HttpResponse(content_type="text/csv")
@@ -1483,13 +1522,19 @@ class AdminInteractionExportView(AdminRequiredMixin, View):
             "color_score", "size_score", "ripeness_score",
             "model_confidence", "model_version", "is_healthy",
             "notes", "quantity_lost", "assessed_at", "image_path",
+            # Override columns (blank when no override exists)
+            "override_grade", "override_reason", "override_notes",
+            "overridden_by", "overridden_at",
         ])
         qs = (
             QualityAssessment.objects
             .select_related("product", "assessed_by")
+            .prefetch_related("overrides__producer")
             .order_by("-assessed_at")
         )
         for a in qs:
+            # Use the most recent override if multiple exist
+            override = a.overrides.order_by("-created_at").first()
             writer.writerow([
                 a.id,
                 a.product.name,
@@ -1505,6 +1550,11 @@ class AdminInteractionExportView(AdminRequiredMixin, View):
                 a.quantity_lost,
                 a.assessed_at.isoformat(),
                 a.image.name if a.image else "",
+                override.override_grade if override else "",
+                override.reason if override else "",
+                override.notes.replace("\n", " ") if override else "",
+                override.producer.email if override else "",
+                override.created_at.isoformat() if override else "",
             ])
         return response
 

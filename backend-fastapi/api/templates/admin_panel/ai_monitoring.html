@@ -76,16 +76,14 @@
           </div>
         </div>
         <div class="col-md-3">
-          <div class="stat-card">
-            <div class="stat-icon blue"><i class="bi bi-cpu"></i></div>
-            <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Model Versions</div>
-            <div style="font-size:1.1rem;font-weight:700;margin-top:.4rem">
-              {% for v in stats.model_versions %}
-              <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:.72rem">{{ v }}</span>
-              {% empty %}<span style="color:var(--muted)">—</span>
-              {% endfor %}
-            </div>
+          <a href="{% url 'admin_override_review' %}" style="text-decoration:none">
+          <div class="stat-card" style="cursor:pointer">
+            <div class="stat-icon {% if stats.override_count > 0 %}amber{% else %}green{% endif %}"><i class="bi bi-pencil-square"></i></div>
+            <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Grade Overrides</div>
+            <div style="font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-top:.2rem">{{ stats.override_count }}</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:.15rem">producer corrections → <u>review</u></div>
           </div>
+          </a>
         </div>
       </div>
 
