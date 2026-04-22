@@ -9,6 +9,7 @@ Templates → api/templates/
 from datetime import date, datetime as _dt, timedelta
 from decimal import Decimal
 import csv
+import pathlib
 from collections import defaultdict
 
 from django.contrib import messages
@@ -1012,14 +1013,12 @@ class ProducerOrderStatusUpdateView(ProducerRequiredMixin, View):
         return redirect("/producer/orders/")
 
 
-class ProducerPaymentsView(ProducerRequiredMixin, TemplateView):
+class ProducerPaymentsView(ProducerRequiredMixin, View):
     template_name = "producer/payments.html"
 
     _commission_rate = Decimal("0.05")
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        producer = self.request.user
+    def _build_payment_data(self, producer):
         delivered_items = OrderItem.objects.filter(
             order__producer=producer,
             order__status="Delivered",
@@ -1032,28 +1031,67 @@ class ProducerPaymentsView(ProducerRequiredMixin, TemplateView):
         pending_gross = sum(float(i.unit_price) * i.quantity for i in pending_items)
 
         commission = round(delivered_gross * float(self._commission_rate), 2)
-        pending_orders_qs = (
-            Order.objects.filter(producer=producer, status="Pending")
+
+        all_orders_qs = (
+            Order.objects.filter(producer=producer)
             .prefetch_related("items")
-            .order_by("delivery_date")
+            .order_by("-delivery_date")
         )
-        pending_orders = []
-        for o in pending_orders_qs:
+        orders = []
+        for o in all_orders_qs:
             total = sum(float(i.unit_price) * i.quantity for i in o.items.all())
-            pending_orders.append({
+            orders.append({
                 "order_id": o.order_id,
                 "customer_name": o.customer_name,
                 "delivery_date": o.delivery_date,
                 "status": o.status,
-                "total": round(total, 2),
+                "gross": round(total, 2),
+                "commission": round(total * float(self._commission_rate), 2),
+                "net": round(total * (1 - float(self._commission_rate)), 2),
             })
-        ctx["payments"] = {
-            "this_week": round(delivered_gross, 2),
-            "pending": round(pending_gross, 2),
-            "commission": commission,
+
+        pending_orders = [o for o in orders if o["status"] == "Pending"]
+
+        return {
+            "summary": {
+                "this_week": round(delivered_gross, 2),
+                "pending": round(pending_gross, 2),
+                "commission": commission,
+                "net_earned": round(delivered_gross * (1 - float(self._commission_rate)), 2),
+            },
+            "orders": orders,
+            "pending_orders": pending_orders,
         }
-        ctx["pending_orders"] = pending_orders
-        return ctx
+
+    def get(self, request):
+        producer = request.user
+        data = self._build_payment_data(producer)
+
+        if request.GET.get("export") == "csv":
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = 'attachment; filename="payment_report.csv"'
+            writer = csv.writer(response)
+            writer.writerow(["Order ID", "Customer", "Delivery Date", "Status", "Gross (£)", "Commission (£)", "Net (£)"])
+            for o in data["orders"]:
+                writer.writerow([
+                    o["order_id"],
+                    o["customer_name"],
+                    o["delivery_date"] or "",
+                    o["status"],
+                    f"{o['gross']:.2f}",
+                    f"{o['commission']:.2f}",
+                    f"{o['net']:.2f}",
+                ])
+            writer.writerow([])
+            s = data["summary"]
+            writer.writerow(["", "", "", "TOTAL", f"{s['this_week']:.2f}", f"{s['commission']:.2f}", f"{s['net_earned']:.2f}"])
+            return response
+
+        return render(request, self.template_name, {
+            "payments": data["summary"],
+            "pending_orders": data["pending_orders"],
+            "all_orders": data["orders"],
+        })
 
 
 # ── Admin views ───────────────────────────────────────────────────────────────
@@ -1259,6 +1297,83 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
             .order_by("-assessed_at")[:20]
         )
         return ctx
+
+
+class AdminModelUploadView(AdminRequiredMixin, View):
+    """Allow AI engineers (admin role) to replace the active ML model."""
+
+    _model_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "quality_classifier.pt"
+    _backup_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "quality_classifier_prev.pt"
+
+    def post(self, request):
+        uploaded = request.FILES.get("model_file")
+        if not uploaded:
+            messages.error(request, "No file uploaded.")
+            return redirect("admin_ai_monitoring")
+        if not uploaded.name.endswith(".pt"):
+            messages.error(request, "Only .pt (PyTorch) model files are accepted.")
+            return redirect("admin_ai_monitoring")
+
+        model_bytes = uploaded.read()
+        try:
+            import io as _io
+            import torch
+            state = torch.load(_io.BytesIO(model_bytes), map_location="cpu", weights_only=True)
+            if not isinstance(state, dict):
+                raise ValueError("File does not contain a state_dict.")
+        except Exception as exc:
+            messages.error(request, f"Invalid model file: {exc}")
+            return redirect("admin_ai_monitoring")
+
+        self._model_path.parent.mkdir(parents=True, exist_ok=True)
+        if self._model_path.exists():
+            import shutil
+            shutil.copy2(self._model_path, self._backup_path)
+
+        with open(self._model_path, "wb") as f:
+            f.write(model_bytes)
+
+        # Clear the in-process model cache so next inference loads the new file
+        import ml.inference as _inf
+        _inf._model = None
+
+        messages.success(request, f"Model '{uploaded.name}' uploaded successfully. Cache cleared.")
+        return redirect("admin_ai_monitoring")
+
+
+class AdminInteractionExportView(AdminRequiredMixin, View):
+    """Export all QualityAssessment interaction records as CSV for model refinement."""
+
+    def get(self, request):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="ai_interactions.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            "assessment_id", "assessed_at", "producer_email", "product_name",
+            "grade", "color_score", "size_score", "ripeness_score",
+            "model_confidence", "is_healthy", "model_version", "notes",
+        ])
+        qs = (
+            QualityAssessment.objects
+            .select_related("product", "assessed_by")
+            .order_by("-assessed_at")
+        )
+        for a in qs:
+            writer.writerow([
+                a.id,
+                str(a.assessed_at),
+                a.assessed_by.email if a.assessed_by else "",
+                a.product.name if a.product else "",
+                a.grade,
+                a.color_score,
+                a.size_score,
+                a.ripeness_score,
+                f"{float(a.model_confidence):.4f}",
+                a.is_healthy,
+                a.model_version,
+                a.notes,
+            ])
+        return response
 
 
 # ── Error views ───────────────────────────────────────────────────────────────

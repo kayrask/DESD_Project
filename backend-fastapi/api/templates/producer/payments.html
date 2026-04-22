@@ -14,28 +14,40 @@
     </div>
 
     <div class="col-md-10 py-4 px-4">
-      <h3 class="fw-bold mb-4">Payments</h3>
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">Payments</h3>
+        <a href="?export=csv" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-download me-1"></i>Download Report (CSV)
+        </a>
+      </div>
 
       <div class="row g-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
           <div class="card stat-card border-0 shadow-sm p-4">
-            <div class="text-muted small mb-1">This Week</div>
+            <div class="text-muted small mb-1">Gross Earned</div>
             <div class="fs-2 fw-bold text-success">£{{ payments.this_week }}</div>
-            <div class="text-muted small">earnings this week</div>
+            <div class="text-muted small">from delivered orders</div>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+          <div class="card stat-card border-0 shadow-sm p-4">
+            <div class="text-muted small mb-1">Net Earned</div>
+            <div class="fs-2 fw-bold text-primary">£{{ payments.net_earned }}</div>
+            <div class="text-muted small">after 5% commission</div>
+          </div>
+        </div>
+        <div class="col-md-3">
           <div class="card stat-card border-0 shadow-sm p-4">
             <div class="text-muted small mb-1">Pending</div>
             <div class="fs-2 fw-bold text-warning">£{{ payments.pending }}</div>
             <div class="text-muted small">awaiting processing</div>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <div class="card stat-card border-0 shadow-sm p-4">
             <div class="text-muted small mb-1">Platform Commission</div>
             <div class="fs-2 fw-bold text-secondary">£{{ payments.commission }}</div>
-            <div class="text-muted small">deducted this week</div>
+            <div class="text-muted small">deducted (5% rate)</div>
           </div>
         </div>
       </div>
@@ -69,7 +81,7 @@
                   <td>{{ o.customer_name }}</td>
                   <td>{% if o.delivery_date %}{{ o.delivery_date }}{% else %}—{% endif %}</td>
                   <td><span class="badge badge-pending">{{ o.status }}</span></td>
-                  <td>£{{ o.total }}</td>
+                  <td>£{{ o.gross }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -77,6 +89,52 @@
           </div>
           {% else %}
           <p class="text-muted mb-0" style="font-size:.9rem">No pending orders right now.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div class="card-body">
+          <h6 style="font-weight:700;margin-bottom:1rem">Payment History</h6>
+          {% if all_orders %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Delivery Date</th>
+                  <th>Status</th>
+                  <th class="text-end">Gross</th>
+                  <th class="text-end">Commission (5%)</th>
+                  <th class="text-end">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in all_orders %}
+                <tr>
+                  <td><strong>{{ o.order_id }}</strong></td>
+                  <td>{{ o.customer_name }}</td>
+                  <td>{% if o.delivery_date %}{{ o.delivery_date }}{% else %}—{% endif %}</td>
+                  <td>
+                    {% if o.status == "Delivered" %}
+                      <span class="badge bg-success">{{ o.status }}</span>
+                    {% elif o.status == "Pending" %}
+                      <span class="badge badge-pending">{{ o.status }}</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ o.status }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">£{{ o.gross }}</td>
+                  <td class="text-end text-danger">−£{{ o.commission }}</td>
+                  <td class="text-end fw-bold text-success">£{{ o.net }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0" style="font-size:.9rem">No orders yet.</p>
           {% endif %}
         </div>
       </div>

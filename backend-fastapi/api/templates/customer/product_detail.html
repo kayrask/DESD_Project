@@ -24,7 +24,13 @@
             {% endif %}
           </div>
           <h2 class="fw-bold mb-3">{{ product.name }}</h2>
+          {% if product.discounted_price %}
+          <p class="fs-3 fw-bold text-danger mb-0">£{{ product.discounted_price }}</p>
+          <p class="text-muted text-decoration-line-through mb-1" style="font-size:1rem">£{{ product.price }}</p>
+          <span class="badge bg-danger mb-2">{{ product.discount_percentage }}% off — Surplus stock</span>
+          {% else %}
           <p class="fs-3 fw-bold text-success mb-1">£{{ product.price }}</p>
+          {% endif %}
 
           {% if avg_rating %}
           <div class="mb-2">
