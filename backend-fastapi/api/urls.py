@@ -69,6 +69,12 @@ web_patterns = [
     path("producer/orders/<str:order_id>/status/", views_web.ProducerOrderStatusUpdateView.as_view(), name="producer_order_status"),
     path("producer/payments/", views_web.ProducerPaymentsView.as_view(), name="producer_payments"),
     path("producer/quality-check/", views_web.ProducerQualityCheckView.as_view(), name="producer_quality_check"),
+    path("producer/content/", views_web.ProducerRecipesView.as_view(), name="producer_content"),
+    path("recipes/<int:pk>/", views_web.RecipeDetailView.as_view(), name="recipe_detail"),
+
+    # Customer recurring orders
+    path("customer/recurring-orders/", views_web.RecurringOrdersView.as_view(), name="recurring_orders"),
+    path("customer/recurring-orders/<int:pk>/cancel/", views_web.CancelRecurringOrderView.as_view(), name="recurring_order_cancel"),
 
     # Admin panel (note: /admin/ is taken by Django admin)
     path("admin-panel/", views_web.AdminDashboardView.as_view(), name="admin_dashboard"),

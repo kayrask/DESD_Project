@@ -220,3 +220,68 @@ class Review(models.Model):
 
     def __str__(self):
         return f"{self.customer.full_name} → {self.product.name} ({self.rating}★)"
+
+
+RECURRENCE_CHOICES = [
+    ("weekly", "Weekly"),
+    ("fortnightly", "Fortnightly"),
+]
+DAY_CHOICES = [
+    (0, "Monday"), (1, "Tuesday"), (2, "Wednesday"),
+    (3, "Thursday"), (4, "Friday"), (5, "Saturday"), (6, "Sunday"),
+]
+
+
+class RecurringOrder(models.Model):
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recurring_orders")
+    items = models.JSONField(help_text='[{"product_id": 1, "name": "...", "quantity": 2, "price": 1.50}]')
+    recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default="weekly")
+    delivery_day = models.IntegerField(choices=DAY_CHOICES, default=2)
+    is_active = models.BooleanField(default=True)
+    next_order_date = models.DateField()
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Recurring order for {self.customer.full_name} ({self.get_recurrence_display()})"
+
+
+SEASON_CHOICES = [
+    ("spring", "Spring"),
+    ("summer", "Summer"),
+    ("autumn", "Autumn/Winter"),
+    ("year_round", "Year Round"),
+]
+
+
+class Recipe(models.Model):
+    producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recipes")
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    ingredients = models.TextField(help_text="One ingredient per line")
+    instructions = models.TextField()
+    products = models.ManyToManyField("Product", blank=True, related_name="recipes")
+    seasonal_tag = models.CharField(max_length=20, choices=SEASON_CHOICES, default="year_round")
+    published_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-published_at"]
+
+    def __str__(self):
+        return f"{self.title} by {self.producer.full_name}"
+
+
+class FarmStory(models.Model):
+    producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="farm_stories")
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    published_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-published_at"]
+
+    def __str__(self):
+        return f"{self.title} by {self.producer.full_name}"

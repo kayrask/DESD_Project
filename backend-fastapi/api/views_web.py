@@ -24,11 +24,14 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, TemplateView
 
+from api.food_miles import calculate_food_miles as _calc_miles
 from api.forms import (
     CheckoutForm,
+    FarmStoryForm,
     LoginForm,
     OrderStatusForm,
     ProductForm,
+    RecipeForm,
     ReportFilterForm,
     RegisterForm,
     ReviewForm,
@@ -36,11 +39,14 @@ from api.forms import (
 from api.models import (
     CartReservation,
     CommissionReport,
+    FarmStory,
     Order,
     OrderItem,
     Product,
     QualityAssessment,
     CheckoutOrder,
+    Recipe,
+    RecurringOrder,
     Review,
     User,
 )
@@ -408,6 +414,9 @@ class ProductDetailView(View):
         existing_review = None
         if request.user.is_authenticated:
             existing_review = reviews.filter(customer=request.user).first()
+        producer_postcode = product.producer.postal_code or "BS1 4DJ"
+        customer_postcode = request.user.postal_code if request.user.is_authenticated else "BS1 5JG"
+        food_miles = _calc_miles(customer_postcode, producer_postcode)
         return {
             "product": product,
             "reviews": reviews,
@@ -415,6 +424,7 @@ class ProductDetailView(View):
             "review_form": form or ReviewForm(),
             "existing_review": existing_review,
             "star_range": range(1, 6),
+            "food_miles": food_miles,
         }
 
     def get(self, request, pk):
@@ -450,6 +460,14 @@ class CartView(CustomerRequiredMixin, TemplateView):
             item["line_total"] = round(float(item["price"]) * int(item["quantity"]), 2)
         ctx["cart"] = cart
         ctx["total"] = round(sum(i["line_total"] for i in cart), 2)
+        customer_pc = self.request.user.postal_code if self.request.user.is_authenticated else "BS1 5JG"
+        product_ids = [item["product_id"] for item in cart]
+        products_map = {p.id: p for p in Product.objects.filter(id__in=product_ids).select_related("producer")}
+        total_miles = sum(
+            _calc_miles(customer_pc, products_map[item["product_id"]].producer.postal_code or "BS1 4DJ")
+            for item in cart if item["product_id"] in products_map
+        )
+        ctx["total_food_miles"] = round(total_miles, 1)
         return ctx
 
 
@@ -1537,6 +1555,100 @@ class OrderReceiptView(CustomerRequiredMixin, View):
             "vendor_orders": vendor_orders,
             "grand_total": grand_total,
         })
+
+
+# ── TC-018: Recurring orders ──────────────────────────────────────────────────
+
+class RecurringOrdersView(CustomerRequiredMixin, View):
+    template_name = "customer/recurring_orders.html"
+
+    def get(self, request):
+        orders = RecurringOrder.objects.filter(customer=request.user)
+        return render(request, self.template_name, {"recurring_orders": orders})
+
+    def post(self, request):
+        """Create a recurring order from current cart."""
+        cart = request.session.get("cart", [])
+        if not cart:
+            messages.error(request, "Your cart is empty.")
+            return redirect("recurring_orders")
+        recurrence = request.POST.get("recurrence", "weekly")
+        delivery_day = int(request.POST.get("delivery_day", 2))
+        notes = request.POST.get("notes", "")
+        # Calculate next order date (next occurrence of delivery_day)
+        today = date.today()
+        days_ahead = (delivery_day - today.weekday()) % 7 or 7
+        next_date = today + timedelta(days=days_ahead)
+        RecurringOrder.objects.create(
+            customer=request.user,
+            items=cart,
+            recurrence=recurrence,
+            delivery_day=delivery_day,
+            is_active=True,
+            next_order_date=next_date,
+            notes=notes,
+        )
+        messages.success(request, "Recurring order set up successfully!")
+        return redirect("recurring_orders")
+
+
+class CancelRecurringOrderView(CustomerRequiredMixin, View):
+    def post(self, request, pk):
+        ro = get_object_or_404(RecurringOrder, pk=pk, customer=request.user)
+        ro.is_active = False
+        ro.save(update_fields=["is_active"])
+        messages.success(request, "Recurring order cancelled.")
+        return redirect("recurring_orders")
+
+
+# ── TC-020: Recipes & Farm Stories ───────────────────────────────────────────
+
+class ProducerRecipesView(ProducerRequiredMixin, View):
+    template_name = "producer/recipes.html"
+
+    def _render(self, request, form=None, story_form=None):
+        recipes = Recipe.objects.filter(producer=request.user)
+        stories = FarmStory.objects.filter(producer=request.user)
+        products = Product.objects.filter(producer=request.user, status__in=["Available", "In Season"])
+        return render(request, self.template_name, {
+            "recipes": recipes,
+            "stories": stories,
+            "products": products,
+            "form": form or RecipeForm(),
+            "story_form": story_form or FarmStoryForm(),
+        })
+
+    def get(self, request):
+        return self._render(request)
+
+    def post(self, request):
+        if "add_story" in request.POST:
+            form = FarmStoryForm(request.POST)
+            if form.is_valid():
+                story = form.save(commit=False)
+                story.producer = request.user
+                story.save()
+                messages.success(request, "Farm story published!")
+                return redirect("producer_content")
+            return self._render(request, story_form=form)
+        else:
+            form = RecipeForm(request.POST)
+            if form.is_valid():
+                recipe = form.save(commit=False)
+                recipe.producer = request.user
+                recipe.save()
+                product_ids = request.POST.getlist("linked_products")
+                if product_ids:
+                    recipe.products.set(Product.objects.filter(id__in=product_ids, producer=request.user))
+                messages.success(request, "Recipe published!")
+                return redirect("producer_content")
+            return self._render(request, form=form)
+
+
+class RecipeDetailView(View):
+    def get(self, request, pk):
+        recipe = get_object_or_404(Recipe, pk=pk)
+        return render(request, "producer/recipe_detail.html", {"recipe": recipe})
 
 
 # ── Error views ───────────────────────────────────────────────────────────────
