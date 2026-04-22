@@ -35,11 +35,10 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_auc_score,
 )
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
+from torch.utils.data import DataLoader
 
-from ml.model import SUPPORTED_ARCHS, load_model
-from ml.train import HealthyRottenDataset, SEED
+from ml.data.preprocess import build_splits, SEED, VAL_SPLIT
+from ml.model import load_model
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 MODELS_DIR   = pathlib.Path(__file__).parent / "saved_models"
@@ -47,10 +46,7 @@ MODEL_PATH   = MODELS_DIR / "quality_classifier.pt"
 CM_SAVE_PATH = MODELS_DIR / "confusion_matrix.png"
 METRICS_PATH = MODELS_DIR / "model_metrics.json"
 
-IMG_SIZE   = 224
-BATCH_SIZE = 32
-VAL_SPLIT  = 0.2
-
+BATCH_SIZE  = 32
 _IN_DOCKER  = pathlib.Path("/.dockerenv").exists()
 NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 
@@ -118,26 +114,19 @@ def compute_fairness_metrics(labels: np.ndarray, preds: np.ndarray) -> dict:
     cm = confusion_matrix(labels, preds)
     tn, fp, fn, tp = cm.ravel()
 
-    # For the Healthy class (label 0): treated as "negative" in standard binary sense
-    healthy_mask = labels == 0
-    rotten_mask  = labels == 1
-
-    # FPR: fraction of healthy samples incorrectly predicted as rotten
     fpr_healthy = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-    # FNR: fraction of rotten samples incorrectly predicted as healthy
     fnr_rotten  = fn / (fn + tp) if (fn + tp) > 0 else 0.0
-    # TPR (recall) per class
-    tpr_healthy = tn / (tn + fp) if (tn + fp) > 0 else 0.0  # specificity
+    tpr_healthy = tn / (tn + fp) if (tn + fp) > 0 else 0.0
     tpr_rotten  = tp / (tp + fn) if (tp + fn) > 0 else 0.0
 
     equalized_odds_gap = abs(fpr_healthy - fnr_rotten)
 
     return {
-        "fpr_healthy":         round(fpr_healthy,        4),
-        "fnr_rotten":          round(fnr_rotten,         4),
-        "tpr_healthy_specificity": round(tpr_healthy,   4),
-        "tpr_rotten_recall":   round(tpr_rotten,         4),
-        "equalized_odds_gap":  round(equalized_odds_gap, 4),
+        "fpr_healthy":             round(fpr_healthy,        4),
+        "fnr_rotten":              round(fnr_rotten,         4),
+        "tpr_healthy_specificity": round(tpr_healthy,        4),
+        "tpr_rotten_recall":       round(tpr_rotten,         4),
+        "equalized_odds_gap":      round(equalized_odds_gap, 4),
         "fairness_verdict": (
             "PASS — equalized-odds gap ≤ 0.10"
             if equalized_odds_gap <= 0.10
@@ -149,18 +138,7 @@ def compute_fairness_metrics(labels: np.ndarray, preds: np.ndarray) -> dict:
 # ── Core evaluation function ───────────────────────────────────────────────────
 
 def _build_val_loader(data_dir: str):
-    tf = transforms.Compose([
-        transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    full_dataset = HealthyRottenDataset(root=data_dir, transform=tf)
-    n_val   = max(1, int(VAL_SPLIT * len(full_dataset)))
-    n_train = len(full_dataset) - n_val
-    _, val_set = random_split(
-        full_dataset, [n_train, n_val],
-        generator=torch.Generator().manual_seed(SEED),
-    )
+    _, val_set, _, _ = build_splits(data_dir)
     print(f"  Evaluating on {len(val_set)} held-out samples ({VAL_SPLIT:.0%} split, seed={SEED})")
     return DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
@@ -266,7 +244,6 @@ def evaluate(data_dir: str) -> None:
 
     metrics = evaluate_model(MODEL_PATH, data_dir, arch="mobilenetv2")
 
-    # Persist metrics (admin panel reads this file)
     output = {
         "model_version": "mobilenetv2-v1",
         "updated_at":    date.today().isoformat(),
@@ -293,7 +270,6 @@ def compare_models(data_dir: str) -> None:
         ("mobilenetv2", MODEL_PATH),
         ("resnet18",    MODELS_DIR / "resnet18_classifier.pt"),
     ]
-    # Also pick up any arch-specific checkpoints saved by experiment.py
     experiments_dir = MODELS_DIR / "experiments"
     if experiments_dir.exists():
         for pt in sorted(experiments_dir.glob("*.pt")):
@@ -318,7 +294,6 @@ def compare_models(data_dir: str) -> None:
         print("No checkpoints found to compare.")
         return
 
-    # Print comparison table
     print(f"\n{'═'*60}")
     print(f"{'Architecture':<18} {'Accuracy':>8} {'Precision':>10} {'Recall':>8} {'F1':>8} {'AUC':>8} {'EOGap':>8}")
     print("─" * 70)
@@ -330,14 +305,12 @@ def compare_models(data_dir: str) -> None:
             f"{r['fairness']['equalized_odds_gap']:>8.4f}"
         )
 
-    # Persist comparison
     experiments_dir.mkdir(parents=True, exist_ok=True)
     comp_path = experiments_dir / "comparison.json"
     with open(comp_path, "w") as f:
         json.dump({"evaluated_at": date.today().isoformat(), "models": results}, f, indent=2)
     print(f"\n  Comparison saved → {comp_path}")
 
-    # Update main metrics with the best model's numbers
     best = max(results, key=lambda r: r["f1_score"])
     print(f"\n  Best model by F1: {best['arch']} (F1={best['f1_score']:.4f})")
 

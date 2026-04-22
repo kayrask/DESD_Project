@@ -345,3 +345,19 @@ class QualityOverride(models.Model):
             f"Override by {self.producer.full_name}: "
             f"AI={self.ai_grade} → Producer={self.override_grade}"
         )
+
+
+class ModelEvaluation(models.Model):
+    """Records accuracy metrics each time a model is evaluated after upload."""
+    version      = models.CharField(max_length=100)
+    accuracy     = models.FloatField()
+    precision    = models.FloatField()
+    recall       = models.FloatField()
+    f1_score     = models.FloatField()
+    evaluated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["evaluated_at"]
+
+    def __str__(self):
+        return f"{self.version} acc={self.accuracy:.3f} @ {self.evaluated_at:%Y-%m-%d}"
