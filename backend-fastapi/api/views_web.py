@@ -1443,11 +1443,21 @@ class AdminAIAssessmentDetailView(AdminRequiredMixin, View):
         assessment = self._get_assessment(pk)
         xai_heatmap, xai_explanation = self._build_xai(assessment)
         overrides = assessment.overrides.select_related("producer").order_by("-created_at")
+
+        # Override rate for this product
+        product = assessment.product
+        total_for_product = QualityAssessment.objects.filter(product=product).count()
+        overrides_for_product = QualityOverride.objects.filter(assessment__product=product).count()
+        override_rate = round(overrides_for_product / total_for_product * 100) if total_for_product else 0
+
         return render(request, self.template_name, {
             "assessment": assessment,
             "xai_heatmap": xai_heatmap,
             "xai_explanation": xai_explanation,
             "overrides": overrides,
+            "override_rate": override_rate,
+            "overrides_for_product": overrides_for_product,
+            "total_for_product": total_for_product,
         })
 
     def post(self, request, pk):

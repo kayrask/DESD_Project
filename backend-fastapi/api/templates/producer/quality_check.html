@@ -85,6 +85,14 @@
           <div class="card p-4 mb-4">
             <h6 style="font-weight:700;margin-bottom:1.5rem">Assessment Result — {{ result.product_name }}</h6>
             <div class="grade-badge grade-{{ result.grade }}">{{ result.grade }}</div>
+            {% if result.predicted_class %}
+            <p class="text-center fw-semibold mb-1" style="font-size:.95rem">
+              {{ result.predicted_class }}
+            </p>
+            <p class="text-center text-muted mb-1" style="font-size:.82rem">
+              {% widthratio result.model_confidence 1 100 as conf_pct %}{{ conf_pct }}% confidence
+            </p>
+            {% endif %}
             <p class="text-center text-muted" style="font-size:.875rem;margin-bottom:1.75rem">
               {% if result.grade == 'A' %}Premium quality – eligible for featured listing{% elif result.grade == 'B' %}Standard quality – list at normal price{% else %}Below standard – consider a discount{% endif %}
             </p>

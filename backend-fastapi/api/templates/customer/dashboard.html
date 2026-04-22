@@ -75,10 +75,15 @@
               <div class="text-muted small mb-1">{{ item.category }}</div>
               <div class="fw-bold text-success mb-2">£{{ item.price }}</div>
               <div class="d-flex align-items-center gap-1 mb-2">
-                {% if item.source == "recurring" %}
+                {% if item.source == "model" %}
                 <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:.7rem"><i class="bi bi-arrow-repeat me-1"></i>Recurring</span>
                 {% else %}
                 <span class="badge" style="background:#fef3c7;color:#92400e;font-size:.7rem"><i class="bi bi-fire me-1"></i>Trending</span>
+                {% endif %}
+                {% if item.probability %}
+                <span class="badge" style="background:#f0fdf4;color:#15803d;font-size:.7rem">
+                  {{ item.probability|floatformat:0 }}% likely
+                </span>
                 {% endif %}
               </div>
               <div class="text-muted" style="font-size:.78rem">{{ item.reason }}</div>

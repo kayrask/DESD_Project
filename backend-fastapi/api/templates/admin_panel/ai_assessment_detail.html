@@ -58,6 +58,15 @@
                 </td>
               </tr>
               <tr><th>Healthy</th><td>{% if assessment.is_healthy %}<span class="text-success">Yes</span>{% else %}<span class="text-danger">No – Rotten detected</span>{% endif %}</td></tr>
+              <tr>
+                <th>Override Rate</th>
+                <td>
+                  <span style="font-weight:600;color:{% if override_rate > 30 %}#dc2626{% elif override_rate > 10 %}#d97706{% else %}#15803d{% endif %}">
+                    {{ override_rate }}%
+                  </span>
+                  <span class="text-muted" style="font-size:.8rem"> ({{ overrides_for_product }}/{{ total_for_product }} assessments for this product)</span>
+                </td>
+              </tr>
             </table>
           </div>
 
