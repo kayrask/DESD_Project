@@ -116,9 +116,10 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
             except Exception:
                 pass
 
-        # Strip verbose dataset suffixes from class names in the reasoning text
+        # Strip verbose dataset suffixes from class names for display
         _STRIP = "_fruit_and_vegetable_diseases_dataset"
         reasoning = result.reasoning.replace(_STRIP, "")
+        predicted_class = result.predicted_class.replace(_STRIP, "").replace("_", " ").title()
 
         # Derive colour/size/ripeness from image pixels (independent of CNN)
         img_scores = _compute_image_scores(image_bytes)
@@ -140,6 +141,7 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
             "model_confidence": round(result.confidence, 4),
             "is_healthy":       is_healthy,
             "model_version":    "efficientnet-b0-v1",
+            "predicted_class":  predicted_class,
             "xai_heatmap":      xai_heatmap,
             "xai_explanation":  reasoning,
         }

@@ -150,6 +150,21 @@
         </div>
       </div>
 
+      <!-- Training history chart -->
+      {% if stats.training_chart %}
+      <div class="card p-4 mb-4">
+        <h6 style="font-weight:700;margin-bottom:1.25rem">
+          <i class="bi bi-graph-up-arrow me-2 text-success"></i>EfficientNet-B0 Training History
+        </h6>
+        <img src="data:image/png;base64,{{ stats.training_chart }}"
+             alt="Training accuracy and loss curves"
+             style="width:100%;border-radius:8px;border:1px solid var(--border)">
+        <p class="text-muted mt-2 mb-0" style="font-size:.78rem">
+          <i class="bi bi-info-circle me-1"></i>Training curve for the EfficientNet-B0 model — 28 classes (14 produce types × healthy/rotten), two-phase fine-tuning.
+        </p>
+      </div>
+      {% endif %}
+
       <!-- Model metrics + confusion matrix -->
       {% if model_metrics %}
       <div class="row g-4 mb-4">

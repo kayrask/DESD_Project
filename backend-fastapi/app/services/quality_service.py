@@ -97,6 +97,7 @@ def assess_product_image(
         "is_healthy": result["is_healthy"],
         "notes": notes,
         "warnings": warnings,
+        "predicted_class": result.get("predicted_class"),
         # XAI fields — populated when explain=True succeeds; None otherwise
         "xai_heatmap": result.get("xai_heatmap"),
         "xai_explanation": result.get("xai_explanation"),
@@ -130,6 +131,15 @@ def get_producer_assessments(producer: User) -> list[dict]:
     ]
 
 
+def _load_training_chart() -> str | None:
+    import base64, pathlib
+    chart_path = pathlib.Path(__file__).parent.parent.parent / "fruit_quality_ai" / "results" / "training_history.png"
+    if chart_path.exists():
+        with open(chart_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    return None
+
+
 def get_ai_monitoring_stats() -> dict:
     """
     Admin-facing stats for the AI monitoring dashboard.
@@ -147,6 +157,8 @@ def get_ai_monitoring_stats() -> dict:
             "avg_confidence": 0,
             "low_confidence_count": 0,
             "model_versions": [],
+            "override_count": QualityOverride.objects.count(),
+            "training_chart": _load_training_chart(),
         }
 
     grade_dist = {
@@ -170,4 +182,5 @@ def get_ai_monitoring_stats() -> dict:
         "low_confidence_count": low_conf,
         "model_versions": versions,
         "override_count": override_count,
+        "training_chart": _load_training_chart(),
     }
