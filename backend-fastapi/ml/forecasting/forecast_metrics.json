@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-04-22T19:23:18.107026",
+  "test_weeks": 4,
+  "n_products": 8,
+  "mean_baseline_mae": 5.3438,
+  "mean_sarima_mae": 4.8863,
+  "improvement_pct": 8.56,
+  "per_product": [
+    {
+      "product": "Tomatoes",
+      "baseline_mae": 5.25,
+      "sarima_mae": 4.36,
+      "baseline_rmse": 5.32,
+      "sarima_rmse": 4.45,
+      "improvement_%": 16.9
+    },
+    {
+      "product": "Strawberries",
+      "baseline_mae": 4.75,
+      "sarima_mae": 2.08,
+      "baseline_rmse": 5.27,
+      "sarima_rmse": 2.9,
+      "improvement_%": 56.3
+    },
+    {
+      "product": "Courgettes",
+      "baseline_mae": 5.0,
+      "sarima_mae": 5.69,
+      "baseline_rmse": 5.24,
+      "sarima_rmse": 5.95,
+      "improvement_%": -13.8
+    },
+    {
+      "product": "Apples",
+      "baseline_mae": 2.0,
+      "sarima_mae": 4.59,
+      "baseline_rmse": 2.29,
+      "sarima_rmse": 4.66,
+      "improvement_%": -129.7
+    },
+    {
+      "product": "Potatoes",
+      "baseline_mae": 3.0,
+      "sarima_mae": 3.47,
+      "baseline_rmse": 3.39,
+      "sarima_rmse": 4.04,
+      "improvement_%": -15.7
+    },
+    {
+      "product": "Carrots",
+      "baseline_mae": 4.5,
+      "sarima_mae": 4.45,
+      "baseline_rmse": 4.89,
+      "sarima_rmse": 4.87,
+      "improvement_%": 1.2
+    },
+    {
+      "product": "Lettuce",
+      "baseline_mae": 12.5,
+      "sarima_mae": 10.12,
+      "baseline_rmse": 13.06,
+      "sarima_rmse": 10.78,
+      "improvement_%": 19.1
+    },
+    {
+      "product": "Raspberries",
+      "baseline_mae": 5.75,
+      "sarima_mae": 4.33,
+      "baseline_rmse": 6.6,
+      "sarima_rmse": 5.49,
+      "improvement_%": 24.7
+    }
+  ]
+}

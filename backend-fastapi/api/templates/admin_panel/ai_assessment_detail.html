@@ -13,6 +13,7 @@
       <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
       <span class="sidebar-label">AI</span>
       <a href="{% url 'admin_ai_monitoring' %}" class="active"><i class="bi bi-stars"></i> AI Monitoring</a>
+      <a href="{% url 'admin_override_review' %}"><i class="bi bi-pencil-square"></i> Override Review</a>
     </div>
 
     <!-- Main -->
@@ -127,11 +128,74 @@
           {% endif %}
 
           {% if xai_explanation %}
-          <div class="card p-4">
+          <div class="card p-4 mb-4">
             <h6 style="font-weight:700;margin-bottom:.75rem">
               <i class="bi bi-info-circle me-1 text-primary"></i>Why this grade?
             </h6>
             <p style="font-size:.9rem;line-height:1.6;margin:0">{{ xai_explanation }}</p>
+          </div>
+          {% endif %}
+
+          <!-- Admin override form -->
+          <div class="card p-4 mb-4">
+            <h6 style="font-weight:700;margin-bottom:1rem">
+              <i class="bi bi-pencil-square me-1"></i>Override AI Grade
+            </h6>
+            {% if messages %}
+            {% for m in messages %}
+            <div class="alert alert-{{ m.tags|default:'info' }} py-2 mb-3" style="font-size:.82rem">{{ m }}</div>
+            {% endfor %}
+            {% endif %}
+            <form method="post">
+              {% csrf_token %}
+              <div class="row g-2">
+                <div class="col-sm-4">
+                  <label class="form-label" style="font-size:.8rem">Correct Grade</label>
+                  <select name="override_grade" class="form-select form-select-sm" required>
+                    <option value="">-- select --</option>
+                    <option value="A" {% if assessment.grade == 'A' %}selected{% endif %}>A – Premium</option>
+                    <option value="B" {% if assessment.grade == 'B' %}selected{% endif %}>B – Standard</option>
+                    <option value="C" {% if assessment.grade == 'C' %}selected{% endif %}>C – Discounted</option>
+                  </select>
+                </div>
+                <div class="col-sm-8">
+                  <label class="form-label" style="font-size:.8rem">Reason</label>
+                  <select name="reason" class="form-select form-select-sm" required>
+                    <option value="">-- select --</option>
+                    <option value="wrong_grade">AI grade was incorrect</option>
+                    <option value="context">Context the model could not see</option>
+                    <option value="image_quality">Poor image quality affected the result</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div class="col-12">
+                  <label class="form-label" style="font-size:.8rem">Notes (optional)</label>
+                  <input type="text" name="notes" class="form-control form-control-sm" maxlength="500" placeholder="Admin annotation…">
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-send me-1"></i>Record Override
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <!-- Existing overrides for this assessment -->
+          {% if overrides %}
+          <div class="card p-4">
+            <h6 style="font-weight:700;margin-bottom:1rem">Override History ({{ overrides|length }})</h6>
+            {% for o in overrides %}
+            <div class="d-flex gap-3 align-items-start mb-3 pb-3 {% if not forloop.last %}border-bottom{% endif %}">
+              <span class="badge fs-6 px-2 py-1" style="background:{% if o.override_grade == 'A' %}#dcfce7;color:#15803d{% elif o.override_grade == 'B' %}#fef3c7;color:#b45309{% else %}#fee2e2;color:#dc2626{% endif %}">{{ o.override_grade }}</span>
+              <div style="font-size:.82rem;flex:1">
+                <div><strong>{{ o.producer.full_name }}</strong> changed AI Grade {{ o.ai_grade }} → {{ o.override_grade }}</div>
+                <div style="color:var(--muted)">{{ o.get_reason_display }}</div>
+                {% if o.notes %}<div style="color:var(--muted);font-style:italic">{{ o.notes }}</div>{% endif %}
+                <div style="color:var(--muted)">{{ o.created_at|date:"d M Y H:i" }}</div>
+              </div>
+            </div>
+            {% endfor %}
           </div>
           {% endif %}
         </div>

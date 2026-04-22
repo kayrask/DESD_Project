@@ -20,7 +20,7 @@ Evidence prefix: ai-integration
 
 from __future__ import annotations
 
-from api.models import Product, QualityAssessment, User
+from api.models import Product, QualityAssessment, QualityOverride, User
 from ml.inference import classify_image
 
 
@@ -157,6 +157,8 @@ def get_ai_monitoring_stats() -> dict:
     low_conf = qs.filter(model_confidence__lt=LOW_CONFIDENCE_THRESHOLD).count()
     versions = list(qs.values_list("model_version", flat=True).distinct())
 
+    override_count = QualityOverride.objects.count()
+
     return {
         "total_assessments": total,
         "grade_distribution": {
@@ -167,4 +169,5 @@ def get_ai_monitoring_stats() -> dict:
         "avg_confidence": round(avg_conf * 100, 1),
         "low_confidence_count": low_conf,
         "model_versions": versions,
+        "override_count": override_count,
     }

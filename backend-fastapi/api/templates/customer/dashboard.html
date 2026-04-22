@@ -24,7 +24,7 @@
   </div>
 
   <!-- Stats row -->
-  <div class="row g-4 mb-5">
+  <div class="row g-4 mb-4">
     <div class="col-md-4">
       <div class="card stat-card border-0 shadow-sm p-4">
         <div class="text-muted small mb-1">Upcoming Deliveries</div>
@@ -54,6 +54,50 @@
           </a>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Suggested Reorder card -->
+  <div class="card border-0 shadow-sm mb-5">
+    <div class="card-body p-4">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <i class="bi bi-stars text-warning fs-5"></i>
+        <h5 class="fw-bold mb-0">Suggested for You</h5>
+        <span class="badge bg-light text-muted fw-normal ms-1" style="font-size:.75rem">AI Reorder Prediction</span>
+      </div>
+      {% if reorder_suggestions %}
+      <div class="row g-3">
+        {% for item in reorder_suggestions %}
+        <div class="col-sm-6 col-lg-4">
+          <div class="border rounded-3 p-3 h-100 d-flex flex-column justify-content-between" style="background:#fafafa">
+            <div>
+              <div class="fw-semibold mb-1">{{ item.name }}</div>
+              <div class="text-muted small mb-1">{{ item.category }}</div>
+              <div class="fw-bold text-success mb-2">£{{ item.price }}</div>
+              <div class="d-flex align-items-center gap-1 mb-2">
+                {% if item.source == "recurring" %}
+                <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:.7rem"><i class="bi bi-arrow-repeat me-1"></i>Recurring</span>
+                {% else %}
+                <span class="badge" style="background:#fef3c7;color:#92400e;font-size:.7rem"><i class="bi bi-fire me-1"></i>Trending</span>
+                {% endif %}
+              </div>
+              <div class="text-muted" style="font-size:.78rem">{{ item.reason }}</div>
+            </div>
+            <a href="{% url 'cart_add' item.product_id %}"
+               class="btn btn-sm btn-brand mt-3 w-100"
+               style="font-size:.8rem">
+              <i class="bi bi-cart-plus me-1"></i>Add to Cart
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center text-muted py-3" style="font-size:.875rem">
+        <i class="bi bi-bag-heart" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.6rem"></i>
+        Place your first order to start receiving personalised reorder suggestions.
+      </div>
+      {% endif %}
     </div>
   </div>
 

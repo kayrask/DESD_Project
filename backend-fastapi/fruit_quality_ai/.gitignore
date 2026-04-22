@@ -1,0 +1,12 @@
+# Training dataset — too large for git (5.9 GB, 29k images)
+data/raw/
+
+# Grad-CAM outputs — generated at runtime
+results/xai/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Uploaded images
+uploads/

@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-04-22T19:23:34.641012",
+  "n_training_samples": 1077,
+  "n_test_samples": 270,
+  "reorder_rate": 0.2606,
+  "auc_roc": 0.9417,
+  "precision": 0.697,
+  "recall": 0.9857,
+  "f1_score": 0.8166,
+  "feature_cols": [
+    "recency",
+    "frequency",
+    "monetary",
+    "last_qty",
+    "avg_interval_days"
+  ]
+}

@@ -296,6 +296,57 @@ class FarmStory(models.Model):
         return f"{self.title} by {self.producer.full_name}"
 
 
+GRADE_OVERRIDE_CHOICES = [
+    ("A", "Grade A – Healthy / Premium"),
+    ("B", "Grade B – Standard"),
+    ("C", "Grade C – Discounted / Borderline"),
+]
+
+OVERRIDE_REASON_CHOICES = [
+    ("wrong_grade",    "AI grade was incorrect"),
+    ("context",        "Context the model could not see (e.g. variety, age)"),
+    ("image_quality",  "Poor image quality affected the result"),
+    ("other",          "Other"),
+]
+
+
+class QualityOverride(models.Model):
+    """
+    Records when a producer disagrees with the AI quality grade.
+
+    These overrides serve two purposes:
+    1. Immediate transparency — the producer's judgement is preserved alongside
+       the model prediction so downstream users can see both.
+    2. Feedback loop — the override table is the source of ground-truth
+       corrections used to prepare new labelled data for model retraining
+       (see ml/prepare_feedback.py).
+
+    Producer-parity fairness note: tracking overrides per producer allows us
+    to detect if the model systematically mis-grades certain producers' produce,
+    which would constitute a fairness issue requiring investigation.
+    """
+    assessment = models.ForeignKey(
+        QualityAssessment, on_delete=models.CASCADE, related_name="overrides"
+    )
+    producer = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="quality_overrides"
+    )
+    ai_grade       = models.CharField(max_length=1, choices=GRADE_CHOICES)
+    override_grade = models.CharField(max_length=1, choices=GRADE_OVERRIDE_CHOICES)
+    reason         = models.CharField(max_length=30, choices=OVERRIDE_REASON_CHOICES)
+    notes          = models.TextField(blank=True, default="")
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"Override by {self.producer.full_name}: "
+            f"AI={self.ai_grade} → Producer={self.override_grade}"
+        )
+
+
 class ModelEvaluation(models.Model):
     """Records accuracy metrics each time a model is evaluated after upload."""
     version      = models.CharField(max_length=100)
