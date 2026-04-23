@@ -25,7 +25,6 @@ _model_cache: dict | None = None   # loaded once, reused across requests
 
 
 def _load_model() -> dict | None:
-    """Load and cache the serialised SARIMA forecast model from disk."""
     global _model_cache
     if _model_cache is not None:
         return _model_cache

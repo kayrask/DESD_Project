@@ -36,7 +36,6 @@ class GradCAM:
     """
 
     def __init__(self, model: nn.Module, target_layer: nn.Module) -> None:
-        """Register forward and backward hooks on target_layer for Grad-CAM."""
         self.model = model
         self._activations: Optional[torch.Tensor] = None
         self._gradients: Optional[torch.Tensor] = None
@@ -45,11 +44,9 @@ class GradCAM:
         self._bwd_hook = target_layer.register_full_backward_hook(self._save_gradient)
 
     def _save_activation(self, module, input, output) -> None:
-        """Forward hook that caches layer activations."""
         self._activations = output.detach()
 
     def _save_gradient(self, module, grad_input, grad_output) -> None:
-        """Backward hook that caches layer gradients."""
         self._gradients = grad_output[0].detach()
 
     def generate(

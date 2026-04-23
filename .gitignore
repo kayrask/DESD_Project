@@ -6,14 +6,3 @@ node_modules/
 dist/
 .DS_Store
 frontend-react/
-
-# Large dataset and model files
-backend-fastapi/ml/Fruit And Vegetable Diseases Dataset/
-backend-fastapi/ml/saved_models/old models/
-backend-fastapi/train_package.zip
-*.pt
-*.zip
-backend-fastapi/ml/Fruit And Vegetable Diseases Dataset/
-backend-fastapi/ml/saved_models/old models/
-*.pt
-*.zip

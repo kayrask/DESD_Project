@@ -35,7 +35,6 @@ class EarlyStopping:
     """Stop training when validation loss stops improving for `patience` epochs."""
 
     def __init__(self, patience: int = EARLY_STOPPING_PATIENCE, min_delta: float = 1e-4):
-        """Initialise early stopping with the given patience and min-delta."""
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
@@ -49,7 +48,6 @@ class EarlyStopping:
         self.should_stop = False
 
     def step(self, val_loss: float) -> bool:
-        """Update early stopping state; return True if training should stop."""
         if self.best_loss is None or val_loss < self.best_loss - self.min_delta:
             self.best_loss = val_loss
             self.counter = 0
@@ -85,7 +83,6 @@ class Trainer:
         label_smoothing: float = LABEL_SMOOTHING,
         pretrained: bool = True,
     ):
-        """Initialise the trainer with config, model, and data loaders."""
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -113,7 +110,6 @@ class Trainer:
     # ── Core epoch loop ────────────────────────────────────────────────────────
 
     def _run_epoch(self, loader: DataLoader, training: bool) -> tuple[float, float]:
-        """Run one forward (and optionally backward) pass over loader; return (loss, accuracy)."""
         self.model.train(training)
         total_loss, correct, total = 0.0, 0, 0
 
@@ -215,7 +211,6 @@ class Trainer:
         return self.history
 
     def _setup_optimizer(self, lr: float, num_epochs: int) -> None:
-        """Configure Adam optimiser with cosine-annealing LR schedule."""
         self.optimizer = Adam(
             filter(lambda p: p.requires_grad, self.model.parameters()),
             lr=lr,
@@ -226,11 +221,9 @@ class Trainer:
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=num_epochs, eta_min=1e-7)
 
     def _save_checkpoint(self, filename: str) -> None:
-        """Save model weights to disk under checkpoint_dir."""
         torch.save(self.model.state_dict(), self.checkpoint_dir / filename)
 
     def _load_checkpoint(self, filename: str) -> None:
-        """Restore model weights from a saved checkpoint file."""
         path = self.checkpoint_dir / filename
         self.model.load_state_dict(torch.load(path, map_location=self.device))
         print(f"  [Trainer] Loaded checkpoint: {path.name}")

@@ -38,11 +38,9 @@ class PredictionResult:
     explanation_path: Optional[str]
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialise the prediction result to a plain dict."""
         return asdict(self)
 
     def to_json(self) -> str:
-        """Serialise the prediction result to an indented JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
     def print_report(self) -> None:
@@ -92,7 +90,6 @@ class QualityPredictor:
         generate_xai: bool = True,
         xai_output_dir: Path = XAI_OUTPUT_DIR,
     ) -> None:
-        """Initialise the predictor with a model, device, and inference config."""
         self.model = model
         self.class_names = class_names
         self.backbone = backbone

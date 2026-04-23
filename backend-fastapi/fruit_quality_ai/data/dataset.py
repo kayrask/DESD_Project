@@ -46,16 +46,13 @@ class _TransformSubset(Dataset):
     to share the same underlying ImageFolder but use different augmentations."""
 
     def __init__(self, subset: Subset, transform) -> None:
-        """Wrap a PyTorch Subset with a custom transform pipeline."""
         self.subset = subset
         self.transform = transform
 
     def __len__(self) -> int:
-        """Return the number of samples in the dataset."""
         return len(self.subset)
 
     def __getitem__(self, idx):
-        """Load, transform, and return the image-label pair at index idx."""
         image, label = self.subset.dataset.imgs[self.subset.indices[idx]]
         from PIL import Image
         image = Image.open(image).convert("RGB")
