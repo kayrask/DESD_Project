@@ -386,7 +386,7 @@ class CustomerDashboardView(CustomerRequiredMixin, ListView):
         ctx["status_filter"] = self.request.GET.get("status", "")
         try:
             from app.services.reorder_service import predict_reorder_items
-            ctx["reorder_suggestions"] = predict_reorder_items(getattr(user, "email", ""))
+            ctx["reorder_suggestions"] = predict_reorder_items(getattr(user, "full_name", ""))
         except Exception:
             logger.exception("predict_reorder_items failed for %s", getattr(user, "email", "?"))
             ctx["reorder_suggestions"] = []
@@ -897,6 +897,12 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
             logger.exception("get_demand_forecast_dashboard failed for producer %s", producer.pk)
             forecast = {"products": [], "labels": [], "top_product": None, "high_demand_alert": None}
 
+        try:
+            from app.services.price_service import get_quality_trend
+            quality_trend = get_quality_trend(producer, weeks=8)
+        except Exception:
+            quality_trend = []
+
         ctx = {
             "summary": {
                 "orders_today": Order.objects.filter(
@@ -908,6 +914,8 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
             "low_stock_products": low_stock_qs,
             "forecast": forecast,
             "forecast_json": _json.dumps(forecast),
+            "quality_trend": quality_trend,
+            "quality_trend_json": _json.dumps(quality_trend),
         }
         return render(request, self.template_name, ctx)
 
@@ -916,7 +924,15 @@ class ProducerProductsView(ProducerRequiredMixin, View):
     template_name = "producer/products.html"
 
     def _render(self, request, form=None):
-        products = Product.objects.filter(producer=request.user).order_by("name")
+        products = list(Product.objects.filter(producer=request.user).order_by("name"))
+        try:
+            from app.services.waste_service import get_waste_risks
+            risks = get_waste_risks(products)
+            for p in products:
+                setattr(p, "waste_risk", risks.get(p.id))
+        except Exception:
+            for p in products:
+                setattr(p, "waste_risk", None)
         return render(request, self.template_name, {
             "products": products,
             "form": form or ProductForm(),
@@ -1389,7 +1405,18 @@ class ProducerQualityCheckView(ProducerRequiredMixin, View):
                 product = Product.objects.get(id=int(product_id), producer=request.user)
                 result["product_id"] = product.id
                 result["current_stock"] = product.stock
+                # Price recommendation + waste risk after each quality check
+                from app.services.forecast_service import get_demand_forecast
+                from app.services.price_service import recommend_price
+                from app.services.waste_service import compute_waste_risk
+                fc = get_demand_forecast(product.id, weeks=1)
+                result["price_recommendation"] = recommend_price(
+                    product, result["grade"], fc.get("high_demand", False)
+                )
+                result["waste_risk"] = compute_waste_risk(product)
             except Product.DoesNotExist:
+                pass
+            except Exception:
                 pass
             messages.success(
                 request,

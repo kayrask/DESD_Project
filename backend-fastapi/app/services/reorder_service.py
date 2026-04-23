@@ -38,13 +38,13 @@ def _load_artifact() -> dict | None:
         return None
 
 
-def predict_reorder_items(customer_email: str) -> list[dict]:
+def predict_reorder_items(customer_name: str) -> list[dict]:
     """
     Return top suggested reorder items for a customer, sorted by reorder
     probability (highest first).
 
     Args:
-        customer_email: The customer's email address (used to look up order history).
+        customer_name: The customer's full name as stored in Order.customer_name.
 
     Returns:
         List of dicts:
@@ -65,14 +65,14 @@ def predict_reorder_items(customer_email: str) -> list[dict]:
     artifact = _load_artifact()
 
     if artifact:
-        ml_results = _model_predict(customer_email, artifact)
+        ml_results = _model_predict(customer_name, artifact)
         if ml_results:
             return ml_results[:5]
 
     return _trending_fallback()
 
 
-def _compute_rfm(customer_email: str) -> list[dict]:
+def _compute_rfm(customer_name: str) -> list[dict]:
     """Compute RFM features per product for this customer from the Django DB."""
     from django.db.models import Sum, Count, Avg
     from api.models import OrderItem
@@ -80,7 +80,7 @@ def _compute_rfm(customer_email: str) -> list[dict]:
     today = date.today()
     rows = (
         OrderItem.objects
-        .filter(order__customer_name=customer_email)
+        .filter(order__customer_name=customer_name)
         .select_related("product", "order")
         .values("product__id", "product__name", "product__category",
                 "product__price", "order__delivery_date", "quantity", "unit_price")
@@ -137,13 +137,13 @@ def _compute_rfm(customer_email: str) -> list[dict]:
     return features
 
 
-def _model_predict(customer_email: str, artifact: dict) -> list[dict]:
+def _model_predict(customer_name: str, artifact: dict) -> list[dict]:
     """Use the trained Logistic Regression pipeline to score each product."""
     try:
         pipeline     = artifact["pipeline"]
         feature_cols = artifact["feature_cols"]
 
-        product_features = _compute_rfm(customer_email)
+        product_features = _compute_rfm(customer_name)
         if not product_features:
             return []
 

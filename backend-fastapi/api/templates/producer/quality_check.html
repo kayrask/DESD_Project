@@ -184,6 +184,47 @@
             </div>
             {% endif %}
 
+            <!-- AI Price Recommendation -->
+            {% if result.price_recommendation %}
+            {% with pr=result.price_recommendation %}
+            <div class="mt-3 p-3 rounded-3" style="background:{% if pr.action == 'increase' %}#f0fdf4{% elif pr.action == 'discount' %}#fff7ed{% else %}#f8fafc{% endif %};border:1px solid {% if pr.action == 'increase' %}#bbf7d0{% elif pr.action == 'discount' %}#fed7aa{% else %}#e2e8f0{% endif %}">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <i class="bi bi-tag-fill" style="color:{% if pr.action == 'increase' %}#15803d{% elif pr.action == 'discount' %}#d97706{% else %}#64748b{% endif %}"></i>
+                <span style="font-weight:700;font-size:.85rem">AI Price Recommendation</span>
+                {% if pr.action == 'increase' %}<span class="badge" style="background:#dcfce7;color:#15803d;font-size:.7rem">Increase</span>
+                {% elif pr.action == 'discount' %}<span class="badge" style="background:#ffedd5;color:#c2410c;font-size:.7rem">Discount</span>
+                {% else %}<span class="badge" style="background:#f1f5f9;color:#475569;font-size:.7rem">Hold</span>{% endif %}
+              </div>
+              <div class="d-flex align-items-baseline gap-3 mb-1">
+                <span style="font-size:.8rem;color:var(--muted)">Current: <strong>£{{ pr.current_price }}</strong></span>
+                <span style="font-size:.8rem">→</span>
+                <span style="font-size:.95rem;font-weight:700;color:{% if pr.action == 'increase' %}#15803d{% elif pr.action == 'discount' %}#c2410c{% else %}var(--text){% endif %}">
+                  £{{ pr.suggested_price }}
+                  {% if pr.change_pct != 0 %}({% if pr.change_pct > 0 %}+{% endif %}{{ pr.change_pct }}%){% endif %}
+                </span>
+              </div>
+              <p style="font-size:.78rem;color:var(--muted);margin:0">{{ pr.reason }}</p>
+            </div>
+            {% endwith %}
+            {% endif %}
+
+            <!-- Waste Risk -->
+            {% if result.waste_risk %}
+            {% with wr=result.waste_risk %}
+            <div class="mt-2 p-3 rounded-3 d-flex align-items-start gap-3" style="background:#f8fafc;border:1px solid #e2e8f0">
+              <div style="width:44px;height:44px;border-radius:50%;background:{% if wr.risk_level == 'High' %}#fee2e2{% elif wr.risk_level == 'Medium' %}#fef3c7{% else %}#dcfce7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <span style="font-weight:800;font-size:.9rem;color:{{ wr.risk_colour }}">{{ wr.risk_score }}</span>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:.85rem">Spoilage Risk — <span style="color:{{ wr.risk_colour }}">{{ wr.risk_level }}</span></div>
+                <div style="font-size:.78rem;color:var(--muted)">
+                  Grade {{ wr.grade }} · {{ wr.stock }} units in stock · 2-week forecast {{ wr.predicted_demand_2w }} units
+                </div>
+              </div>
+            </div>
+            {% endwith %}
+            {% endif %}
+
             <!-- Grade Override -->
             <div class="mt-4 pt-3" style="border-top:1px solid var(--border)">
               <h6 style="font-weight:700;font-size:.85rem;margin-bottom:.75rem">
