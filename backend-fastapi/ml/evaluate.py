@@ -54,6 +54,7 @@ NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 # ── Confusion matrix visualisation ────────────────────────────────────────────
 
 def _save_confusion_matrix(cm: np.ndarray, save_path: pathlib.Path, title: str = "") -> None:
+    """Render and save a labelled confusion matrix PNG to ``save_path``."""
     fig, ax = plt.subplots(figsize=(5, 4))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
     plt.colorbar(im, ax=ax)
@@ -140,6 +141,7 @@ def compute_fairness_metrics(labels: np.ndarray, preds: np.ndarray) -> dict:
 # ── Core evaluation function ───────────────────────────────────────────────────
 
 def _build_val_loader(data_dir: str):
+    """Build the validation DataLoader from the dataset split."""
     _, val_set, _, _ = build_splits(data_dir)
     print(f"  Evaluating on {len(val_set)} held-out samples ({VAL_SPLIT:.0%} split, seed={SEED})")
     return DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
@@ -241,6 +243,7 @@ def evaluate_model(
 # ── Single-model entry point ───────────────────────────────────────────────────
 
 def evaluate(data_dir: str) -> None:
+    """CLI entry point: evaluate the saved model and write metrics JSON."""
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"No trained model at {MODEL_PATH}. Run ml/train.py first.")
 

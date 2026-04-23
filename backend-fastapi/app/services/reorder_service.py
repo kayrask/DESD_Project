@@ -25,6 +25,7 @@ _artifact_cache: dict | None = None
 
 
 def _load_artifact() -> dict | None:
+    """Load the serialised reorder model artifact from disk (cached)."""
     global _artifact_cache
     if _artifact_cache is not None:
         return _artifact_cache

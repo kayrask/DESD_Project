@@ -161,6 +161,7 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
 # ── Legacy model: MobileNetV2 ─────────────────────────────────────────────────
 
 def _load_legacy_once():
+    """Lazy-load the MobileNetV2 legacy model into the global cache (once)."""
     global _legacy_model, _device
     if _legacy_model is not None:
         return _legacy_model
@@ -179,6 +180,7 @@ def reload_model():
 
 
 def _preprocess(image_bytes: bytes):
+    """Decode image bytes and apply the ImageNet normalisation transform."""
     from PIL import Image
     from torchvision import transforms
     tf = transforms.Compose([
@@ -193,6 +195,7 @@ def _preprocess(image_bytes: bytes):
 # ── Pixel-level quality scores (architecture-independent) ─────────────────────
 
 def _compute_image_scores(image_bytes: bytes) -> dict:
+    """Derive pixel-level colour, size, and ripeness scores from raw image bytes."""
     from PIL import Image
     import numpy as np
 
@@ -235,6 +238,7 @@ def _compute_image_scores(image_bytes: bytes) -> dict:
 
 
 def _grade_from_scores(color, size, ripeness):
+    """Map score thresholds to a grade (A/B/C) per the case study spec."""
     # Thresholds from the Advanced AI case study:
     #   Grade A: Color ≥ 75, Size ≥ 80, Ripeness ≥ 70
     #   Grade B: Color ≥ 65, Size ≥ 70, Ripeness ≥ 60
@@ -247,6 +251,7 @@ def _grade_from_scores(color, size, ripeness):
 
 
 def _build_explanation(grade, color, size, ripeness):
+    """Build a human-readable XAI explanation string for the given grade and scores."""
     parts = []
     parts.append(
         "excellent colour uniformity" if color >= 75
@@ -268,6 +273,7 @@ def _build_explanation(grade, color, size, ripeness):
 
 
 def _grad_cam_heatmap(model, tensor, image_bytes):
+    """Generate a Grad-CAM heatmap blended with the original image (base64 PNG)."""
     import numpy as np
     from PIL import Image
     try:
@@ -307,6 +313,7 @@ def _grad_cam_heatmap(model, tensor, image_bytes):
 # ── KMeans fallback ───────────────────────────────────────────────────────────
 
 def _kmeans_fallback(image_bytes):
+    """KMeans colour-cluster fallback used when no trained model is available."""
     from PIL import Image
     import numpy as np
     from sklearn.cluster import KMeans

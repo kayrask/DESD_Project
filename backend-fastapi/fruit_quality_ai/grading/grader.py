@@ -28,6 +28,8 @@ from config import GRADE_A_CONFIDENCE_THRESHOLD, GRADE_B_CONFIDENCE_THRESHOLD
 
 @dataclass
 class GradeResult:
+    """Dataclass holding the grading output (grade, scores, and explanation)."""
+
     grade: str            # "A", "B", or "C"
     condition: str        # "fresh", "rotten", or "uncertain"
     recommendation: str
