@@ -30,6 +30,10 @@
 
     /* Navbar */
     .navbar { background: var(--surface) !important; border-bottom: 1px solid var(--border); padding: 0.75rem 0; position: sticky; top: 0; z-index: 1000; }
+    .navbar-shell { padding-left: 0.75rem; padding-right: 0.75rem; }
+    @media (min-width: 992px) {
+      .navbar-shell { padding-left: 1rem; padding-right: 1rem; }
+    }
     .navbar-brand { font-weight: 800; font-size: 1.1rem; color: var(--brand-darker) !important; letter-spacing: -0.02em; }
     .nav-link { color: var(--muted) !important; font-weight: 500; font-size: 0.875rem; padding: 0.4rem 0.7rem !important; border-radius: 6px; transition: all 0.15s; }
     .nav-link:hover { color: var(--text) !important; background: var(--bg); }
@@ -40,8 +44,9 @@
     .user-chip { background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
 
     /* Sidebar */
-    .sidebar { background: var(--sidebar-bg); min-height: calc(100vh - 61px); padding: 1.5rem 0.75rem; position: sticky; top: 61px; align-self: flex-start; }
+    .sidebar { background: var(--sidebar-bg); min-height: calc(100vh - 61px); padding: 1.5rem 0.75rem; position: sticky; top: 61px; align-self: flex-start; margin-top: 0; border-radius: 0; }
     .sidebar-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,.3); padding: 0.5rem 0.75rem; margin-top: 1rem; display: block; }
+    .sidebar-heading { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,.3); padding: 0.5rem 0.75rem; margin-top: 1rem; display: block; }
     .sidebar a { display: flex; align-items: center; gap: 0.6rem; color: rgba(255,255,255,.65); text-decoration: none; padding: 0.55rem 0.75rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; transition: all 0.15s; margin-bottom: 2px; }
     .sidebar a:hover { background: var(--sidebar-hover); color: #fff; }
     .sidebar a.active { background: var(--brand); color: #fff; }
@@ -89,6 +94,27 @@
     .page-header h2, .page-header h3 { font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
     .page-header p { color: var(--muted); font-size: 0.9rem; margin: 0; }
 
+    /* Flash messages */
+    .flash-stack {
+      position: fixed;
+      top: 76px;
+      left: 0;
+      right: 0;
+      z-index: 1100;
+      pointer-events: none;
+    }
+    .flash-stack .container-fluid {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    .flash-alert {
+      pointer-events: auto;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+      box-shadow: var(--shadow-md);
+    }
+
     footer { background: var(--sidebar-bg); color: rgba(255,255,255,.35); font-size: 0.8rem; text-align: center; padding: 1.5rem; margin-top: auto; }
   </style>
   {% block extra_head %}{% endblock %}
@@ -96,7 +122,7 @@
 <body>
 
 <nav class="navbar navbar-expand-lg">
-  <div class="container">
+  <div class="container-fluid navbar-shell">
     <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
       <span style="background:var(--brand);color:#fff;border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:.85rem;">
         <i class="bi bi-tree-fill"></i>
@@ -155,23 +181,25 @@
         {% else %}
           <a href="{% url 'login' %}" class="nav-link">Sign in</a>
           <a href="{% url 'register' %}" class="btn btn-brand btn-sm">Get started</a>
-        {% endif %}
+{% endif %}
       </div>
     </div>
   </div>
 </nav>
 
 {% if messages %}
-<div class="container mt-3">
-  {% for message in messages %}
-  <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show d-flex align-items-center gap-2" role="alert">
-    {% if message.tags == 'success' %}<i class="bi bi-check-circle-fill"></i>
-    {% elif message.tags == 'danger' or message.tags == 'error' %}<i class="bi bi-exclamation-circle-fill"></i>
-    {% else %}<i class="bi bi-info-circle-fill"></i>{% endif %}
-    <span>{{ message }}</span>
-    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+<div class="flash-stack">
+  <div class="container-fluid">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show d-flex align-items-center gap-2 flash-alert" role="alert" data-auto-dismiss="5000">
+      {% if message.tags == 'success' %}<i class="bi bi-check-circle-fill"></i>
+      {% elif message.tags == 'danger' or message.tags == 'error' %}<i class="bi bi-exclamation-circle-fill"></i>
+      {% else %}<i class="bi bi-info-circle-fill"></i>{% endif %}
+      <span>{{ message }}</span>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 </div>
 {% endif %}
 
@@ -255,6 +283,21 @@
   });
   window.showCartToast = showCartToast;
   window.getCartCsrf  = getCsrf;
+}());
+</script>
+<script>
+(function () {
+  document.querySelectorAll('[data-auto-dismiss]').forEach(function (el) {
+    var delay = parseInt(el.getAttribute('data-auto-dismiss') || '5000', 10);
+    window.setTimeout(function () {
+      if (!el || !el.parentNode) return;
+      if (window.bootstrap && window.bootstrap.Alert) {
+        window.bootstrap.Alert.getOrCreateInstance(el).close();
+      } else {
+        el.remove();
+      }
+    }, delay);
+  });
 }());
 </script>
 

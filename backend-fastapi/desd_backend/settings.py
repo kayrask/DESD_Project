@@ -1,7 +1,10 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+TESTING = "test" in sys.argv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
@@ -121,12 +124,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 # ── Django Channels ───────────────────────────────────────────────────────────
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {"hosts": [REDIS_URL]},
+# Tests use the in-memory layer so they don't need a running Redis.
+if TESTING:
+    CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
     }
-}
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
+    }
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = REDIS_URL

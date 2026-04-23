@@ -2,22 +2,25 @@
 {% block title %}Commission Reports – DESD{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="row">
-    <div class="col-md-2 sidebar py-4 px-3">
-      <div class="text-white fw-bold fs-6 mb-4 px-3">Admin Panel</div>
-      <a href="{% url 'admin_dashboard' %}"><i class="bi bi-shield me-2"></i>Dashboard</a>
-      <a href="{% url 'admin_reports' %}" class="active"><i class="bi bi-bar-chart me-2"></i>Reports</a>
-      <a href="{% url 'admin_users' %}"><i class="bi bi-people me-2"></i>Users</a>
-      <a href="{% url 'admin_database' %}"><i class="bi bi-database me-2"></i>Database</a>
-      <div class="sidebar-heading">AI</div>
-      <a href="{% url 'admin_ai_monitoring' %}"><i class="bi bi-stars me-2"></i>AI Monitoring</a>
-      <div class="sidebar-heading">Django</div>
-      <a href="/admin/" target="_blank"><i class="bi bi-gear me-2"></i>Django Admin</a>
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
+    <div class="col-md-2 sidebar">
+      <span class="sidebar-label">Admin Panel</span>
+      <a href="{% url 'admin_dashboard' %}"><i class="bi bi-shield-fill"></i> Dashboard</a>
+      <a href="{% url 'admin_reports' %}" class="active"><i class="bi bi-bar-chart-fill"></i> Reports</a>
+      <a href="{% url 'admin_users' %}"><i class="bi bi-people-fill"></i> Users</a>
+      <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
+      <span class="sidebar-label">AI</span>
+      <a href="{% url 'admin_ai_monitoring' %}"><i class="bi bi-stars"></i> AI Monitoring</a>
+      <span class="sidebar-label">Django</span>
+      <a href="/admin/" target="_blank"><i class="bi bi-gear-fill"></i> Django Admin</a>
     </div>
 
-    <div class="col-md-10 py-4 px-4">
-      <h3 class="fw-bold mb-4">Commission Reports</h3>
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header">
+        <h3>Commission Reports</h3>
+        <p>Track report totals, date-filtered revenue, and exported commission evidence.</p>
+      </div>
 
       <!-- Filter form -->
       <div class="card border-0 shadow-sm mb-4">

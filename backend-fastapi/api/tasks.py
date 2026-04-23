@@ -4,40 +4,53 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
 
-_DATASET_PATH = pathlib.Path(__file__).resolve().parent.parent / "ml" / "Fruit And Vegetable Diseases Dataset"
-_METRICS_PATH = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "model_metrics.json"
+_BACKEND_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_DATASET_PATH = _BACKEND_ROOT / "ml" / "Fruit And Vegetable Diseases Dataset"
+_METRICS_PATH = _BACKEND_ROOT / "ml" / "saved_models" / "model_metrics.json"
 
 
 @shared_task(max_retries=0)
-def evaluate_model_after_upload(model_version: str):
-    """Run ml.evaluate in a subprocess after a new model is uploaded.
+def evaluate_model_after_upload(model_version: str, arch: str = "mobilenetv2"):
+    """Run the correct evaluator for the uploaded model, in a subprocess.
 
-    Running as a subprocess keeps PyTorch memory isolated from the Celery
-    worker process — avoids OOM when multiple uploads happen concurrently.
-    After evaluation succeeds, writes a ModelEvaluation row so the admin
-    chart tracks accuracy over time across model versions.
+    Architectures:
+      - "efficientnet-b0" → fruit_quality_ai/main.py --mode evaluate
+                            (writes fruit_quality_ai/results/evaluation_report.json)
+      - "mobilenetv2"     → ml.evaluate
+                            (writes ml/saved_models/model_metrics.json)
+
+    Subprocess isolation keeps PyTorch memory separate from the Celery worker
+    so two concurrent uploads can't OOM each other. After evaluation succeeds
+    we write a ModelEvaluation row so the admin accuracy-over-time chart
+    tracks the new version alongside the older ones.
     """
     import json
     import subprocess
     import sys
 
-    result = subprocess.run(
-        [
+    if arch.startswith("efficientnet"):
+        cmd = [sys.executable, "fruit_quality_ai/main.py", "--mode", "evaluate"]
+    else:
+        cmd = [
             sys.executable, "-m", "ml.evaluate",
             "--data_dir", str(_DATASET_PATH),
             "--model_version", model_version,
-        ],
+        ]
+
+    result = subprocess.run(
+        cmd,
         capture_output=True,
         text=True,
-        cwd=str(pathlib.Path(__file__).resolve().parent.parent),
+        cwd=str(_BACKEND_ROOT),
     )
     if result.returncode != 0:
-        raise RuntimeError(f"ml.evaluate failed:\n{result.stderr}")
+        raise RuntimeError(f"Evaluation ({arch}) failed:\n{result.stderr}")
 
-    # Record this evaluation run for the accuracy-over-time chart
-    if _METRICS_PATH.exists():
-        with open(_METRICS_PATH) as f:
-            m = json.load(f)
+    # Use the same bridge the admin page reads so we record the exact metrics
+    # that will appear in the UI. Handles both schemas (new 28-class + legacy).
+    from app.services.quality_service import load_latest_model_metrics
+    m = load_latest_model_metrics()
+    if m:
         from api.models import ModelEvaluation
         ModelEvaluation.objects.create(
             version=m.get("model_version", model_version),

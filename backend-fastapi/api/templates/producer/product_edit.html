@@ -65,7 +65,7 @@
                   <span class="text-muted fw-normal small">0–50%</span>
                 </label>
                 {{ form.discount_percentage }}
-                <div class="form-text">Set a discount for surplus or lower-grade stock. 0 = no discount.</div>
+                <div class="form-text">Manual surplus discount only. AI quality discount is tracked separately.</div>
                 {% if form.discount_percentage.errors %}<div class="text-danger small">{{ form.discount_percentage.errors }}</div>{% endif %}
               </div>
               <div class="col-12">

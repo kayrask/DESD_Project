@@ -194,11 +194,47 @@
             </div>
             <div class="row g-2" style="font-size:.8rem;color:var(--muted)">
               <div class="col-6"><strong>Dataset:</strong> {{ model_metrics.dataset }}</div>
-              <div class="col-3"><strong>Train:</strong> {{ model_metrics.train_samples }} samples</div>
-              <div class="col-3"><strong>Val:</strong> {{ model_metrics.val_samples }} samples</div>
+              {% if model_metrics.num_classes %}<div class="col-3"><strong>Classes:</strong> {{ model_metrics.num_classes }}</div>{% endif %}
+              {% if model_metrics.train_samples %}<div class="col-3"><strong>Train:</strong> {{ model_metrics.train_samples }} samples</div>{% endif %}
+              {% if model_metrics.val_samples %}<div class="col-3"><strong>Val:</strong> {{ model_metrics.val_samples }} samples</div>{% endif %}
               {% if model_metrics.auc_roc %}<div class="col-6"><strong>AUC-ROC:</strong> {{ model_metrics.auc_roc }}</div>{% endif %}
               <div class="col-12"><strong>Updated:</strong> {{ model_metrics.updated_at }}</div>
             </div>
+
+            {% if model_metrics.fairness %}
+            <hr style="margin:1.25rem 0 1rem">
+            <h6 style="font-weight:700;margin-bottom:.75rem;font-size:.9rem">
+              <i class="bi bi-shield-check me-1"></i>Fairness Metrics
+              <span class="badge ms-2"
+                    style="background:{% if model_metrics.fairness.equalized_odds_gap <= 0.10 %}#dcfce7;color:#166534{% else %}#fee2e2;color:#991b1b{% endif %};font-size:.7rem;font-weight:600">
+                {{ model_metrics.fairness.fairness_verdict }}
+              </span>
+            </h6>
+            <div class="row g-3" style="font-size:.78rem">
+              <div class="col-4 text-center">
+                <div style="font-weight:700;font-size:1.1rem">{{ model_metrics.fairness.fpr_healthy|floatformat:3 }}</div>
+                <div style="color:var(--muted)">FPR Healthy<br><span style="font-size:.68rem">(honest producers wrongly flagged)</span></div>
+              </div>
+              <div class="col-4 text-center">
+                <div style="font-weight:700;font-size:1.1rem">{{ model_metrics.fairness.fnr_rotten|floatformat:3 }}</div>
+                <div style="color:var(--muted)">FNR Rotten<br><span style="font-size:.68rem">(food-safety risk)</span></div>
+              </div>
+              <div class="col-4 text-center">
+                <div style="font-weight:700;font-size:1.1rem">{{ model_metrics.fairness.equalized_odds_gap|floatformat:3 }}</div>
+                <div style="color:var(--muted)">Equalized-Odds Gap<br><span style="font-size:.68rem">(target ≤ 0.10)</span></div>
+              </div>
+            </div>
+            {% if model_metrics.fairness.weakest_rotten_produce %}
+            <div class="mt-3 p-2" style="background:#fef3c7;border-left:3px solid #d97706;border-radius:4px;font-size:.75rem;color:#78350f">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              <strong>Food-safety spotlight:</strong>
+              weakest rotten-detection is
+              <strong>{{ model_metrics.fairness.weakest_rotten_produce|title }}</strong>
+              (recall {{ model_metrics.fairness.weakest_rotten_recall|floatformat:3 }}).
+              Prioritise collecting more labelled rotten examples for this produce.
+            </div>
+            {% endif %}
+            {% endif %}
           </div>
         </div>
         <div class="col-md-5">
@@ -211,7 +247,8 @@
             <div class="text-muted" style="font-size:.875rem;padding:2rem 0">
               <i class="bi bi-image fs-2 d-block mb-2"></i>
               Not generated yet.<br>
-              Run <code>python -m ml.evaluate --data_dir /path/to/dataset</code>
+              Run <code>python fruit_quality_ai/main.py --mode evaluate</code>
+              <br><span style="font-size:.72rem">(or the legacy <code>python -m ml.evaluate</code>)</span>
             </div>
             {% endif %}
           </div>
@@ -260,12 +297,12 @@
         <div class="col-md-6">
           <div class="card p-4">
             <h6 style="font-weight:700;margin-bottom:.25rem"><i class="bi bi-upload me-1"></i>Upload New Model</h6>
-            <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">Upload a new trained <code>.pt</code> file to replace the current model. The model will reload immediately — no server restart needed. Optionally upload a metrics <code>.json</code> file to update the evaluation display above.</p>
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">Upload a new trained <code>.pth</code> or <code>.pt</code> file to replace the current model. The model will reload immediately with no server restart needed. Optionally upload a metrics <code>.json</code> file to update the evaluation display above.</p>
             <form method="post" action="{% url 'admin_model_upload' %}" enctype="multipart/form-data">
               {% csrf_token %}
               <div class="mb-2">
-                <label style="font-size:.82rem;font-weight:600;margin-bottom:.3rem;display:block">Model file (.pt)</label>
-                <input type="file" name="model_file" accept=".pt" class="form-control form-control-sm">
+                <label style="font-size:.82rem;font-weight:600;margin-bottom:.3rem;display:block">Model file (.pth or .pt)</label>
+                <input type="file" name="model_file" accept=".pth,.pt" class="form-control form-control-sm">
               </div>
               <div class="mb-3">
                 <label style="font-size:.82rem;font-weight:600;margin-bottom:.3rem;display:block">Metrics file (.json) <span style="font-weight:400;color:var(--muted)">(optional)</span></label>

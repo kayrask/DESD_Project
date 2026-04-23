@@ -116,15 +116,24 @@ def recommend_products_v2(
     cooccur       = _build_cooccurrence_map()
     category_counts = Counter(p.category.strip() for p in all_products)
 
-    # Personal category preferences (for logged-in customers)
+    # Personal category preferences (for logged-in customers).
+    # Resolve email → User.full_name first so we match the exact customer_name
+    # on Order rows, rather than doing a fuzzy substring on the email local-part.
     personal_categories: Counter = Counter()
     if customer_email:
-        personal_items = OrderItem.objects.filter(
-            order__customer_name__icontains=customer_email.split("@")[0]
-        ).select_related("product")
-        personal_categories = Counter(
-            item.product.category.lower() for item in personal_items
+        from api.models import User as _User
+        full_name = (
+            _User.objects.filter(email=customer_email)
+            .values_list("full_name", flat=True)
+            .first()
         )
+        if full_name:
+            personal_items = OrderItem.objects.filter(
+                order__customer_name=full_name
+            ).select_related("product")
+            personal_categories = Counter(
+                item.product.category.lower() for item in personal_items
+            )
 
     # Max popularity for normalisation
     max_pop = max(popularity.values(), default=1)
@@ -147,7 +156,36 @@ def recommend_products_v2(
         total = pop_score + baseline + personal_boost + collab_score
         scored.append((total, product, pop_score, personal_boost, collab_score))
 
-    top = sorted(scored, key=lambda x: -x[0])[: max(1, min(limit, 20))]
+    # Producer diversification: avoid the "one big producer dominates all slots"
+    # bias by capping how many recommendations come from any single producer.
+    # We pick greedily from the score-sorted list, skipping a product when its
+    # producer's slot cap is full, then top up if we still have room.
+    scored.sort(key=lambda x: -x[0])
+    cap = max(1, limit // 2)  # no producer can own more than half the slots
+    limit_clamped = max(1, min(limit, 20))
+    top = []
+    per_producer: Counter = Counter()
+    for entry in scored:
+        product = entry[1]
+        pid = getattr(product, "producer_id", None)
+        if pid is not None and per_producer[pid] >= cap:
+            continue
+        top.append(entry)
+        if pid is not None:
+            per_producer[pid] += 1
+        if len(top) >= limit_clamped:
+            break
+    if len(top) < limit_clamped:
+        # Fallback: if diversification left us short (only one producer exists),
+        # fill the remaining slots from the original ranking.
+        seen = {id(entry) for entry in top}
+        for entry in scored:
+            if id(entry) in seen:
+                continue
+            top.append(entry)
+            if len(top) >= limit_clamped:
+                break
+
     return {
         "items": [
             _format_product(p, s, _build_reason(p, pop, pers, collab))
@@ -197,7 +235,9 @@ def _build_reason(
 
 
 def _format_product(product: Product, score: float, reason: str = "") -> dict:
-    discount = _safe_int(product.discount_percentage) if hasattr(product, "discount_percentage") else 0
+    manual_discount = _safe_int(product.discount_percentage) if hasattr(product, "discount_percentage") else 0
+    ai_discount = _safe_int(product.ai_discount_percentage) if hasattr(product, "ai_discount_percentage") else 0
+    discount = min(50, manual_discount + ai_discount)
     price = _safe_float(product.price)
     discounted = round(price * (1 - discount / 100), 2) if discount > 0 else None
     return {
@@ -206,6 +246,8 @@ def _format_product(product: Product, score: float, reason: str = "") -> dict:
         "category": product.category,
         "price": price,
         "discount_percentage": discount,
+        "manual_discount_percentage": manual_discount,
+        "ai_discount_percentage": ai_discount,
         "discounted_price": discounted,
         "stock": _safe_int(product.stock),
         "status": product.status,
