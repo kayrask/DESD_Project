@@ -2,17 +2,19 @@
 {% block title %}Producer Dashboard – DESD{% endblock %}
 
 {% block content %}
-<div class="container-fluid p-0" style="min-height:calc(100vh - 61px)">
-  <div class="row g-0 h-100">
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
     <!-- Sidebar -->
     <div class="col-md-2 sidebar">
-      <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);padding:.25rem .75rem;margin-bottom:.75rem">Producer</div>
+      <span class="sidebar-label">Producer</span>
       <a href="{% url 'producer_dashboard' %}" class="active"><i class="bi bi-grid-fill"></i> Dashboard</a>
       <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
       <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list"></i> Orders</a>
       <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
       <span class="sidebar-label">AI Tools</span>
       <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
+      <span class="sidebar-label">Content</span>
+      <a href="{% url 'producer_content' %}"><i class="bi bi-journal-richtext"></i> Recipes &amp; Stories</a>
     </div>
 
     <!-- Main -->
@@ -82,6 +84,17 @@
         <a href="{% url 'producer_quality_check' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-stars me-1"></i> Quality Check</a>
       </div>
 
+      {# ── Quality Trend chart ───────────────────────────────────────────── #}
+      {% if quality_trend %}
+      <div class="card p-4 mb-4">
+        <div class="mb-3">
+          <h6 style="font-weight:700;margin:0"><i class="bi bi-bar-chart-fill me-1 text-info"></i>Quality Grade Trend</h6>
+          <p style="font-size:.8rem;color:var(--muted);margin:.3rem 0 0">Weekly A / B / C breakdown from AI quality assessments (last 8 weeks)</p>
+        </div>
+        <canvas id="qualityTrendChart" style="max-height:220px"></canvas>
+      </div>
+      {% endif %}
+
       {# ── Demand Forecast card ──────────────────────────────────────────── #}
       <div class="card p-4 mb-4">
         <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
@@ -123,8 +136,37 @@
 {% endblock %}
 
 {% block extra_scripts %}
-{% if forecast.products %}
+{% if quality_trend or forecast.products %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endif %}
+{% if quality_trend %}
+<script>
+(function () {
+  const trend = {{ quality_trend_json|safe }};
+  const labels = trend.map(w => w.week);
+  const aData   = trend.map(w => w.A);
+  const bData   = trend.map(w => w.B);
+  const cData   = trend.map(w => w.C);
+  new Chart(document.getElementById('qualityTrendChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Grade A', data: aData, backgroundColor: '#16a34a' },
+        { label: 'Grade B', data: bData, backgroundColor: '#d97706' },
+        { label: 'Grade C', data: cData, backgroundColor: '#dc2626' },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 } } } },
+    },
+  });
+})();
+</script>
+{% endif %}
+{% if forecast.products %}
 <script>
 const forecast = {{ forecast_json|safe }};
 const ctx = document.getElementById('forecastChart').getContext('2d');

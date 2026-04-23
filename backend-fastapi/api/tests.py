@@ -2697,35 +2697,46 @@ class EvaluateModelTaskTest(TestCase):
     """evaluate_model_after_upload writes a ModelEvaluation row on success."""
 
     def _fake_metrics(self, version="task-v99"):
-        import json
-        data = {
+        return {
             "model_version": version,
             "accuracy": 0.95, "precision": 0.94, "recall": 0.96, "f1_score": 0.95,
         }
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        json.dump(data, tmp)
-        tmp.close()
-        return pathlib.Path(tmp.name)
 
-    def test_successful_evaluation_writes_row(self):
+    def test_successful_evaluation_writes_row_legacy_arch(self):
         from unittest.mock import patch, MagicMock
         from api.tasks import evaluate_model_after_upload
         from api.models import ModelEvaluation
 
-        metrics_path = self._fake_metrics("task-v99")
-        try:
-            with patch("subprocess.run") as mock_run, \
-                    patch("api.tasks._METRICS_PATH", metrics_path):
-                mock_run.return_value = MagicMock(returncode=0, stderr="")
-                evaluate_model_after_upload("task-v99")
+        with patch("subprocess.run") as mock_run, \
+             patch("app.services.quality_service.load_latest_model_metrics",
+                   return_value=self._fake_metrics("task-v99")):
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            evaluate_model_after_upload("task-v99", arch="mobilenetv2")
+            # Uses ml.evaluate for mobilenet
+            cmd = mock_run.call_args[0][0]
+            self.assertIn("ml.evaluate", " ".join(cmd))
 
-            self.assertEqual(ModelEvaluation.objects.count(), 1)
-            row = ModelEvaluation.objects.first()
-            self.assertEqual(row.version, "task-v99")
-            self.assertAlmostEqual(row.accuracy, 0.95)
-            self.assertAlmostEqual(row.precision, 0.94)
-        finally:
-            metrics_path.unlink(missing_ok=True)
+        self.assertEqual(ModelEvaluation.objects.count(), 1)
+        row = ModelEvaluation.objects.first()
+        self.assertEqual(row.version, "task-v99")
+        self.assertAlmostEqual(row.accuracy, 0.95)
+        self.assertAlmostEqual(row.precision, 0.94)
+
+    def test_successful_evaluation_writes_row_new_arch(self):
+        from unittest.mock import patch, MagicMock
+        from api.tasks import evaluate_model_after_upload
+        from api.models import ModelEvaluation
+
+        with patch("subprocess.run") as mock_run, \
+             patch("app.services.quality_service.load_latest_model_metrics",
+                   return_value=self._fake_metrics("efficientnet-v2")):
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            evaluate_model_after_upload("efficientnet-v2", arch="efficientnet-b0")
+            # Uses fruit_quality_ai/main.py for EfficientNet
+            cmd = mock_run.call_args[0][0]
+            self.assertIn("fruit_quality_ai/main.py", " ".join(cmd))
+
+        self.assertEqual(ModelEvaluation.objects.count(), 1)
 
     def test_failed_evaluation_writes_no_row(self):
         from unittest.mock import patch, MagicMock
@@ -2743,12 +2754,233 @@ class EvaluateModelTaskTest(TestCase):
         from unittest.mock import patch, MagicMock
         from api.tasks import evaluate_model_after_upload
 
-        metrics_path = self._fake_metrics("msg-v1")
+        with patch("subprocess.run") as mock_run, \
+             patch("app.services.quality_service.load_latest_model_metrics",
+                   return_value=self._fake_metrics("msg-v1")):
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            result = evaluate_model_after_upload("msg-v1")
+        self.assertIn("msg-v1", result)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AI DEGRADED-PATH RESILIENCE
+# Runtime hardening — if an AI service crashes, the page must still render.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class CustomerDashboardDegradedAIPathTest(TestCase):
+    """Customer dashboard must render even when the reorder service errors."""
+
+    def setUp(self):
+        self.client = Client()
+        self.customer = _make_customer("degraded_cust@test.com")
+        self.client.login(username="degraded_cust@test.com", password="Test1234")
+
+    def test_dashboard_renders_when_reorder_service_raises(self):
+        from unittest.mock import patch
+
+        with patch(
+            "app.services.reorder_service.predict_reorder_items",
+            side_effect=RuntimeError("model file corrupt"),
+        ):
+            response = self.client.get(reverse("customer_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["reorder_suggestions"], [])
+
+
+class ProducerDashboardDegradedAIPathTest(TestCase):
+    """Producer dashboard must render even when the forecast service errors."""
+
+    def setUp(self):
+        self.client = Client()
+        self.producer = _make_producer("degraded_prod@test.com")
+        self.client.login(username="degraded_prod@test.com", password="Test1234")
+
+    def test_dashboard_renders_when_forecast_service_raises(self):
+        from unittest.mock import patch
+
+        with patch(
+            "app.services.forecast_service.get_demand_forecast_dashboard",
+            side_effect=RuntimeError("statsmodels unavailable"),
+        ):
+            response = self.client.get(reverse("producer_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        forecast = response.context["forecast"]
+        self.assertEqual(forecast["products"], [])
+        self.assertIsNone(forecast["top_product"])
+
+
+class MarketplaceDegradedAIPathTest(TestCase):
+    """Marketplace must render even when the recommendation service errors."""
+
+    def setUp(self):
+        self.client = Client()
+        self.customer = _make_customer("degraded_mkt@test.com")
+        self.client.login(username="degraded_mkt@test.com", password="Test1234")
+
+    def test_marketplace_renders_when_recommendations_raise(self):
+        from unittest.mock import patch
+
+        with patch(
+            "api.views_web.recommend_products",
+            side_effect=RuntimeError("collaborative matrix broken"),
+        ):
+            response = self.client.get(reverse("marketplace"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["recommendations"], [])
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RECOMMENDATION ENGINE — smoke tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class RecommendProductsSmokeTest(TestCase):
+    """Recommendation engine must return explained, producer-diverse items."""
+
+    def setUp(self):
+        # Two producers → tests the producer-diversity cap
+        self.prod_a = _make_producer("rec_prod_a@test.com")
+        self.prod_b = _make_producer("rec_prod_b@test.com")
+        for i in range(6):
+            _make_product(self.prod_a, name=f"A-Fruit-{i}", price="2.00", stock=20)
+        for i in range(6):
+            _make_product(self.prod_b, name=f"B-Veg-{i}", price="2.50", stock=20)
+
+    def test_returns_shape_with_reason(self):
+        from app.services.ai_service import recommend_products
+        result = recommend_products(limit=4)
+        self.assertIn("items", result)
+        self.assertIn("model_version", result)
+        self.assertGreater(len(result["items"]), 0)
+        for item in result["items"]:
+            self.assertIn("id", item)
+            self.assertIn("name", item)
+            # Customer-facing explainability — reason must be non-empty.
+            self.assertTrue(item.get("reason"), f"missing reason on {item['name']}")
+
+    def test_producer_diversity_cap(self):
+        from app.services.ai_service import recommend_products
+        result = recommend_products(limit=6)
+        producer_counts = {}
+        for item in result["items"]:
+            pid = item.get("producer_id") or item.get("producer")
+            if pid is not None:
+                producer_counts[pid] = producer_counts.get(pid, 0) + 1
+        # Cap is max(1, limit // 2) = 3 for limit=6, but top-up is allowed.
+        # At minimum verify no producer has ALL slots when >1 producer exists.
+        if len(producer_counts) > 1:
+            self.assertLess(max(producer_counts.values()), len(result["items"]))
+
+    def test_empty_catalogue_returns_empty(self):
+        from app.services.ai_service import recommend_products
+        Product.objects.all().delete()
+        result = recommend_products(limit=4)
+        self.assertEqual(result["items"], [])
+
+
+class PredictReorderItemsSmokeTest(TestCase):
+    """Reorder predictor must return empty list (not crash) with no history,
+    and must produce plain-language reasons when history exists."""
+
+    def setUp(self):
+        self.producer = _make_producer("reorder_prod@test.com")
+        self.customer = _make_customer("reorder_cust@test.com")
+        self.product = _make_product(self.producer, name="Tomato", stock=20)
+
+    def test_no_history_safe_return(self):
+        from app.services.reorder_service import predict_reorder_items
+        result = predict_reorder_items("unknown@test.com")
+        # Safe fallback — list (may be empty or trending), never raises.
+        self.assertIsInstance(result, list)
+
+    def test_with_history_returns_items_with_reason(self):
+        from app.services.reorder_service import predict_reorder_items
+        # Create some order history so trending/model has data
+        for i in range(3):
+            order = Order.objects.create(
+                order_id=f"REORDER-TEST-{i}",
+                producer=self.producer,
+                customer_name=self.customer.full_name,
+                delivery_date=date.today() - timedelta(days=10),
+                status="Delivered",
+            )
+            OrderItem.objects.create(
+                order=order, product=self.product,
+                quantity=2, unit_price=self.product.price,
+            )
+        result = predict_reorder_items(self.customer.email)
+        self.assertIsInstance(result, list)
+        for item in result:
+            self.assertIn("name", item)
+            self.assertIn("reason", item)
+            self.assertTrue(item["reason"])
+
+
+class NewModelMetricsBridgeTest(TestCase):
+    """Bridge must normalise the 28-class evaluator's output into the schema
+    the admin monitoring template expects, including per-produce fairness."""
+
+    def _expected_report_path(self):
+        import pathlib
+        from app.services import quality_service
+        return (
+            pathlib.Path(quality_service.__file__).resolve().parent.parent.parent
+            / "fruit_quality_ai" / "results" / "evaluation_report.json"
+        )
+
+    def test_bridges_28class_report_and_computes_per_produce_fairness(self):
+        import json
+        from app.services import quality_service
+
+        report = {
+            "accuracy": 0.88,
+            "per_class": {
+                "apple_healthy_x":  {"precision": 0.94, "recall": 0.95, "f1-score": 0.945, "support": 100},
+                "apple_rotten_x":   {"precision": 0.93, "recall": 0.92, "f1-score": 0.925, "support": 100},
+                "tomato_healthy_x": {"precision": 0.90, "recall": 0.90, "f1-score": 0.900, "support": 100},
+                "tomato_rotten_x":  {"precision": 0.82, "recall": 0.60, "f1-score": 0.693, "support": 100},
+                "weighted avg":     {"precision": 0.90, "recall": 0.84, "f1-score": 0.87,  "support": 400},
+                "macro avg":        {"precision": 0.90, "recall": 0.84, "f1-score": 0.87,  "support": 400},
+                "accuracy": 0.88,
+            },
+        }
+
+        path = self._expected_report_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        backup = path.read_text() if path.exists() else None
         try:
-            with patch("subprocess.run") as mock_run, \
-                    patch("api.tasks._METRICS_PATH", metrics_path):
-                mock_run.return_value = MagicMock(returncode=0, stderr="")
-                result = evaluate_model_after_upload("msg-v1")
-            self.assertIn("msg-v1", result)
+            with open(path, "w") as f:
+                json.dump(report, f)
+            metrics = quality_service._load_new_model_metrics()
         finally:
-            metrics_path.unlink(missing_ok=True)
+            if backup is not None:
+                path.write_text(backup)
+            else:
+                path.unlink(missing_ok=True)
+
+        self.assertIsNotNone(metrics)
+        self.assertEqual(metrics["model_version"], "efficientnet-b0-v1")
+        self.assertEqual(metrics["accuracy"], 0.88)
+        self.assertAlmostEqual(metrics["precision"], 0.90, places=2)
+        self.assertEqual(metrics["num_classes"], 4)
+
+        fair = metrics["fairness"]
+        self.assertIsNotNone(fair)
+        self.assertEqual(fair["weakest_rotten_produce"], "tomato")
+        self.assertAlmostEqual(fair["weakest_rotten_recall"], 0.60, places=2)
+        # mean_healthy ≈ 0.925, mean_rotten ≈ 0.76, gap ≈ 0.165 → warning
+        self.assertGreater(fair["equalized_odds_gap"], 0.10)
+        self.assertIn("Warning", fair["fairness_verdict"])
+
+    def test_returns_none_when_no_report_on_disk(self):
+        from app.services import quality_service
+
+        path = self._expected_report_path()
+        backup = path.read_text() if path.exists() else None
+        try:
+            if path.exists():
+                path.unlink()
+            self.assertIsNone(quality_service._load_new_model_metrics())
+        finally:
+            if backup is not None:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(backup)

@@ -2,21 +2,26 @@
 {% block title %}Payments – DESD{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="row">
-    <div class="col-md-2 sidebar py-4 px-3">
-      <div class="text-white fw-bold fs-6 mb-4 px-3">Producer Panel</div>
-      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid me-2"></i>Dashboard</a>
-      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam me-2"></i>Products</a>
-      <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list me-2"></i>Orders</a>
-      <a href="{% url 'producer_payments' %}" class="active"><i class="bi bi-cash-stack me-2"></i>Payments</a>
-      <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars me-2"></i>Quality Check</a>
-      <a href="{% url 'producer_content' %}"><i class="bi bi-journal-richtext me-2"></i>Recipes &amp; Stories</a>
+<div class="container-fluid p-0">
+  <div class="row g-0" style="min-height:calc(100vh - 61px)">
+    <div class="col-md-2 sidebar">
+      <span class="sidebar-label">Producer</span>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list"></i> Orders</a>
+      <a href="{% url 'producer_payments' %}" class="active"><i class="bi bi-cash-stack"></i> Payments</a>
+      <span class="sidebar-label">AI Tools</span>
+      <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
+      <span class="sidebar-label">Content</span>
+      <a href="{% url 'producer_content' %}"><i class="bi bi-journal-richtext"></i> Recipes &amp; Stories</a>
     </div>
 
-    <div class="col-md-10 py-4 px-4">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold mb-0">Payments</h3>
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <h3>Payments</h3>
+          <p>Review gross, commission, and pending payout information for your orders.</p>
+        </div>
         <a href="?export=csv" class="btn btn-outline-success btn-sm">
           <i class="bi bi-download me-1"></i>Download Report (CSV)
         </a>

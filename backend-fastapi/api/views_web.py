@@ -9,8 +9,11 @@ Templates → api/templates/
 from datetime import date, datetime as _dt, timedelta
 from decimal import Decimal
 import csv
+import logging
 import pathlib
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -115,10 +118,8 @@ def _broadcast_order_status(order):
     if layer is None:
         return
     payload = {"type": "order.status.update", "order_id": order.order_id, "status": order.status}
-    # Notify anyone watching this specific order (order confirmation page)
-    async_to_sync(layer.group_send)(f"order_{order.order_id}", payload)
-    # Notify the customer's dashboard notification channel
     try:
+        async_to_sync(layer.group_send)(f"order_{order.order_id}", payload)
         parts = order.order_id.split("-")  # CO-1 or CO-1-42
         checkout_id = int(parts[1])
         from api.models import CheckoutOrder
@@ -127,6 +128,8 @@ def _broadcast_order_status(order):
             async_to_sync(layer.group_send)(f"user_{co.customer_id}", payload)
     except (IndexError, ValueError):
         pass
+    except Exception:
+        logger.exception("broadcast_order_status failed for %s", order.order_id)
 
 
 def _broadcast_stock_update(product):
@@ -135,10 +138,13 @@ def _broadcast_stock_update(product):
     layer = _get_channel_layer()
     if layer is None:
         return
-    async_to_sync(layer.group_send)(
-        "stock_updates",
-        {"type": "stock.update", "product_id": product.id, "stock": product.stock, "status": product.status},
-    )
+    try:
+        async_to_sync(layer.group_send)(
+            "stock_updates",
+            {"type": "stock.update", "product_id": product.id, "stock": product.stock, "status": product.status},
+        )
+    except Exception:
+        logger.exception("broadcast_stock_update failed for product %s", product.id)
 
 
 # ── Role-enforcement mixins ───────────────────────────────────────────────────
@@ -370,8 +376,6 @@ class CustomerDashboardView(CustomerRequiredMixin, ListView):
         return qs
 
     def get_context_data(self, **kwargs):
-        from app.services.reorder_service import predict_reorder_items
-
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         ctx["upcoming_deliveries"] = CheckoutOrder.objects.filter(
@@ -380,7 +384,12 @@ class CustomerDashboardView(CustomerRequiredMixin, ListView):
         ).count()
         ctx["total_orders"] = CheckoutOrder.objects.filter(customer=user).count()
         ctx["status_filter"] = self.request.GET.get("status", "")
-        ctx["reorder_suggestions"] = predict_reorder_items(getattr(user, "email", ""))
+        try:
+            from app.services.reorder_service import predict_reorder_items
+            ctx["reorder_suggestions"] = predict_reorder_items(getattr(user, "full_name", ""))
+        except Exception:
+            logger.exception("predict_reorder_items failed for %s", getattr(user, "email", "?"))
+            ctx["reorder_suggestions"] = []
         return ctx
 
 
@@ -875,7 +884,6 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
 
     def get(self, request):
         import json as _json
-        from app.services.forecast_service import get_demand_forecast_dashboard
 
         producer = request.user
         low_stock_qs = Product.objects.filter(
@@ -884,7 +892,18 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
             stock__lte=F("low_stock_threshold"),
         ).order_by("stock")
 
-        forecast = get_demand_forecast_dashboard(producer)
+        try:
+            from app.services.forecast_service import get_demand_forecast_dashboard
+            forecast = get_demand_forecast_dashboard(producer)
+        except Exception:
+            logger.exception("get_demand_forecast_dashboard failed for producer %s", producer.pk)
+            forecast = {"products": [], "labels": [], "top_product": None, "high_demand_alert": None}
+
+        try:
+            from app.services.price_service import get_quality_trend
+            quality_trend = get_quality_trend(producer, weeks=8)
+        except Exception:
+            quality_trend = []
 
         ctx = {
             "summary": {
@@ -897,6 +916,8 @@ class ProducerDashboardView(ProducerRequiredMixin, View):
             "low_stock_products": low_stock_qs,
             "forecast": forecast,
             "forecast_json": _json.dumps(forecast),
+            "quality_trend": quality_trend,
+            "quality_trend_json": _json.dumps(quality_trend),
         }
         return render(request, self.template_name, ctx)
 
@@ -905,7 +926,15 @@ class ProducerProductsView(ProducerRequiredMixin, View):
     template_name = "producer/products.html"
 
     def _render(self, request, form=None):
-        products = Product.objects.filter(producer=request.user).order_by("name")
+        products = list(Product.objects.filter(producer=request.user).order_by("name"))
+        try:
+            from app.services.waste_service import get_waste_risks
+            risks = get_waste_risks(products)
+            for p in products:
+                setattr(p, "waste_risk", risks.get(p.id))
+        except Exception:
+            for p in products:
+                setattr(p, "waste_risk", None)
         return render(request, self.template_name, {
             "products": products,
             "form": form or ProductForm(),
@@ -932,6 +961,9 @@ class ProducerProductsView(ProducerRequiredMixin, View):
             status=status,
             allergens=data.get("allergens", ""),
             is_organic=data.get("is_organic", False),
+            discount_percentage=data.get("discount_percentage", 0),
+            ai_discount_percentage=0,
+            ai_discount_active=False,
             producer=request.user,
         )
         messages.success(request, "Product created successfully.")
@@ -1375,7 +1407,18 @@ class ProducerQualityCheckView(ProducerRequiredMixin, View):
                 product = Product.objects.get(id=int(product_id), producer=request.user)
                 result["product_id"] = product.id
                 result["current_stock"] = product.stock
+                # Price recommendation + waste risk after each quality check
+                from app.services.forecast_service import get_demand_forecast
+                from app.services.price_service import recommend_price
+                from app.services.waste_service import compute_waste_risk
+                fc = get_demand_forecast(product.id, weeks=1)
+                result["price_recommendation"] = recommend_price(
+                    product, result["grade"], fc.get("high_demand", False)
+                )
+                result["waste_risk"] = compute_waste_risk(product)
             except Product.DoesNotExist:
+                pass
+            except Exception:
                 pass
             messages.success(
                 request,
@@ -1394,8 +1437,12 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
     template_name = "admin_panel/ai_monitoring.html"
 
     def get_context_data(self, **kwargs):
-        import json
-        import pathlib
+        from app.services.quality_service import (
+            load_latest_model_metrics,
+            find_confusion_matrix_path,
+        )
+
+
         ctx = super().get_context_data(**kwargs)
         ctx["stats"] = get_ai_monitoring_stats()
         ctx["recent_assessments"] = (
@@ -1403,15 +1450,10 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
             .select_related("product", "assessed_by")
             .order_by("-assessed_at")[:20]
         )
-        # Load model metrics JSON if it exists
-        metrics_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "model_metrics.json"
-        if metrics_path.exists():
-            with open(metrics_path) as f:
-                ctx["model_metrics"] = json.load(f)
-        # Check if confusion matrix image exists
-        cm_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "confusion_matrix.png"
-        ctx["has_confusion_matrix"] = cm_path.exists()
-        # Accuracy-over-time history for the line chart
+        metrics = load_latest_model_metrics()
+        if metrics is not None:
+            ctx["model_metrics"] = metrics
+        ctx["has_confusion_matrix"] = find_confusion_matrix_path() is not None
         from api.models import ModelEvaluation
         ctx["eval_history"] = list(
             ModelEvaluation.objects.values(
@@ -1446,11 +1488,21 @@ class AdminAIAssessmentDetailView(AdminRequiredMixin, View):
         assessment = self._get_assessment(pk)
         xai_heatmap, xai_explanation = self._build_xai(assessment)
         overrides = assessment.overrides.select_related("producer").order_by("-created_at")
+
+        # Override rate for this product
+        product = assessment.product
+        total_for_product = QualityAssessment.objects.filter(product=product).count()
+        overrides_for_product = QualityOverride.objects.filter(assessment__product=product).count()
+        override_rate = round(overrides_for_product / total_for_product * 100) if total_for_product else 0
+
         return render(request, self.template_name, {
             "assessment": assessment,
             "xai_heatmap": xai_heatmap,
             "xai_explanation": xai_explanation,
             "overrides": overrides,
+            "override_rate": override_rate,
+            "overrides_for_product": overrides_for_product,
+            "total_for_product": total_for_product,
         })
 
     def post(self, request, pk):
@@ -1478,18 +1530,34 @@ class AdminAIAssessmentDetailView(AdminRequiredMixin, View):
 
 
 class AdminModelUploadView(AdminRequiredMixin, View):
-    """Allow AI engineers (admin role) to replace the active ML model."""
+    """Allow AI engineers (admin role) to replace the active ML model.
 
-    _model_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "quality_classifier.pt"
-    _backup_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "quality_classifier_prev.pt"
+    Routing by extension:
+      .pth → EfficientNet-B0 checkpoint  (fruit_quality_ai/checkpoints/best_model.pth)
+      .pt  → legacy MobileNetV2           (ml/saved_models/quality_classifier.pt)
+    """
+
+    _BACKEND_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
     def post(self, request):
         uploaded = request.FILES.get("model_file")
         if not uploaded:
             messages.error(request, "No file uploaded.")
             return redirect("admin_ai_monitoring")
-        if not uploaded.name.endswith(".pt"):
-            messages.error(request, "Only .pt (PyTorch) model files are accepted.")
+
+        name = uploaded.name
+        if name.endswith(".pth"):
+            model_path = self._BACKEND_ROOT / "fruit_quality_ai" / "checkpoints" / "best_model.pth"
+            backup_path = model_path.with_name("best_model_prev.pth")
+            version_prefix = "efficientnet-b0"
+            cache_attrs = ("_fruit_predictor",)
+        elif name.endswith(".pt"):
+            model_path = self._BACKEND_ROOT / "ml" / "saved_models" / "quality_classifier.pt"
+            backup_path = model_path.with_name("quality_classifier_prev.pt")
+            version_prefix = "mobilenetv2"
+            cache_attrs = ("_legacy_model",)
+        else:
+            messages.error(request, "Only .pth (EfficientNet) or .pt (MobileNet) files are accepted.")
             return redirect("admin_ai_monitoring")
 
         model_bytes = uploaded.read()
@@ -1503,28 +1571,40 @@ class AdminModelUploadView(AdminRequiredMixin, View):
             messages.error(request, f"Invalid model file: {exc}")
             return redirect("admin_ai_monitoring")
 
-        self._model_path.parent.mkdir(parents=True, exist_ok=True)
-        if self._model_path.exists():
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        if model_path.exists():
             import shutil
-            shutil.copy2(self._model_path, self._backup_path)
+            shutil.copy2(model_path, backup_path)
 
-        with open(self._model_path, "wb") as f:
+        with open(model_path, "wb") as f:
             f.write(model_bytes)
 
-        # Clear the in-process model cache so next inference loads the new file
+        # Save optional metrics JSON (e.g., train/val accuracy from external training).
+        metrics_file = request.FILES.get("metrics_file")
+        if metrics_file and metrics_file.name.endswith(".json"):
+            metrics_target = self._BACKEND_ROOT / "ml" / "saved_models" / "model_metrics.json"
+            metrics_target.parent.mkdir(parents=True, exist_ok=True)
+            with open(metrics_target, "wb") as f:
+                f.write(metrics_file.read())
+
+        # Clear in-process caches so the next inference loads the new file.
         import ml.inference as _inf
-        _inf._model = None
+        for attr in cache_attrs:
+            if hasattr(_inf, attr):
+                setattr(_inf, attr, None)
 
-        # Derive a version label from the filename (strip .pt extension)
-        version_label = uploaded.name.removesuffix(".pt") or "mobilenetv2-v2"
+        base = name.rsplit(".", 1)[0]
+        version_label = base or f"{version_prefix}-v2"
 
-        # Kick off background evaluation — metrics card updates automatically
-        from api.tasks import evaluate_model_after_upload
-        evaluate_model_after_upload.delay(version_label)
+        try:
+            from api.tasks import evaluate_model_after_upload
+            evaluate_model_after_upload.delay(version_label, arch=version_prefix)
+        except Exception:
+            logger.exception("Failed to enqueue evaluate_model_after_upload")
 
         messages.success(
             request,
-            f"Model '{uploaded.name}' uploaded and activated. "
+            f"Model '{name}' uploaded and activated. "
             "Evaluation is running in the background — refresh this page in ~30 seconds to see updated metrics.",
         )
         return redirect("admin_ai_monitoring")
@@ -1581,13 +1661,18 @@ class AdminInteractionExportView(AdminRequiredMixin, View):
 
 
 class AdminConfusionMatrixView(AdminRequiredMixin, View):
-    """Serves the confusion_matrix.png generated by ml/evaluate.py."""
+    """Serves the confusion_matrix.png from whichever evaluator wrote one.
+    Prefers fruit_quality_ai/results/, falls back to ml/saved_models/."""
 
     def get(self, request):
-        import pathlib
-        cm_path = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "confusion_matrix.png"
-        if not cm_path.exists():
-            return HttpResponse("Confusion matrix not found. Run ml/evaluate.py to generate it.", status=404)
+        from app.services.quality_service import find_confusion_matrix_path
+        cm_path = find_confusion_matrix_path()
+        if cm_path is None:
+            return HttpResponse(
+                "Confusion matrix not found. Run `python fruit_quality_ai/main.py --mode evaluate` "
+                "or `python -m ml.evaluate`.",
+                status=404,
+            )
         with open(cm_path, "rb") as f:
             return HttpResponse(f.read(), content_type="image/png")
 
@@ -1771,24 +1856,19 @@ class RecipeDetailView(View):
 
 class ProducerDemandForecastView(ProducerRequiredMixin, View):
     """
-    Simple demand forecast for a producer's products.
+    JSON demand forecast endpoint for a producer's products.
 
-    Method
-    ------
-    For each product, count fulfilled OrderItems over the past 6 months,
-    group by calendar month, and project next month using a 3-month moving
-    average.  The harvest season window (season_start/season_end) is overlaid
-    to flag products approaching or leaving their season.
-
-    Design choice: an intentionally transparent, interpretable approach —
-    a simple moving average rather than a black-box model — so producers can
-    understand and trust the forecast.  It can be upgraded to Prophet/ARIMA
-    once sufficient order history accumulates.
+    Forecast values come from the SARIMA-backed service in
+    app/services/forecast_service.py (which falls back to a moving average
+    when the trained model file is absent). This view then overlays the
+    product's harvest-season window so the frontend can flag out-of-season
+    items. One canonical forecast implementation, not two.
     """
 
     def get(self, request):
         from collections import defaultdict
         from calendar import month_abbr
+        from app.services.forecast_service import get_demand_forecast
 
         producer = request.user
         today = date.today()
@@ -1798,6 +1878,7 @@ class ProducerDemandForecastView(ProducerRequiredMixin, View):
         result = []
 
         for product in products:
+            # Recent monthly history (unchanged — used by the chart).
             items = (
                 OrderItem.objects.filter(
                     product=product,
@@ -1805,17 +1886,22 @@ class ProducerDemandForecastView(ProducerRequiredMixin, View):
                     order__delivery_date__gte=six_months_ago,
                 ).select_related("order")
             )
-
             monthly: dict[str, int] = defaultdict(int)
             for item in items:
                 if item.order.delivery_date:
                     key = item.order.delivery_date.strftime("%Y-%m")
                     monthly[key] += item.quantity
 
-            sorted_months = sorted(monthly.keys())[-3:]
-            recent_totals = [monthly[m] for m in sorted_months]
-            forecast = round(sum(recent_totals) / len(recent_totals)) if recent_totals else 0
+            # Delegate forecast computation to the shared service — keeps a
+            # single source of truth for "what the next month looks like".
+            try:
+                fc = get_demand_forecast(product.id, weeks=4)
+                forecast = round(sum(fc["predicted_units"])) if fc.get("predicted_units") else 0
+            except Exception:
+                logger.exception("get_demand_forecast failed for product %s", product.id)
+                forecast = 0
 
+            # Harvest-season overlay (forecast service has no season knowledge).
             in_season = True
             season_label = "Year round"
             if product.season_start and product.season_end:
@@ -1856,16 +1942,21 @@ class AdminOverrideReviewView(AdminRequiredMixin, View):
     """
 
     def get(self, request):
-        from collections import Counter
         overrides = (
             QualityOverride.objects
             .select_related("assessment__product", "producer")
             .order_by("-created_at")[:200]
         )
-        producer_counts = Counter(o.producer.full_name for o in overrides)
+        producer_counts = list(
+            QualityOverride.objects
+            .values("producer__full_name", "producer__email")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]
+        )
         return render(request, "admin_panel/override_review.html", {
             "overrides": overrides,
-            "producer_counts": dict(producer_counts.most_common(10)),
+            "producer_counts": producer_counts,
+            "total_overrides": QualityOverride.objects.count(),
         })
 
 

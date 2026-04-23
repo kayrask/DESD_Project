@@ -85,6 +85,14 @@
           <div class="card p-4 mb-4">
             <h6 style="font-weight:700;margin-bottom:1.5rem">Assessment Result — {{ result.product_name }}</h6>
             <div class="grade-badge grade-{{ result.grade }}">{{ result.grade }}</div>
+            {% if result.predicted_class %}
+            <p class="text-center fw-semibold mb-1" style="font-size:.95rem">
+              {{ result.predicted_class }}
+            </p>
+            <p class="text-center text-muted mb-1" style="font-size:.82rem">
+              {% widthratio result.model_confidence 1 100 as conf_pct %}{{ conf_pct }}% confidence
+            </p>
+            {% endif %}
             <p class="text-center text-muted" style="font-size:.875rem;margin-bottom:1.75rem">
               {% if result.grade == 'A' %}Premium quality – eligible for featured listing{% elif result.grade == 'B' %}Standard quality – list at normal price{% else %}Below standard – consider a discount{% endif %}
             </p>
@@ -100,17 +108,17 @@
               <div class="col-4">
                 <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">COLOUR</div>
                 <div style="font-weight:700;font-size:1.1rem">{{ result.color_score }}%</div>
-                <div class="score-bar"><div class="score-fill" style="width:{{ result.color_score }}%;background:{% if result.color_score >= 85 %}var(--brand){% elif result.color_score >= 75 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.color_score }}%;background:{% if result.color_score >= 75 %}var(--brand){% elif result.color_score >= 65 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
               </div>
               <div class="col-4">
                 <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">SIZE</div>
                 <div style="font-weight:700;font-size:1.1rem">{{ result.size_score }}%</div>
-                <div class="score-bar"><div class="score-fill" style="width:{{ result.size_score }}%;background:{% if result.size_score >= 90 %}var(--brand){% elif result.size_score >= 80 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.size_score }}%;background:{% if result.size_score >= 80 %}var(--brand){% elif result.size_score >= 70 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
               </div>
               <div class="col-4">
                 <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">RIPENESS</div>
                 <div style="font-weight:700;font-size:1.1rem">{{ result.ripeness_score }}%</div>
-                <div class="score-bar"><div class="score-fill" style="width:{{ result.ripeness_score }}%;background:{% if result.ripeness_score >= 80 %}var(--brand){% elif result.ripeness_score >= 70 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.ripeness_score }}%;background:{% if result.ripeness_score >= 70 %}var(--brand){% elif result.ripeness_score >= 60 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
               </div>
             </div>
 
@@ -160,6 +168,61 @@
             {% endif %}
             {% if result.notes %}
             <div class="alert alert-success mt-3 py-2" style="font-size:.82rem">{{ result.notes }}</div>
+            {% endif %}
+            {% if result.effective_discount_percentage > 0 %}
+            <div class="alert alert-info mt-3 py-2" style="font-size:.82rem">
+              <i class="bi bi-tag me-1"></i>
+              Active product discount:
+              <strong>{{ result.effective_discount_percentage }}% off</strong>
+              {% if result.discounted_price %}
+              — now £{{ result.discounted_price }} instead of £{{ result.price }}
+              {% endif %}
+              <span class="d-block mt-1">
+                Surplus: {{ result.discount_percentage }}%
+                {% if result.ai_discount_percentage > 0 %} · AI: {{ result.ai_discount_percentage }}%{% endif %}
+              </span>
+            </div>
+            {% endif %}
+
+            <!-- AI Price Recommendation -->
+            {% if result.price_recommendation %}
+            {% with pr=result.price_recommendation %}
+            <div class="mt-3 p-3 rounded-3" style="background:{% if pr.action == 'increase' %}#f0fdf4{% elif pr.action == 'discount' %}#fff7ed{% else %}#f8fafc{% endif %};border:1px solid {% if pr.action == 'increase' %}#bbf7d0{% elif pr.action == 'discount' %}#fed7aa{% else %}#e2e8f0{% endif %}">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <i class="bi bi-tag-fill" style="color:{% if pr.action == 'increase' %}#15803d{% elif pr.action == 'discount' %}#d97706{% else %}#64748b{% endif %}"></i>
+                <span style="font-weight:700;font-size:.85rem">AI Price Recommendation</span>
+                {% if pr.action == 'increase' %}<span class="badge" style="background:#dcfce7;color:#15803d;font-size:.7rem">Increase</span>
+                {% elif pr.action == 'discount' %}<span class="badge" style="background:#ffedd5;color:#c2410c;font-size:.7rem">Discount</span>
+                {% else %}<span class="badge" style="background:#f1f5f9;color:#475569;font-size:.7rem">Hold</span>{% endif %}
+              </div>
+              <div class="d-flex align-items-baseline gap-3 mb-1">
+                <span style="font-size:.8rem;color:var(--muted)">Current: <strong>£{{ pr.current_price }}</strong></span>
+                <span style="font-size:.8rem">→</span>
+                <span style="font-size:.95rem;font-weight:700;color:{% if pr.action == 'increase' %}#15803d{% elif pr.action == 'discount' %}#c2410c{% else %}var(--text){% endif %}">
+                  £{{ pr.suggested_price }}
+                  {% if pr.change_pct != 0 %}({% if pr.change_pct > 0 %}+{% endif %}{{ pr.change_pct }}%){% endif %}
+                </span>
+              </div>
+              <p style="font-size:.78rem;color:var(--muted);margin:0">{{ pr.reason }}</p>
+            </div>
+            {% endwith %}
+            {% endif %}
+
+            <!-- Waste Risk -->
+            {% if result.waste_risk %}
+            {% with wr=result.waste_risk %}
+            <div class="mt-2 p-3 rounded-3 d-flex align-items-start gap-3" style="background:#f8fafc;border:1px solid #e2e8f0">
+              <div style="width:44px;height:44px;border-radius:50%;background:{% if wr.risk_level == 'High' %}#fee2e2{% elif wr.risk_level == 'Medium' %}#fef3c7{% else %}#dcfce7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <span style="font-weight:800;font-size:.9rem;color:{{ wr.risk_colour }}">{{ wr.risk_score }}</span>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:.85rem">Spoilage Risk — <span style="color:{{ wr.risk_colour }}">{{ wr.risk_level }}</span></div>
+                <div style="font-size:.78rem;color:var(--muted)">
+                  Grade {{ wr.grade }} · {{ wr.stock }} units in stock · 2-week forecast {{ wr.predicted_demand_2w }} units
+                </div>
+              </div>
+            </div>
+            {% endwith %}
             {% endif %}
 
             <!-- Grade Override -->

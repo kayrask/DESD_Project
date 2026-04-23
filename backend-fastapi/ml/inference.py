@@ -117,9 +117,10 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
             except Exception:
                 pass
 
-        # Strip verbose dataset suffixes from class names in the reasoning text
+        # Strip verbose dataset suffixes from class names for display
         _STRIP = "_fruit_and_vegetable_diseases_dataset"
         reasoning = result.reasoning.replace(_STRIP, "")
+        predicted_class = result.predicted_class.replace(_STRIP, "").replace("_", " ").title()
 
         # Derive colour/size/ripeness from image pixels (independent of CNN)
         img_scores = _compute_image_scores(image_bytes)
@@ -131,16 +132,25 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
         size_s = round(img_scores["size_score"] * w_img + q * 100 * w_cnn, 1)
         ripeness_s = round(img_scores["ripeness_score"] * w_img + q * 100 * w_cnn, 1)
 
+        # Case study mandates grade be derived from the three scores via the
+        # fixed thresholds (Color/Size/Ripeness). Use the score-derived grade
+        # here so the UI grade matches the breakdown it displays. A rotten
+        # prediction from the CNN overrides to Grade C regardless.
+        grade, _ = _grade_from_scores(color_s, size_s, ripeness_s)
         is_healthy = result.condition == "fresh"
+        if result.condition == "rotten":
+            grade = "C"
+            is_healthy = False
 
         return {
-            "grade": result.grade,
+            "grade": grade,
             "color_score": color_s,
             "size_score": size_s,
             "ripeness_score": ripeness_s,
             "model_confidence": round(result.confidence, 4),
             "is_healthy": is_healthy,
             "model_version": "efficientnet-b0-v1",
+            "predicted_class": predicted_class,
             "xai_heatmap": xai_heatmap,
             "xai_explanation": reasoning,
         }
@@ -225,9 +235,13 @@ def _compute_image_scores(image_bytes: bytes) -> dict:
 
 
 def _grade_from_scores(color, size, ripeness):
-    if color >= 85 and size >= 90 and ripeness >= 80:
-        return "A", True
+    # Thresholds from the Advanced AI case study:
+    #   Grade A: Color ≥ 75, Size ≥ 80, Ripeness ≥ 70
+    #   Grade B: Color ≥ 65, Size ≥ 70, Ripeness ≥ 60
+    #   Grade C: anything below B floor (triggers auto-discount)
     if color >= 75 and size >= 80 and ripeness >= 70:
+        return "A", True
+    if color >= 65 and size >= 70 and ripeness >= 60:
         return "B", True
     return "C", False
 
@@ -235,18 +249,18 @@ def _grade_from_scores(color, size, ripeness):
 def _build_explanation(grade, color, size, ripeness):
     parts = []
     parts.append(
-        "excellent colour uniformity" if color >= 85
-        else "acceptable colour with minor discolouration" if color >= 75
+        "excellent colour uniformity" if color >= 75
+        else "acceptable colour with minor discolouration" if color >= 65
         else "notable discolouration or browning detected"
     )
     parts.append(
-        "uniform shape consistent with premium quality" if size >= 90
-        else "adequate size with minor irregularities" if size >= 80
+        "uniform shape consistent with premium quality" if size >= 80
+        else "adequate size with minor irregularities" if size >= 70
         else "irregular shape or insufficient subject fill"
     )
     parts.append(
-        "smooth surface indicating optimal ripeness" if ripeness >= 80
-        else "surface texture within acceptable range" if ripeness >= 70
+        "smooth surface indicating optimal ripeness" if ripeness >= 70
+        else "surface texture within acceptable range" if ripeness >= 60
         else "surface irregularities suggest over-ripeness or rot"
     )
     labels = {"A": "Premium (Grade A)", "B": "Standard (Grade B)", "C": "Below standard (Grade C)"}

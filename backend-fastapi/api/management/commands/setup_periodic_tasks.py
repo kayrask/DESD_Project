@@ -32,4 +32,30 @@ class Command(BaseCommand):
             },
         )
 
+        schedule_daily, _ = IntervalSchedule.objects.get_or_create(
+            every=1440,
+            period=IntervalSchedule.MINUTES,
+        )
+        PeriodicTask.objects.update_or_create(
+            name="Send high demand alerts to producers",
+            defaults={
+                "interval": schedule_daily,
+                "task": "api.tasks.send_high_demand_alerts",
+                "enabled": True,
+            },
+        )
+
+        schedule_weekly, _ = IntervalSchedule.objects.get_or_create(
+            every=10080,
+            period=IntervalSchedule.MINUTES,
+        )
+        PeriodicTask.objects.update_or_create(
+            name="Send reorder reminders to customers",
+            defaults={
+                "interval": schedule_weekly,
+                "task": "api.tasks.send_reorder_reminders",
+                "enabled": True,
+            },
+        )
+
         self.stdout.write(self.style.SUCCESS("Periodic tasks registered."))

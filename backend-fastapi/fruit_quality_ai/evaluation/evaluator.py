@@ -82,7 +82,18 @@ def evaluate(
     _plot_confusion_matrix(cm, class_names, results_dir / "confusion_matrix.png")
 
     # ── Persist JSON report ────────────────────────────────────────────────────
-    summary = {"accuracy": accuracy, "per_class": report_dict}
+    # Includes the metadata the admin monitoring template expects
+    # (dataset, samples, updated_at, model_version) so the bridge in
+    # app/services/quality_service.py can surface it without extra glue.
+    from datetime import date
+    summary = {
+        "model_version": "efficientnet-b0-v1",
+        "accuracy": accuracy,
+        "per_class": report_dict,
+        "dataset": "Fruit & Vegetable Disease (Healthy vs Rotten)",
+        "test_samples": len(all_labels),
+        "updated_at": date.today().isoformat(),
+    }
     report_path = results_dir / "evaluation_report.json"
     with open(report_path, "w") as f:
         json.dump(summary, f, indent=2)
