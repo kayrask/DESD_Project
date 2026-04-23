@@ -80,7 +80,7 @@ def _download_with_resume(url: str, dest: Path, expected_bytes: int) -> None:
                             bar = "█" * filled + "░" * (50 - filled)
                             print(f"\r  [{bar}] {pct:5.1f}%  {downloaded:,}/{total:,}", end="", flush=True)
 
-            print(f"\n  Download segment complete.")
+            print("\n  Download segment complete.")
 
         except (
             requests.exceptions.ChunkedEncodingError,
@@ -130,14 +130,14 @@ def download_backbone(backbone: str = "resnet18") -> Path:
             break
 
     print(f"\n{'─'*55}")
-    print(f"  Weights ready. Now update config.py:")
-    print(f"    PRETRAINED         = True")
-    print(f"    IMAGE_SIZE         = 128")
-    print(f"    LEARNING_RATE      = 1e-4")
-    print(f"    WEIGHT_DECAY       = 1e-5")
-    print(f"    NUM_EPOCHS         = 30")
-    print(f"    EARLY_STOPPING_PATIENCE = 7")
-    print(f"  Then run: python main.py --mode train")
+    print("  Weights ready. Now update config.py:")
+    print("    PRETRAINED         = True")
+    print("    IMAGE_SIZE         = 128")
+    print("    LEARNING_RATE      = 1e-4")
+    print("    WEIGHT_DECAY       = 1e-5")
+    print("    NUM_EPOCHS         = 30")
+    print("    EARLY_STOPPING_PATIENCE = 7")
+    print("  Then run: python main.py --mode train")
     print(f"{'─'*55}\n")
     return dest
 

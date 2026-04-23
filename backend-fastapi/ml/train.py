@@ -52,21 +52,18 @@ from torch.utils.data import DataLoader
 from ml.data.preprocess import (
     HealthyRottenDataset,
     build_splits,
-    get_transforms,
     report_class_imbalance,
     scan_for_corrupt,
-    SEED,
-    IMG_SIZE,
 )
 from ml.model import build_model_by_arch, unfreeze_top_layers_by_arch
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-MODELS_DIR      = pathlib.Path(__file__).parent / "saved_models"
-SAVE_PATH       = MODELS_DIR / "quality_classifier.pt"
-BACKUP_PATH     = MODELS_DIR / "quality_classifier_prev.pt"
+MODELS_DIR = pathlib.Path(__file__).parent / "saved_models"
+SAVE_PATH = MODELS_DIR / "quality_classifier.pt"
+BACKUP_PATH = MODELS_DIR / "quality_classifier_prev.pt"
 EXPERIMENTS_DIR = MODELS_DIR / "experiments"
-BATCH_SIZE  = 32
-_IN_DOCKER  = pathlib.Path("/.dockerenv").exists()
+BATCH_SIZE = 32
+_IN_DOCKER = pathlib.Path("/.dockerenv").exists()
 NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 
 # Class weights: penalise Rotten→Healthy errors twice as much.
@@ -84,7 +81,7 @@ def _validate_epoch(model, loader, device):
             images, labels = images.to(device), labels.to(device)
             preds = model(images).argmax(dim=1)
             correct += (preds == labels).sum().item()
-            total   += labels.size(0)
+            total += labels.size(0)
     return correct / total if total else 0.0
 
 
@@ -148,18 +145,18 @@ def train(
     full_ds = HealthyRottenDataset(root=data_dir, transform=None)
     report_class_imbalance(full_ds)
 
-    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True,  num_workers=NUM_WORKERS)
-    val_loader   = DataLoader(val_set,   batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+    val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
     if save_path.exists():
         print(f"  Resuming from checkpoint: {save_path}")
         model = build_model_by_arch(arch, pretrained=False).to(device)
         model.load_state_dict(torch.load(str(save_path), map_location=device, weights_only=True))
     else:
-        print(f"  No checkpoint — using ImageNet pretrained weights.")
+        print("  No checkpoint — using ImageNet pretrained weights.")
         model = build_model_by_arch(arch, pretrained=True).to(device)
 
-    weights   = torch.tensor(CLASS_WEIGHTS, dtype=torch.float32).to(device)
+    weights = torch.tensor(CLASS_WEIGHTS, dtype=torch.float32).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights)
 
     # Phase 1: head-only warmup
@@ -181,8 +178,8 @@ def train(
             all_unfrozen = [p for p in model.parameters() if p.requires_grad and
                             id(p) not in {id(q) for q in head_params}]
             optimizer = torch.optim.Adam([
-                {"params": list(head_params),    "lr": lr / 10},
-                {"params": all_unfrozen,          "lr": lr / 100},
+                {"params": list(head_params), "lr": lr / 10},
+                {"params": all_unfrozen, "lr": lr / 100},
             ])
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer, T_max=finetune_epochs, eta_min=lr / 1000
@@ -190,7 +187,7 @@ def train(
 
         model.train()
         running_loss, correct, total = 0.0, 0, 0
-        epoch_start  = time.time()
+        epoch_start = time.time()
         batches_seen = 0
 
         for images, labels in train_loader:
@@ -198,28 +195,28 @@ def train(
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
-            loss    = criterion(outputs, labels)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item() * images.size(0)
-            preds         = outputs.argmax(dim=1)
-            correct      += (preds == labels).sum().item()
-            total        += labels.size(0)
+            preds = outputs.argmax(dim=1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
 
             if log_every and (batches_seen % log_every == 0):
-                elapsed   = time.time() - epoch_start
+                elapsed = time.time() - epoch_start
                 avg_batch = elapsed / batches_seen
-                eta_sec   = int(max(0, len(train_loader) - batches_seen) * avg_batch)
+                eta_sec = int(max(0, len(train_loader) - batches_seen) * avg_batch)
                 print(
                     f"  [epoch {epoch}/{total_epochs}] batch {batches_seen}/{len(train_loader)} "
                     f"loss={loss.item():.4f} acc={correct/total:.3f} "
                     f"ETA~{eta_sec//60}m{eta_sec%60:02d}s"
                 )
 
-        train_acc  = correct / total
+        train_acc = correct / total
         train_loss = running_loss / total
-        val_acc    = _validate_epoch(model, val_loader, device)
+        val_acc = _validate_epoch(model, val_loader, device)
         scheduler.step()
 
         phase_label = "warmup  " if epoch <= warmup_epochs else "finetune"
@@ -231,8 +228,8 @@ def train(
             "epoch": epoch,
             "phase": "warmup" if epoch <= warmup_epochs else "finetune",
             "train_loss": round(train_loss, 4),
-            "train_acc":  round(train_acc,  4),
-            "val_acc":    round(val_acc,    4),
+            "train_acc": round(train_acc, 4),
+            "val_acc": round(val_acc, 4),
         })
 
         if val_acc > best_val_acc:
@@ -247,19 +244,19 @@ def train(
 
     # Log this run for comparative analysis
     _save_experiment({
-        "run_id":          datetime.utcnow().strftime("%Y%m%dT%H%M%S"),
-        "arch":            arch,
-        "warmup_epochs":   warmup_epochs,
+        "run_id": datetime.utcnow().strftime("%Y%m%dT%H%M%S"),
+        "arch": arch,
+        "warmup_epochs": warmup_epochs,
         "finetune_epochs": finetune_epochs,
-        "lr":              lr,
-        "unfreeze_n":      unfreeze_n,
-        "batch_size":      BATCH_SIZE,
-        "class_weights":   CLASS_WEIGHTS,
-        "n_train":         n_train,
-        "n_val":           n_val,
-        "best_val_acc":    round(best_val_acc, 4),
-        "epoch_log":       epoch_log,
-        "save_path":       str(save_path),
+        "lr": lr,
+        "unfreeze_n": unfreeze_n,
+        "batch_size": BATCH_SIZE,
+        "class_weights": CLASS_WEIGHTS,
+        "n_train": n_train,
+        "n_val": n_val,
+        "best_val_acc": round(best_val_acc, 4),
+        "epoch_log": epoch_log,
+        "save_path": str(save_path),
     })
 
     return best_val_acc
@@ -267,14 +264,14 @@ def train(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train quality classifier (two-phase progressive fine-tuning)")
-    parser.add_argument("--data_dir",        required=True,               help="Path to dataset root folder")
-    parser.add_argument("--arch",            default="mobilenetv2",       choices=("mobilenetv2", "resnet18"),
+    parser.add_argument("--data_dir", required=True, help="Path to dataset root folder")
+    parser.add_argument("--arch", default="mobilenetv2", choices=("mobilenetv2", "resnet18"),
                         help="Model architecture (default: mobilenetv2)")
-    parser.add_argument("--warmup_epochs",   type=int,   default=3,       help="Epochs to train head only (default 3)")
-    parser.add_argument("--finetune_epochs", type=int,   default=7,       help="Epochs to fine-tune top blocks (default 7)")
-    parser.add_argument("--lr",              type=float, default=1e-3,    help="Initial learning rate (default 1e-3)")
-    parser.add_argument("--unfreeze_n",      type=int,   default=3,       help="Top blocks to unfreeze in phase 2 (default 3)")
-    parser.add_argument("--log_every",       type=int,   default=50,      help="Print progress every N batches (0 disables)")
+    parser.add_argument("--warmup_epochs", type=int, default=3, help="Epochs to train head only (default 3)")
+    parser.add_argument("--finetune_epochs", type=int, default=7, help="Epochs to fine-tune top blocks (default 7)")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate (default 1e-3)")
+    parser.add_argument("--unfreeze_n", type=int, default=3, help="Top blocks to unfreeze in phase 2 (default 3)")
+    parser.add_argument("--log_every", type=int, default=50, help="Print progress every N batches (0 disables)")
     args = parser.parse_args()
     train(
         data_dir=args.data_dir,

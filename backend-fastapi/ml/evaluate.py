@@ -41,13 +41,13 @@ from ml.data.preprocess import build_splits, SEED, VAL_SPLIT
 from ml.model import load_model
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-MODELS_DIR   = pathlib.Path(__file__).parent / "saved_models"
-MODEL_PATH   = MODELS_DIR / "quality_classifier.pt"
+MODELS_DIR = pathlib.Path(__file__).parent / "saved_models"
+MODEL_PATH = MODELS_DIR / "quality_classifier.pt"
 CM_SAVE_PATH = MODELS_DIR / "confusion_matrix.png"
 METRICS_PATH = MODELS_DIR / "model_metrics.json"
 
-BATCH_SIZE  = 32
-_IN_DOCKER  = pathlib.Path("/.dockerenv").exists()
+BATCH_SIZE = 32
+_IN_DOCKER = pathlib.Path("/.dockerenv").exists()
 NUM_WORKERS = 0 if (os.name == "nt" or _IN_DOCKER) else 2
 
 
@@ -57,10 +57,12 @@ def _save_confusion_matrix(cm: np.ndarray, save_path: pathlib.Path, title: str =
     fig, ax = plt.subplots(figsize=(5, 4))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
     plt.colorbar(im, ax=ax)
-    classes    = ["Healthy", "Rotten"]
+    classes = ["Healthy", "Rotten"]
     tick_marks = range(len(classes))
-    ax.set_xticks(tick_marks); ax.set_yticks(tick_marks)
-    ax.set_xticklabels(classes); ax.set_yticklabels(classes)
+    ax.set_xticks(tick_marks)
+    ax.set_yticks(tick_marks)
+    ax.set_xticklabels(classes)
+    ax.set_yticklabels(classes)
     thresh = cm.max() / 2.0
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
@@ -115,18 +117,18 @@ def compute_fairness_metrics(labels: np.ndarray, preds: np.ndarray) -> dict:
     tn, fp, fn, tp = cm.ravel()
 
     fpr_healthy = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-    fnr_rotten  = fn / (fn + tp) if (fn + tp) > 0 else 0.0
+    fnr_rotten = fn / (fn + tp) if (fn + tp) > 0 else 0.0
     tpr_healthy = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-    tpr_rotten  = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    tpr_rotten = tp / (tp + fn) if (tp + fn) > 0 else 0.0
 
     equalized_odds_gap = abs(fpr_healthy - fnr_rotten)
 
     return {
-        "fpr_healthy":             round(fpr_healthy,        4),
-        "fnr_rotten":              round(fnr_rotten,         4),
-        "tpr_healthy_specificity": round(tpr_healthy,        4),
-        "tpr_rotten_recall":       round(tpr_rotten,         4),
-        "equalized_odds_gap":      round(equalized_odds_gap, 4),
+        "fpr_healthy": round(fpr_healthy, 4),
+        "fnr_rotten": round(fnr_rotten, 4),
+        "tpr_healthy_specificity": round(tpr_healthy, 4),
+        "tpr_rotten_recall": round(tpr_rotten, 4),
+        "equalized_odds_gap": round(equalized_odds_gap, 4),
         "fairness_verdict": (
             "PASS — equalized-odds gap ≤ 0.10"
             if equalized_odds_gap <= 0.10
@@ -164,7 +166,7 @@ def evaluate_model(
         dict with accuracy, precision, recall, F1, AUC-ROC, fairness metrics.
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model  = load_model(str(model_path), device=device, arch=arch)
+    model = load_model(str(model_path), device=device, arch=arch)
     loader = _build_val_loader(data_dir)
 
     all_preds, all_labels, all_probs = [], [], []
@@ -172,15 +174,15 @@ def evaluate_model(
         for images, labels in loader:
             images = images.to(device)
             outputs = model(images)
-            probs   = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
-            preds   = outputs.argmax(dim=1).cpu().numpy()
+            probs = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
+            preds = outputs.argmax(dim=1).cpu().numpy()
             all_preds.extend(preds)
             all_labels.extend(labels.numpy())
             all_probs.extend(probs)
 
-    all_preds  = np.array(all_preds)
+    all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
-    all_probs  = np.array(all_probs)
+    all_probs = np.array(all_probs)
 
     print(f"\n── Classification Report [{arch}] {'─' * 40}")
     report = classification_report(
@@ -192,7 +194,7 @@ def evaluate_model(
 
     cm = confusion_matrix(all_labels, all_preds)
     print("Confusion matrix (rows=actual, cols=predicted):")
-    print(f"             Healthy  Rotten")
+    print("             Healthy  Rotten")
     print(f"  Healthy    {cm[0,0]:>7}  {cm[0,1]:>6}")
     print(f"  Rotten     {cm[1,0]:>7}  {cm[1,1]:>6}")
 
@@ -210,7 +212,7 @@ def evaluate_model(
     print(f"\n  Hit-rate (healthy correctly identified): {hit_rate:.3f}")
 
     fairness = compute_fairness_metrics(all_labels, all_preds)
-    print(f"\n── Fairness Metrics ─────────────────────────────────────────")
+    print("\n── Fairness Metrics ─────────────────────────────────────────")
     print(f"  FPR Healthy (healthy → wrongly rotten): {fairness['fpr_healthy']:.3f}")
     print(f"  FNR Rotten  (rotten  → missed):         {fairness['fnr_rotten']:.3f}")
     print(f"  Equalized-Odds Gap:                     {fairness['equalized_odds_gap']:.3f}")
@@ -218,16 +220,16 @@ def evaluate_model(
 
     tn, fp, fn, tp = cm.ravel()
     metrics = {
-        "arch":        arch,
-        "accuracy":    round(report["accuracy"],                      4),
-        "precision":   round(report["weighted avg"]["precision"],     4),
-        "recall":      round(report["weighted avg"]["recall"],        4),
-        "f1_score":    round(report["weighted avg"]["f1-score"],      4),
-        "auc_roc":     round(auc, 4) if auc is not None else None,
+        "arch": arch,
+        "accuracy": round(report["accuracy"], 4),
+        "precision": round(report["weighted avg"]["precision"], 4),
+        "recall": round(report["weighted avg"]["recall"], 4),
+        "f1_score": round(report["weighted avg"]["f1-score"], 4),
+        "auc_roc": round(auc, 4) if auc is not None else None,
         "hit_rate_healthy": round(hit_rate, 4),
         "confusion_matrix": {
-            "true_positive":  int(tp),
-            "true_negative":  int(tn),
+            "true_positive": int(tp),
+            "true_negative": int(tn),
             "false_positive": int(fp),
             "false_negative": int(fn),
         },
@@ -246,7 +248,7 @@ def evaluate(data_dir: str) -> None:
 
     output = {
         "model_version": "mobilenetv2-v1",
-        "updated_at":    date.today().isoformat(),
+        "updated_at": date.today().isoformat(),
         **metrics,
         "notes": "Generated by ml/evaluate.py. Run ml/evaluate.py --compare for multi-arch comparison.",
     }
@@ -268,13 +270,13 @@ def compare_models(data_dir: str) -> None:
     """
     candidates = [
         ("mobilenetv2", MODEL_PATH),
-        ("resnet18",    MODELS_DIR / "resnet18_classifier.pt"),
+        ("resnet18", MODELS_DIR / "resnet18_classifier.pt"),
     ]
     experiments_dir = MODELS_DIR / "experiments"
     if experiments_dir.exists():
         for pt in sorted(experiments_dir.glob("*.pt")):
             arch = "mobilenetv2" if "mobilenetv2" in pt.stem else (
-                   "resnet18"    if "resnet18"    in pt.stem else None)
+                   "resnet18" if "resnet18" in pt.stem else None)
             if arch:
                 candidates.append((arch, pt))
 
@@ -320,7 +322,7 @@ def compare_models(data_dir: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate quality classifier")
     parser.add_argument("--data_dir", required=True, help="Path to dataset root folder")
-    parser.add_argument("--compare",  action="store_true",
+    parser.add_argument("--compare", action="store_true",
                         help="Compare all available model checkpoints side-by-side")
     args = parser.parse_args()
 

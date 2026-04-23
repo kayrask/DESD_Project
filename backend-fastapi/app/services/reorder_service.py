@@ -74,7 +74,6 @@ def predict_reorder_items(customer_email: str) -> list[dict]:
 
 def _compute_rfm(customer_email: str) -> list[dict]:
     """Compute RFM features per product for this customer from the Django DB."""
-    from django.db.models import Sum, Count, Avg
     from api.models import OrderItem
 
     today = date.today()
@@ -95,14 +94,14 @@ def _compute_rfm(customer_email: str) -> list[dict]:
     for r in rows:
         pid = r["product__id"]
         product_meta[pid] = {
-            "name":     r["product__name"],
+            "name": r["product__name"],
             "category": r["product__category"],
-            "price":    float(r["product__price"]),
+            "price": float(r["product__price"]),
         }
         if r["order__delivery_date"]:
             product_orders[pid].append({
-                "date":  r["order__delivery_date"],
-                "qty":   r["quantity"],
+                "date": r["order__delivery_date"],
+                "qty": r["quantity"],
                 "spend": float(r["unit_price"]) * r["quantity"],
             })
 
@@ -111,25 +110,25 @@ def _compute_rfm(customer_email: str) -> list[dict]:
         if not orders:
             continue
         orders_sorted = sorted(orders, key=lambda x: x["date"])
-        last_date     = orders_sorted[-1]["date"]
-        recency       = (today - last_date).days
-        frequency     = len(orders_sorted)
-        monetary      = sum(o["spend"] for o in orders_sorted)
-        last_qty      = orders_sorted[-1]["qty"]
+        last_date = orders_sorted[-1]["date"]
+        recency = (today - last_date).days
+        frequency = len(orders_sorted)
+        monetary = sum(o["spend"] for o in orders_sorted)
+        last_qty = orders_sorted[-1]["qty"]
 
         dates = [o["date"] for o in orders_sorted]
         if len(dates) >= 2:
-            intervals = [(dates[i+1] - dates[i]).days for i in range(len(dates)-1)]
+            intervals = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
             avg_interval = float(np.mean(intervals))
         else:
             avg_interval = 999.0
 
         features.append({
-            "product_id":        pid,
-            "recency":           float(recency),
-            "frequency":         float(frequency),
-            "monetary":          float(monetary),
-            "last_qty":          float(last_qty),
+            "product_id": pid,
+            "recency": float(recency),
+            "frequency": float(frequency),
+            "monetary": float(monetary),
+            "last_qty": float(last_qty),
             "avg_interval_days": float(avg_interval),
             **product_meta[pid],
         })
@@ -140,7 +139,7 @@ def _compute_rfm(customer_email: str) -> list[dict]:
 def _model_predict(customer_email: str, artifact: dict) -> list[dict]:
     """Use the trained Logistic Regression pipeline to score each product."""
     try:
-        pipeline     = artifact["pipeline"]
+        pipeline = artifact["pipeline"]
         feature_cols = artifact["feature_cols"]
 
         product_features = _compute_rfm(customer_email)
@@ -162,19 +161,19 @@ def _model_predict(customer_email: str, artifact: dict) -> list[dict]:
                 continue
 
             days_since = int(pf["recency"])
-            avg_int    = int(pf["avg_interval_days"])
+            avg_int = int(pf["avg_interval_days"])
             reason = (
                 f"Usually reorders every {avg_int} days — last ordered {days_since} days ago"
                 if avg_int < 900
                 else f"Ordered {int(pf['frequency'])}× before — due for a restock?"
             )
             results.append({
-                "product_id":  p.id,
-                "name":        p.name,
-                "price":       float(p.price),
-                "category":    p.category,
-                "source":      "model",
-                "reason":      reason,
+                "product_id": p.id,
+                "name": p.name,
+                "price": float(p.price),
+                "category": p.category,
+                "source": "model",
+                "reason": reason,
                 "probability": round(float(prob), 3),
             })
 
@@ -211,12 +210,12 @@ def _trending_fallback() -> list[dict]:
                 break
             p = products[pid]
             results.append({
-                "product_id":  p.id,
-                "name":        p.name,
-                "price":       float(p.price),
-                "category":    p.category,
-                "source":      "trending",
-                "reason":      f"Popular this month — {r['total']} units sold",
+                "product_id": p.id,
+                "name": p.name,
+                "price": float(p.price),
+                "category": p.category,
+                "source": "trending",
+                "reason": f"Popular this month — {r['total']} units sold",
                 "probability": 0.5,
             })
         return results
