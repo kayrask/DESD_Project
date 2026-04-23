@@ -17,6 +17,7 @@ from api.models import OrderItem, Product
 
 
 def _safe_float(value) -> float:
+    """Coerce value to float, returning 0.0 on failure."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -24,6 +25,7 @@ def _safe_float(value) -> float:
 
 
 def _safe_int(value) -> int:
+    """Coerce value to int, returning 0 on failure."""
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -33,6 +35,7 @@ def _safe_int(value) -> int:
 # ── Baseline v1 ──────────────────────────────────────────────────────────────
 
 def _baseline_score(product: Product, category_counts: Counter) -> float:
+    """Compute a heuristic baseline relevance score for a product based on stock, price, and category popularity."""
     stock = _safe_int(product.stock)
     price = _safe_float(product.price)
     stock_score    = min(stock, 100) / 20.0
@@ -235,6 +238,7 @@ def _build_reason(
 
 
 def _format_product(product: Product, score: float, reason: str = "") -> dict:
+    """Serialise a product with its AI score and combined discount into a standardised response dict."""
     manual_discount = _safe_int(product.discount_percentage) if hasattr(product, "discount_percentage") else 0
     ai_discount = _safe_int(product.ai_discount_percentage) if hasattr(product, "ai_discount_percentage") else 0
     discount = min(50, manual_discount + ai_discount)

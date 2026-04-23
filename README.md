@@ -21,6 +21,7 @@ This repository contains work for **two modules** that share a single codebase. 
 | `feature/ai-producer-quality-check-and-backend-improvements` | Matt | AI quality assessment, backend improvements |
 | `feature/ada-ai-and-missing-features` | Ada | AI monitoring, XAI, model upload/export |
 | `feature/pep8-compliance` | Kayra | PEP 8 compliance for all ML/AI Python modules |
+| `main` *(latest)* | Kayra | Docstrings added to all AI/ML functions and classes |
 
 ### DESD Project Branches
 
@@ -107,6 +108,22 @@ npm run dev -- --host 127.0.0.1 --port 5173
 | Producer | `producer@desd.local` | `Password123` |
 | Admin | `admin@desd.local` | `Password123` |
 | Customer | `customer@desd.local` | `Password123` |
+
+---
+
+## Code Quality
+
+All Python source code across `ml/`, `fruit_quality_ai/`, and `app/services/` meets the following standards:
+
+- **PEP 8 compliant** — validated with `flake8`, 105 violations resolved (`feature/pep8-compliance`)
+- **Full docstring coverage** — every function and class has a docstring explaining its purpose
+- **Test suite** — `backend-fastapi/api/tests.py`
+
+To run the linter:
+```bash
+cd backend-fastapi
+python3 -m flake8 --max-line-length=120 --statistics .
+```
 
 ---
 
