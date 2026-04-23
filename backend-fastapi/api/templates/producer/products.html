@@ -92,6 +92,7 @@
                 <th class="text-center">AI</th>
                 <th class="text-center">Total</th>
                 <th class="text-center">Stock</th>
+                <th class="text-center">Waste Risk</th>
                 <th>Status</th>
                 <th class="text-end">Actions</th>
               </tr>
@@ -137,6 +138,15 @@
                   <span class="{% if product.stock == 0 %}text-danger fw-bold{% elif product.stock < 10 %}text-warning fw-bold{% else %}text-success{% endif %}">
                     {{ product.stock }}
                   </span>
+                </td>
+                <td class="align-middle text-center">
+                  {% if product.waste_risk %}
+                  <span class="badge" style="background:{{ product.waste_risk.risk_colour }}20;color:{{ product.waste_risk.risk_colour }};font-size:.7rem;border:1px solid {{ product.waste_risk.risk_colour }}40">
+                    {{ product.waste_risk.risk_level }} &nbsp;{{ product.waste_risk.risk_score }}
+                  </span>
+                  {% else %}
+                  <span class="text-muted small">—</span>
+                  {% endif %}
                 </td>
                 <td class="align-middle">
                   <span class="badge {% if product.status == 'Available' %}badge-available{% elif product.status == 'Out of Stock' %}badge-out-of-stock{% else %}badge-unavailable{% endif %}">
