@@ -140,6 +140,7 @@ def get_producer_assessments(producer: User) -> list[dict]:
 
 
 def _load_training_chart() -> str | None:
+    """Load the accuracy-over-time training chart as a base64-encoded string."""
     import base64, pathlib
     chart_path = pathlib.Path(__file__).parent.parent.parent / "fruit_quality_ai" / "results" / "training_history.png"
     if chart_path.exists():

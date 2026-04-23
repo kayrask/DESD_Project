@@ -107,6 +107,7 @@ def _plot_confusion_matrix(
     class_names: List[str],
     save_path: Path,
 ) -> None:
+    """Save a labelled confusion matrix figure to ``save_path``."""
     n = len(class_names)
     fig, ax = plt.subplots(figsize=(max(6, n), max(5, n)))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
