@@ -950,8 +950,8 @@ class CartOperationsTest(TestCase):
     def test_remove_from_cart(self):
         session = self.client.session
         session["cart"] = [{"product_id": self.product.id, "name": "Bean",
-                             "price": 1.00, "quantity": 2,
-                             "producer_id": self.producer.id, "producer_name": "Test"}]
+                            "price": 1.00, "quantity": 2,
+                            "producer_id": self.producer.id, "producer_name": "Test"}]
         session.save()
         self.client.post(reverse("cart_remove", args=[self.product.id]))
         cart = self.client.session.get("cart", [])
@@ -960,8 +960,8 @@ class CartOperationsTest(TestCase):
     def test_update_cart_quantity(self):
         session = self.client.session
         session["cart"] = [{"product_id": self.product.id, "name": "Bean",
-                             "price": 1.00, "quantity": 1,
-                             "producer_id": self.producer.id, "producer_name": "Test"}]
+                            "price": 1.00, "quantity": 1,
+                            "producer_id": self.producer.id, "producer_name": "Test"}]
         session.save()
         self.client.post(reverse("cart_update", args=[self.product.id]), {"quantity": "3"})
         cart = self.client.session.get("cart", [])
@@ -970,8 +970,8 @@ class CartOperationsTest(TestCase):
     def test_update_cart_quantity_exceeds_stock_fails(self):
         session = self.client.session
         session["cart"] = [{"product_id": self.product.id, "name": "Bean",
-                             "price": 1.00, "quantity": 1,
-                             "producer_id": self.producer.id, "producer_name": "Test"}]
+                            "price": 1.00, "quantity": 1,
+                            "producer_id": self.producer.id, "producer_name": "Test"}]
         session.save()
         self.client.post(reverse("cart_update", args=[self.product.id]), {"quantity": "999"})
         cart = self.client.session.get("cart", [])
@@ -2320,7 +2320,7 @@ class FoodMilesFallbackTest(TestCase):
         self.assertIsNone(result)
 
     def test_calculate_uses_fallback_for_unknown(self):
-        from api.food_miles import calculate_food_miles, DEFAULT_BRISTOL
+        from api.food_miles import calculate_food_miles
         # Both sides unknown → both DEFAULT_BRISTOL → distance = 0
         result = calculate_food_miles("ZZ99 9ZZ", "ZZ88 8ZZ")
         self.assertEqual(result, 0.0)
@@ -2415,7 +2415,6 @@ class SerializerValidationTest(TestCase):
 
 # ── Task 1: ml/data/preprocess.py — data pipeline ────────────────────────────
 
-import os
 import pathlib
 import shutil
 import tempfile

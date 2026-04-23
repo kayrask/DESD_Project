@@ -309,10 +309,10 @@ GRADE_OVERRIDE_CHOICES = [
 ]
 
 OVERRIDE_REASON_CHOICES = [
-    ("wrong_grade",    "AI grade was incorrect"),
-    ("context",        "Context the model could not see (e.g. variety, age)"),
-    ("image_quality",  "Poor image quality affected the result"),
-    ("other",          "Other"),
+    ("wrong_grade", "AI grade was incorrect"),
+    ("context", "Context the model could not see (e.g. variety, age)"),
+    ("image_quality", "Poor image quality affected the result"),
+    ("other", "Other"),
 ]
 
 
@@ -337,11 +337,11 @@ class QualityOverride(models.Model):
     producer = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="quality_overrides"
     )
-    ai_grade       = models.CharField(max_length=1, choices=GRADE_CHOICES)
+    ai_grade = models.CharField(max_length=1, choices=GRADE_CHOICES)
     override_grade = models.CharField(max_length=1, choices=GRADE_OVERRIDE_CHOICES)
-    reason         = models.CharField(max_length=30, choices=OVERRIDE_REASON_CHOICES)
-    notes          = models.TextField(blank=True, default="")
-    created_at     = models.DateTimeField(auto_now_add=True)
+    reason = models.CharField(max_length=30, choices=OVERRIDE_REASON_CHOICES)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -355,11 +355,11 @@ class QualityOverride(models.Model):
 
 class ModelEvaluation(models.Model):
     """Records accuracy metrics each time a model is evaluated after upload."""
-    version      = models.CharField(max_length=100)
-    accuracy     = models.FloatField()
-    precision    = models.FloatField()
-    recall       = models.FloatField()
-    f1_score     = models.FloatField()
+    version = models.CharField(max_length=100)
+    accuracy = models.FloatField()
+    precision = models.FloatField()
+    recall = models.FloatField()
+    f1_score = models.FloatField()
     evaluated_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

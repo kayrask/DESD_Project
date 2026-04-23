@@ -23,14 +23,14 @@ import sys
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BASE = pathlib.Path(__file__).parent
-_FRUIT_AI_DIR   = _BASE.parent / "fruit_quality_ai"
-_CHECKPOINT     = _FRUIT_AI_DIR / "checkpoints" / "best_model.pth"
-_LEGACY_MODEL   = _BASE / "saved_models" / "quality_classifier.pt"
+_FRUIT_AI_DIR = _BASE.parent / "fruit_quality_ai"
+_CHECKPOINT = _FRUIT_AI_DIR / "checkpoints" / "best_model.pth"
+_LEGACY_MODEL = _BASE / "saved_models" / "quality_classifier.pt"
 IMG_SIZE = 224
 
 # Module-level caches
 _fruit_predictor = None   # QualityPredictor instance (new model)
-_legacy_model    = None   # MobileNetV2 (old model)
+_legacy_model = None   # MobileNetV2 (old model)
 _device = "cpu"
 
 
@@ -85,7 +85,8 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
     Returns the standard classify_image dict, or None if the model
     couldn't be loaded so the caller can fall through to the legacy path.
     """
-    import tempfile, os
+    import tempfile
+    import os
     predictor = _load_fruit_predictor()
     if predictor is None:
         return None
@@ -127,8 +128,8 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
         # Blend pixel scores with CNN quality_score for smoother output
         q = float(result.quality_score)          # 0.5–1.0 fresh, 0.0–0.5 rotten
         w_cnn, w_img = 0.65, 0.35
-        color_s    = round(img_scores["color_score"]    * w_img + q * 100 * w_cnn, 1)
-        size_s     = round(img_scores["size_score"]     * w_img + q * 100 * w_cnn, 1)
+        color_s = round(img_scores["color_score"] * w_img + q * 100 * w_cnn, 1)
+        size_s = round(img_scores["size_score"] * w_img + q * 100 * w_cnn, 1)
         ripeness_s = round(img_scores["ripeness_score"] * w_img + q * 100 * w_cnn, 1)
 
         # Case study mandates grade be derived from the three scores via the
@@ -142,16 +143,16 @@ def _fruit_classify(image_bytes: bytes, explain: bool) -> dict | None:
             is_healthy = False
 
         return {
-            "grade":            grade,
-            "color_score":      color_s,
-            "size_score":       size_s,
-            "ripeness_score":   ripeness_s,
+            "grade": grade,
+            "color_score": color_s,
+            "size_score": size_s,
+            "ripeness_score": ripeness_s,
             "model_confidence": round(result.confidence, 4),
-            "is_healthy":       is_healthy,
-            "model_version":    "efficientnet-b0-v1",
-            "predicted_class":  predicted_class,
-            "xai_heatmap":      xai_heatmap,
-            "xai_explanation":  reasoning,
+            "is_healthy": is_healthy,
+            "model_version": "efficientnet-b0-v1",
+            "predicted_class": predicted_class,
+            "xai_heatmap": xai_heatmap,
+            "xai_explanation": reasoning,
         }
     except Exception:
         return None
@@ -178,7 +179,6 @@ def reload_model():
 
 
 def _preprocess(image_bytes: bytes):
-    import torch
     from PIL import Image
     from torchvision import transforms
     tf = transforms.Compose([
@@ -228,8 +228,8 @@ def _compute_image_scores(image_bytes: bytes) -> dict:
     size_score = float(np.clip(50.0 + (cv / (corner_v + cv)) * 50.0, 40.0, 100.0))
 
     return {
-        "color_score":    round(color_score, 1),
-        "size_score":     round(size_score, 1),
+        "color_score": round(color_score, 1),
+        "size_score": round(size_score, 1),
         "ripeness_score": round(ripeness_score, 1),
     }
 
@@ -288,11 +288,11 @@ def _grad_cam_heatmap(model, tensor, image_bytes):
                 cam /= cam.max()
             cam_img = Image.fromarray((cam * 255).astype(np.uint8)).resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
             cam_arr = np.array(cam_img, dtype=np.float32) / 255.0
-            red   = np.clip(cam_arr * 3.0, 0, 1)
+            red = np.clip(cam_arr * 3.0, 0, 1)
             green = np.clip(cam_arr * 3.0 - 1.0, 0, 1)
-            blue  = np.clip(cam_arr * 3.0 - 2.0, 0, 1)
-            heat  = Image.fromarray((np.stack([red, green, blue], axis=-1) * 255).astype("uint8"))
-            orig  = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((IMG_SIZE, IMG_SIZE))
+            blue = np.clip(cam_arr * 3.0 - 2.0, 0, 1)
+            heat = Image.fromarray((np.stack([red, green, blue], axis=-1) * 255).astype("uint8"))
+            orig = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((IMG_SIZE, IMG_SIZE))
             blended = Image.blend(orig, heat, alpha=0.45)
             buf = io.BytesIO()
             blended.save(buf, format="PNG")
@@ -326,8 +326,8 @@ def _kmeans_fallback(image_bytes):
     ))
     img_scores = _compute_image_scores(image_bytes)
     w_cnn, w_img = 0.4, 0.6
-    cs = round(img_scores["color_score"]    * w_img + cnn_conf * 100 * w_cnn, 1)
-    ss = round(img_scores["size_score"]     * w_img + cnn_conf * 100 * w_cnn, 1)
+    cs = round(img_scores["color_score"] * w_img + cnn_conf * 100 * w_cnn, 1)
+    ss = round(img_scores["size_score"] * w_img + cnn_conf * 100 * w_cnn, 1)
     rs = round(img_scores["ripeness_score"] * w_img + cnn_conf * 100 * w_cnn, 1)
     grade, is_healthy = _grade_from_scores(cs, ss, rs)
     return {
@@ -371,8 +371,8 @@ def classify_image(image_bytes: bytes, explain: bool = False) -> dict:
             healthy_conf = float(probs[0])
             img_scores = _compute_image_scores(image_bytes)
             w_cnn, w_img = 0.6, 0.4
-            cs = round(img_scores["color_score"]    * w_img + healthy_conf * 100 * w_cnn, 1)
-            ss = round(img_scores["size_score"]     * w_img + healthy_conf * 100 * w_cnn, 1)
+            cs = round(img_scores["color_score"] * w_img + healthy_conf * 100 * w_cnn, 1)
+            ss = round(img_scores["size_score"] * w_img + healthy_conf * 100 * w_cnn, 1)
             rs = round(img_scores["ripeness_score"] * w_img + healthy_conf * 100 * w_cnn, 1)
             grade, is_healthy = _grade_from_scores(cs, ss, rs)
             xai_heatmap = _grad_cam_heatmap(model, tensor, image_bytes) if explain else None
@@ -401,8 +401,8 @@ def classify_image(image_bytes: bytes, explain: bool = False) -> dict:
     b = arr[:, :, 2] / 255.0
     cnn_conf = float(np.clip(g.mean() - np.clip(r - b, 0, None).mean() * 0.5, 0.0, 1.0))
     img_scores = _compute_image_scores(image_bytes)
-    cs = round(img_scores["color_score"]    * 0.5 + cnn_conf * 100 * 0.5, 1)
-    ss = round(img_scores["size_score"]     * 0.5 + cnn_conf * 100 * 0.5, 1)
+    cs = round(img_scores["color_score"] * 0.5 + cnn_conf * 100 * 0.5, 1)
+    ss = round(img_scores["size_score"] * 0.5 + cnn_conf * 100 * 0.5, 1)
     rs = round(img_scores["ripeness_score"] * 0.5 + cnn_conf * 100 * 0.5, 1)
     grade, is_healthy = _grade_from_scores(cs, ss, rs)
     return {

@@ -395,6 +395,7 @@ class CustomerDashboardView(CustomerRequiredMixin, ListView):
 
 class CustomerOrdersView(CustomerRequiredMixin, View):
     """Redirects to the dashboard which now contains the full order history."""
+
     def get(self, request):
         return redirect("customer_dashboard")
 
@@ -416,6 +417,7 @@ def product_suggest(request):
 
 class ProductListView(View):
     """Redirects to marketplace — kept for URL backwards-compatibility only."""
+
     def get(self, request):
         qs = request.GET.urlencode()
         url = "/marketplace/" + (f"?{qs}" if qs else "")
@@ -1359,10 +1361,10 @@ class ProducerQualityCheckView(ProducerRequiredMixin, View):
 
         # ── Override: producer disputes the AI grade ──────────────────────────
         if action == "override_grade":
-            assessment_id  = request.POST.get("assessment_id")
+            assessment_id = request.POST.get("assessment_id")
             override_grade = request.POST.get("override_grade", "").strip()
-            reason         = request.POST.get("reason", "other").strip()
-            notes          = request.POST.get("notes", "").strip()
+            reason = request.POST.get("reason", "other").strip()
+            notes = request.POST.get("notes", "").strip()
 
             if not assessment_id or not str(assessment_id).isdigit():
                 messages.error(request, "Missing assessment reference.")
@@ -1439,6 +1441,7 @@ class AdminAIMonitoringView(AdminRequiredMixin, TemplateView):
             load_latest_model_metrics,
             find_confusion_matrix_path,
         )
+
 
         ctx = super().get_context_data(**kwargs)
         ctx["stats"] = get_ai_monitoring_stats()
@@ -1903,7 +1906,7 @@ class ProducerDemandForecastView(ProducerRequiredMixin, View):
             season_label = "Year round"
             if product.season_start and product.season_end:
                 start_md = (product.season_start.month, product.season_start.day)
-                end_md   = (product.season_end.month,   product.season_end.day)
+                end_md = (product.season_end.month, product.season_end.day)
                 today_md = (today.month, today.day)
                 if start_md <= end_md:
                     in_season = start_md <= today_md <= end_md
@@ -1915,14 +1918,14 @@ class ProducerDemandForecastView(ProducerRequiredMixin, View):
                 )
 
             result.append({
-                "id":                  product.id,
-                "name":                product.name,
-                "category":            product.category,
-                "current_stock":       product.stock,
-                "monthly_orders":      dict(sorted(monthly.items())),
+                "id": product.id,
+                "name": product.name,
+                "category": product.category,
+                "current_stock": product.stock,
+                "monthly_orders": dict(sorted(monthly.items())),
                 "forecast_next_month": forecast,
-                "in_season":           in_season,
-                "season_label":        season_label,
+                "in_season": in_season,
+                "season_label": season_label,
             })
 
         return JsonResponse({"products": result})
@@ -1951,7 +1954,7 @@ class AdminOverrideReviewView(AdminRequiredMixin, View):
             .order_by("-count")[:10]
         )
         return render(request, "admin_panel/override_review.html", {
-            "overrides":       overrides,
+            "overrides": overrides,
             "producer_counts": producer_counts,
             "total_overrides": QualityOverride.objects.count(),
         })
