@@ -95,7 +95,7 @@
           {% endif %}
           {% if rec.discounted_price %}
           <div style="margin-bottom:.75rem">
-            <span class="badge bg-danger" style="font-size:.7rem">{{ rec.discount_percentage }}% off</span>
+          <span class="badge bg-danger" style="font-size:.7rem">{{ rec.discount_percentage }}% off</span>
             <div style="font-size:1.1rem;font-weight:800;color:#dc3545">£{{ rec.discounted_price }}</div>
             <div style="font-size:.85rem;color:var(--muted);text-decoration:line-through">£{{ rec.price }}</div>
           </div>
@@ -165,7 +165,7 @@
             {% endif %}
           </p>
           {% if product.discounted_price %}
-          <span class="badge bg-danger" style="font-size:.7rem">{{ product.discount_percentage }}% off</span>
+          <span class="badge bg-danger" style="font-size:.7rem">{{ product.effective_discount_percentage }}% off</span>
           <div style="font-size:1.25rem;font-weight:800;color:#dc3545">£{{ product.discounted_price }} <span style="font-size:.85rem;color:var(--muted);text-decoration:line-through;font-weight:400">£{{ product.price }}</span></div>
           {% else %}
           <div style="font-size:1.25rem;font-weight:800;color:var(--brand-darker)">£{{ product.price }}</div>

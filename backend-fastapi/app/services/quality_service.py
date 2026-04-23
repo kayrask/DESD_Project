@@ -62,14 +62,16 @@ def assess_product_image(
 
     if result["grade"] == "C":
         notes = "AI suggests offering this batch at a discount (Grade C quality). 20% discount applied automatically."
-        if product.discount_percentage == 0:
-            product.discount_percentage = 20
-            product.save(update_fields=["discount_percentage"])
+        if product.ai_discount_percentage == 0:
+            product.ai_discount_percentage = 20
+            product.ai_discount_active = True
+            product.save(update_fields=["ai_discount_percentage", "ai_discount_active"])
     elif result["grade"] == "A":
         notes = "Premium quality confirmed. Eligible for featured listing."
-        if product.discount_percentage > 0:
-            product.discount_percentage = 0
-            product.save(update_fields=["discount_percentage"])
+        if product.ai_discount_active and product.ai_discount_percentage > 0:
+            product.ai_discount_percentage = 0
+            product.ai_discount_active = False
+            product.save(update_fields=["ai_discount_percentage", "ai_discount_active"])
 
     assessment = QualityAssessment.objects.create(
         product=product,
@@ -98,6 +100,12 @@ def assess_product_image(
         "notes": notes,
         "warnings": warnings,
         "predicted_class": result.get("predicted_class"),
+        "price": float(product.price),
+        "discount_percentage": product.discount_percentage,
+        "ai_discount_percentage": product.ai_discount_percentage,
+        "effective_discount_percentage": product.effective_discount_percentage,
+        "discounted_price": product.discounted_price,
+        "ai_discount_active": product.ai_discount_active,
         # XAI fields — populated when explain=True succeeds; None otherwise
         "xai_heatmap": result.get("xai_heatmap"),
         "xai_explanation": result.get("xai_explanation"),
@@ -184,3 +192,135 @@ def get_ai_monitoring_stats() -> dict:
         "override_count": override_count,
         "training_chart": _load_training_chart(),
     }
+
+
+# ── Model metrics bridge ──────────────────────────────────────────────────────
+# The admin AI monitoring page reads a single dict with keys
+# {accuracy, precision, recall, f1_score, fairness, ...}. The OLD binary
+# evaluator (ml/evaluate.py) already emits that schema to
+# ml/saved_models/model_metrics.json. The NEW 28-class evaluator
+# (fruit_quality_ai/evaluation/evaluator.py) emits a different shape to
+# fruit_quality_ai/results/evaluation_report.json.
+#
+# load_latest_model_metrics() prefers the new model's report when present and
+# normalises it into the legacy schema so the admin page works for both.
+
+def _load_new_model_metrics() -> dict | None:
+    """Read fruit_quality_ai/results/evaluation_report.json, normalise it into
+    the schema the admin monitoring template expects, and compute per-produce
+    fairness (weakest rotten-class recall + healthy/rotten accuracy gap).
+    Returns None if the report doesn't exist yet."""
+    import json
+    import pathlib
+
+    report_path = (
+        pathlib.Path(__file__).resolve().parent.parent.parent
+        / "fruit_quality_ai" / "results" / "evaluation_report.json"
+    )
+    if not report_path.exists():
+        return None
+    try:
+        with open(report_path) as f:
+            raw = json.load(f)
+    except Exception:
+        return None
+
+    per_class = raw.get("per_class", {})
+    weighted = per_class.get("weighted avg", {}) or per_class.get("macro avg", {})
+
+    # ── Per-produce fairness ──────────────────────────────────────────────────
+    # Class names follow "<produce>_<healthy|rotten>_..."
+    # Group recalls by produce type and by condition (healthy vs rotten) to
+    # surface (a) weakest rotten-recall (food-safety risk) and
+    # (b) healthy/rotten recall gap (producer-fairness risk).
+    healthy_recalls: list[float] = []
+    rotten_recalls: list[float] = []
+    weakest_rotten: tuple[str, float] | None = None
+    for class_name, stats in per_class.items():
+        if class_name in ("accuracy", "macro avg", "weighted avg"):
+            continue
+        if not isinstance(stats, dict):
+            continue
+        recall = float(stats.get("recall", 0.0) or 0.0)
+        if "_healthy_" in class_name:
+            healthy_recalls.append(recall)
+        elif "_rotten_" in class_name:
+            rotten_recalls.append(recall)
+            if weakest_rotten is None or recall < weakest_rotten[1]:
+                produce = class_name.split("_", 1)[0]
+                weakest_rotten = (produce, recall)
+
+    fairness: dict | None = None
+    if healthy_recalls and rotten_recalls:
+        mean_healthy = sum(healthy_recalls) / len(healthy_recalls)
+        mean_rotten = sum(rotten_recalls) / len(rotten_recalls)
+        gap = abs(mean_healthy - mean_rotten)
+        # Reuse the legacy schema keys so the existing template card works.
+        # fpr_healthy  ≈ 1 - mean_healthy_recall  (rate healthy produce mis-flagged)
+        # fnr_rotten   ≈ 1 - mean_rotten_recall   (rate rotten produce missed)
+        fairness = {
+            "fpr_healthy": round(1.0 - mean_healthy, 4),
+            "fnr_rotten":  round(1.0 - mean_rotten, 4),
+            "equalized_odds_gap": round(gap, 4),
+            "fairness_verdict": (
+                "Acceptable (per-class recall gap ≤ 0.10)"
+                if gap <= 0.10
+                else "Warning: per-class recall gap > 0.10"
+            ),
+            "weakest_rotten_produce": weakest_rotten[0] if weakest_rotten else None,
+            "weakest_rotten_recall": round(weakest_rotten[1], 4) if weakest_rotten else None,
+        }
+
+    return {
+        "model_version": raw.get("model_version", "efficientnet-b0-v1"),
+        "accuracy":      round(float(raw.get("accuracy", 0.0)), 4),
+        "precision":     round(float(weighted.get("precision", 0.0) or 0.0), 4),
+        "recall":        round(float(weighted.get("recall", 0.0) or 0.0), 4),
+        "f1_score":      round(float(weighted.get("f1-score", 0.0) or 0.0), 4),
+        "auc_roc":       raw.get("auc_roc"),
+        "dataset":       raw.get("dataset", "Fruit & Vegetable Disease (Healthy vs Rotten)"),
+        "train_samples": raw.get("train_samples"),
+        "val_samples":   raw.get("val_samples"),
+        "updated_at":    raw.get("updated_at"),
+        "fairness":      fairness,
+        "num_classes":   len([k for k in per_class if k not in ("accuracy", "macro avg", "weighted avg")]),
+    }
+
+
+def _load_legacy_model_metrics() -> dict | None:
+    """Read the old binary classifier's metrics JSON in its original schema."""
+    import json
+    import pathlib
+
+    path = (
+        pathlib.Path(__file__).resolve().parent.parent.parent
+        / "ml" / "saved_models" / "model_metrics.json"
+    )
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def load_latest_model_metrics() -> dict | None:
+    """Prefer the new 28-class model's metrics when present, else fall back
+    to the legacy binary model's metrics. Returns None if neither exists."""
+    return _load_new_model_metrics() or _load_legacy_model_metrics()
+
+
+def find_confusion_matrix_path() -> "pathlib.Path | None":
+    """Locate the confusion-matrix image from whichever evaluator wrote one."""
+    import pathlib
+
+    backend_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    candidates = [
+        backend_root / "fruit_quality_ai" / "results" / "confusion_matrix.png",
+        backend_root / "ml" / "saved_models" / "confusion_matrix.png",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None

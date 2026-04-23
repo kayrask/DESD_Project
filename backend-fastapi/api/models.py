@@ -74,7 +74,9 @@ class Product(models.Model):
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products")
     allergens = models.TextField(blank=True, default="", help_text="List allergens e.g. Milk, Eggs, Gluten")
     is_organic = models.BooleanField(default=False)
-    discount_percentage = models.IntegerField(default=0, help_text="Surplus/quality discount 0–50%")
+    discount_percentage = models.IntegerField(default=0, help_text="Manual surplus discount 0–50%")
+    ai_discount_percentage = models.IntegerField(default=0, help_text="AI quality discount 0–50%")
+    ai_discount_active = models.BooleanField(default=False, help_text="True when the current AI quality discount is active.")
     harvest_date = models.DateField(null=True, blank=True, help_text="Date produce was harvested")
     season_start = models.DateField(null=True, blank=True, help_text="Season availability start")
     season_end = models.DateField(null=True, blank=True, help_text="Season availability end")
@@ -82,9 +84,13 @@ class Product(models.Model):
 
     @property
     def discounted_price(self):
-        if self.discount_percentage > 0:
-            return round(float(self.price) * (1 - self.discount_percentage / 100), 2)
+        if self.effective_discount_percentage > 0:
+            return round(float(self.price) * (1 - self.effective_discount_percentage / 100), 2)
         return None
+
+    @property
+    def effective_discount_percentage(self):
+        return min(50, max(0, self.discount_percentage) + max(0, self.ai_discount_percentage))
 
     class Meta:
         ordering = ["name"]

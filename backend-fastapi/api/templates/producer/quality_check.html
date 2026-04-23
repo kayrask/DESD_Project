@@ -108,17 +108,17 @@
               <div class="col-4">
                 <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">COLOUR</div>
                 <div style="font-weight:700;font-size:1.1rem">{{ result.color_score }}%</div>
-                <div class="score-bar"><div class="score-fill" style="width:{{ result.color_score }}%;background:{% if result.color_score >= 85 %}var(--brand){% elif result.color_score >= 75 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.color_score }}%;background:{% if result.color_score >= 75 %}var(--brand){% elif result.color_score >= 65 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
               </div>
               <div class="col-4">
                 <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">SIZE</div>
                 <div style="font-weight:700;font-size:1.1rem">{{ result.size_score }}%</div>
-                <div class="score-bar"><div class="score-fill" style="width:{{ result.size_score }}%;background:{% if result.size_score >= 90 %}var(--brand){% elif result.size_score >= 80 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.size_score }}%;background:{% if result.size_score >= 80 %}var(--brand){% elif result.size_score >= 70 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
               </div>
               <div class="col-4">
                 <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem">RIPENESS</div>
                 <div style="font-weight:700;font-size:1.1rem">{{ result.ripeness_score }}%</div>
-                <div class="score-bar"><div class="score-fill" style="width:{{ result.ripeness_score }}%;background:{% if result.ripeness_score >= 80 %}var(--brand){% elif result.ripeness_score >= 70 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
+                <div class="score-bar"><div class="score-fill" style="width:{{ result.ripeness_score }}%;background:{% if result.ripeness_score >= 70 %}var(--brand){% elif result.ripeness_score >= 60 %}#d97706{% else %}#dc2626{% endif %}"></div></div>
               </div>
             </div>
 
@@ -168,6 +168,20 @@
             {% endif %}
             {% if result.notes %}
             <div class="alert alert-success mt-3 py-2" style="font-size:.82rem">{{ result.notes }}</div>
+            {% endif %}
+            {% if result.effective_discount_percentage > 0 %}
+            <div class="alert alert-info mt-3 py-2" style="font-size:.82rem">
+              <i class="bi bi-tag me-1"></i>
+              Active product discount:
+              <strong>{{ result.effective_discount_percentage }}% off</strong>
+              {% if result.discounted_price %}
+              — now £{{ result.discounted_price }} instead of £{{ result.price }}
+              {% endif %}
+              <span class="d-block mt-1">
+                Surplus: {{ result.discount_percentage }}%
+                {% if result.ai_discount_percentage > 0 %} · AI: {{ result.ai_discount_percentage }}%{% endif %}
+              </span>
+            </div>
             {% endif %}
 
             <!-- Grade Override -->
