@@ -1,17 +1,66 @@
-# DESD Group Project - Sprint 1 Setup
+# DESD Group Project
+
+This repository contains work for **two modules** that share a single codebase. The `main` branch is the combined production branch with all features merged.
+
+---
+
+## Repository Branch Structure
+
+### Advanced AI (UFCFUR-15-3) Branches
+
+| Branch | Author | Description |
+|--------|--------|-------------|
+| `feature/ai-ml-forecasting-reorder` | Nazlican | EfficientNet-B0 integration, SARIMA demand forecasting, reorder prediction |
+| `feature/ada-ml-pipeline-eval-tracking` | Ada | ML data pipeline extraction, accuracy-over-time tracking |
+| `feature/nazli-ai-modelling-engine` | Nazlican | ML modelling engine |
+| `feature/nazli-ai-ux-improvements` | Nazlican | AI output visibility — predicted class, confidence badges, training chart |
+| `feature/nazli-ai-enhancements` | Nazlican | Waste risk scoring, quality trend chart, price recommendations, Celery alerts |
+| `feat/ai-case-study-audit-fixes` | Kayra | Runtime hardening, grade thresholds, evaluator routing, fairness UX |
+| `feature/admin-ai-fixes-model-eval` | Kayra | Auto-evaluate model on upload, Celery task, OOM fix |
+| `feature/kayra-ai-ml-improvements` | Kayra | AI/ML improvements, model upload, surplus discounts |
+| `feature/ai-producer-quality-check-and-backend-improvements` | Matt | AI quality assessment, backend improvements |
+| `feature/ada-ai-and-missing-features` | Ada | AI monitoring, XAI, model upload/export |
+| `feature/pep8-compliance` | Kayra | PEP 8 compliance for all ML/AI Python modules |
+
+### DESD Project Branches
+
+| Branch | Author | Description |
+|--------|--------|-------------|
+| `feature/docker-setup` | — | Docker & infrastructure setup |
+| `feature/database-and-api-integration` | — | Database and API layer |
+| `feature/supabase-migration` | — | SQLite to Supabase migration |
+| `feature/checkout-and-registration` | — | Checkout and registration flow |
+| `feature/enhanced-customer-experience` | — | Customer UX improvements |
+| `feature/auth-cors-error-messages` | — | Auth, CORS, error messages |
+| `feature/marketing-pages-split` | — | Marketing and landing pages |
+| `feature/frontend-django-polish` | — | Frontend polish |
+| `feature/sprint2-concurrency-realtime-catalogue` | — | Sprint 2: concurrency, real-time catalogue |
+| `feature/sprint1-sprint2-nazli-fixes` | Nazlican | Sprint 1/2 bug fixes |
+| `feature/sprint2-kayra-producer-final` | Kayra | Producer dashboard, sprint 2 |
+| `feature/desd-sprint2-sprint3-kayra` | Kayra | Sprint 2/3 DESD features |
+| `feature/tc-013-017-018-020-community-foodmiles` | — | Test cases: community & food miles |
+| `feature/cart-quantity-ux-improvements` | — | Cart quantity UX |
+| `feature/ada-sprint3-final` | Ada | Sprint 3 marketplace fixes |
+| `feature/ada-sprint3-order-history-security` | Ada | Order history, session security (TC-021/022) |
+| `feature/ada-auth-security-fixes` | Ada | Role protection, ownership checks |
+| `feature/admin-report-implementation-and-cleanup` | — | Admin reports, backend cleanup |
+
+---
+
+## Setup
 
 This repo has two apps:
-- `backend-fastapi` (Django/DRF API + Supabase)
+- `backend-fastapi` (Django/DRF API + PostgreSQL)
 - `frontend-react` (React + Vite)
 
-## 1) Requirements
-- Python 3.11+ (3.12 tested)
+### Requirements
+- Python 3.11+
 - Node.js 18+
 - npm 9+
-- Supabase project (shared team project)
+- Docker & Docker Compose (recommended)
 
-## 2) Shared Environment File
-Create/edit root `.env`:
+### Environment File
+Create a `.env` file in the project root:
 
 ```env
 FRONTEND_URLS=http://localhost:5173,http://127.0.0.1:5173,http://frontend:5173
@@ -23,53 +72,48 @@ SUPABASE_ANON_KEY=YOUR_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 ```
 
-## 3) Database Setup (Supabase)
-In Supabase SQL Editor, run:
-- `backend-fastapi/sql/supabase_schema.sql`
-
-This creates tables:
-- `users`
-- `products`
-- `orders`
-- future tables: `producer_settlements`, `commission_reports`, `customer_favorites`
-
-## 4) Start Backend
+### Start with Docker (recommended)
 ```bash
-cd "/Users/kayra/Developer/DESD Group Project/backend-fastapi"
+docker compose up -d --build
+docker compose exec backend python manage.py migrate
+```
+
+App runs at `http://localhost`
+
+### Start Manually
+
+**Backend:**
+```bash
+cd backend-fastapi
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Backend URL: `http://127.0.0.1:8000`
-
-## 5) Start Frontend
+**Frontend:**
 ```bash
-cd "/Users/kayra/Developer/DESD Group Project/frontend-react"
+cd frontend-react
 npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Frontend URL: `http://127.0.0.1:5173`
+---
 
-## 6) Demo Users (seeded by SQL)
-- `producer@desd.local / Password123`
-- `admin@desd.local / Password123`
-- `customer@desd.local / Password123`
+## Demo Users
 
-## 7) Before Demo Checklist
-- Run backend and frontend successfully.
-- Confirm Supabase schema + seed rows are applied.
-- Verify role login works for producer/admin/customer.
-- Verify producer flow:
-  - `/producer/products` create/edit
-  - `/producer/orders` status transitions
-  - `/producer/orders/:orderId` detail page
-- Verify admin flow:
-  - `/admin/reports` date range filter
-  - totals summary updates
-  - CSV export works
-- Verify security:
-  - wrong role access returns `403`
-  - unauthenticated protected route returns `401`
+| Role | Email | Password |
+|------|-------|----------|
+| Producer | `producer@desd.local` | `Password123` |
+| Admin | `admin@desd.local` | `Password123` |
+| Customer | `customer@desd.local` | `Password123` |
+
+---
+
+## Pre-Demo Checklist
+- [ ] Backend and frontend running successfully
+- [ ] Database migrations applied
+- [ ] Role login works for producer / admin / customer
+- [ ] Producer flow: create/edit products, order status transitions, order detail
+- [ ] Admin flow: reports date range filter, totals summary, CSV export
+- [ ] Security: wrong role returns `403`, unauthenticated returns `401`
