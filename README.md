@@ -2,6 +2,25 @@
 
 This repository contains work for **two modules** that share a single codebase. The `main` branch is the combined production branch with all features merged.
 
+## Repository Structure
+
+```
+/
+├── advanced-ai/        ← Advanced AI module (UFCFUR-15-3) — AI/ML code & notebooks
+├── desd/               ← DESD Group Project (UFCF7S-30-2) — web application
+├── backend-fastapi/    ← Django backend (shared between both modules)
+└── compose.yaml        ← Docker Compose
+```
+
+> `advanced-ai/ml` and `advanced-ai/fruit_quality_ai` are symlinks into `backend-fastapi/` so Django can import them directly while keeping them visible under the AI folder.
+
+## PR Labels
+
+All pull requests are labelled by module for easy filtering:
+
+- 🟣 [`advanced-ai`](../../pulls?q=label%3Aadvanced-ai+is%3Amerged) — Advanced AI module PRs
+- 🔵 [`desd`](../../pulls?q=label%3Adesd+is%3Amerged) — DESD project PRs
+
 ---
 
 ## Repository Branch Structure
@@ -21,7 +40,9 @@ This repository contains work for **two modules** that share a single codebase. 
 | `feature/ai-producer-quality-check-and-backend-improvements` | Matt | AI quality assessment, backend improvements |
 | `feature/ada-ai-and-missing-features` | Ada | AI monitoring, XAI, model upload/export |
 | `feature/pep8-compliance` | Kayra | PEP 8 compliance for all ML/AI Python modules |
-| `feature/docs-docstrings-readme-v2` *(latest)* | Kayra | Docstrings added to all AI/ML functions and classes |
+| `feature/nazli-auc-roc-evaluation` | Nazlican | AUC-ROC added to EfficientNet-B0 evaluator |
+| `feature/docs-docstrings-readme-v2` | Kayra | Docstrings added to all AI/ML functions and classes |
+| `feature/repo-restructure` *(latest)* | Kayra | `advanced-ai/` and `desd/` folder separation, PR labels |
 
 ### DESD Project Branches
 
