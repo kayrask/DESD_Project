@@ -43,3 +43,52 @@ This folder contains all AI/ML work for the Advanced Artificial Intelligence mod
 - `ml/evaluate.py` — Fairness metrics (FPR, FNR, equalized-odds gap)
 - `ml/forecasting/` — SARIMA model and forecasting service
 - `ml/reorder/` — Logistic Regression reorder prediction
+
+## How to Run
+
+### Prerequisites
+```bash
+cd backend-fastapi
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Train EfficientNet-B0
+```bash
+cd backend-fastapi
+python fruit_quality_ai/main.py --mode train
+```
+
+### Evaluate EfficientNet-B0 (regenerates confusion matrix + metrics)
+```bash
+cd backend-fastapi
+python fruit_quality_ai/main.py --mode evaluate
+```
+
+### Run Fairness Metrics (binary MobileNetV2 models)
+```bash
+cd backend-fastapi
+python -m ml.evaluate --data_dir "ml/Fruit And Vegetable Diseases Dataset"
+```
+
+### Compare All Models Side-by-Side
+```bash
+cd backend-fastapi
+python -m ml.evaluate --data_dir "ml/Fruit And Vegetable Diseases Dataset" --compare
+```
+
+### Notebooks
+Open in Jupyter:
+```bash
+pip install jupyter
+jupyter notebook advanced-ai/notebooks/
+```
+- \`demand_forecast.ipynb\` — SARIMA training and MAE evaluation
+- \`reorder_prediction.ipynb\` — Logistic Regression training, AUC-ROC 0.9417
+
+### Run via Docker (recommended for full system)
+```bash
+docker compose up -d --build
+docker compose exec backend python fruit_quality_ai/main.py --mode evaluate
+```
