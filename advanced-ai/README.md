@@ -17,6 +17,25 @@ This folder contains all AI/ML work for the Advanced Artificial Intelligence mod
 > `ml/` and `fruit_quality_ai/` are symlinks to `backend-fastapi/ml/` and `backend-fastapi/fruit_quality_ai/`
 > respectively. The code lives there so Django can import it directly.
 
+## Branch Structure
+
+| Branch | Author | Description |
+|--------|--------|-------------|
+| `feature/ai-ml-forecasting-reorder` | Nazlican | EfficientNet-B0 integration, SARIMA demand forecasting, reorder prediction |
+| `feature/ada-ml-pipeline-eval-tracking` | Ada | ML data pipeline extraction, accuracy-over-time tracking |
+| `feature/nazli-ai-modelling-engine` | Nazlican | ML modelling engine |
+| `feature/nazli-ai-ux-improvements` | Nazlican | AI output visibility — predicted class, confidence badges, training chart |
+| `feature/nazli-ai-enhancements` | Nazlican | Waste risk scoring, quality trend chart, price recommendations, Celery alerts |
+| `feat/ai-case-study-audit-fixes` | Kayra | Runtime hardening, grade thresholds, evaluator routing, fairness UX |
+| `feature/admin-ai-fixes-model-eval` | Kayra | Auto-evaluate model on upload, Celery task, OOM fix |
+| `feature/kayra-ai-ml-improvements` | Kayra | AI/ML improvements, model upload, surplus discounts |
+| `feature/ai-producer-quality-check-and-backend-improvements` | Matt | AI quality assessment, backend improvements |
+| `feature/ada-ai-and-missing-features` | Ada | AI monitoring, XAI, model upload/export |
+| `feature/pep8-compliance` | Kayra | PEP 8 compliance for all ML/AI Python modules |
+| `feature/nazli-auc-roc-evaluation` | Nazlican | AUC-ROC added to EfficientNet-B0 evaluator |
+| `feature/docs-docstrings-readme-v2` | Kayra | Docstrings added to all AI/ML functions and classes |
+| `feature/repo-restructure` *(latest)* | Kayra | `advanced-ai/` and `desd/` folder separation, PR labels |
+
 ## Key Files
 - `fruit_quality_ai/training/trainer.py` — Two-stage transfer learning trainer
 - `fruit_quality_ai/evaluation/evaluator.py` — Per-class F1, confusion matrix
