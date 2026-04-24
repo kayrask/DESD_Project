@@ -21,7 +21,7 @@ This repository contains work for **two modules** that share a single codebase. 
 | `feature/ai-producer-quality-check-and-backend-improvements` | Matt | AI quality assessment, backend improvements |
 | `feature/ada-ai-and-missing-features` | Ada | AI monitoring, XAI, model upload/export |
 | `feature/pep8-compliance` | Kayra | PEP 8 compliance for all ML/AI Python modules |
-| `main` *(latest)* | Kayra | Docstrings added to all AI/ML functions and classes |
+| `feature/docs-docstrings-readme-v2` *(latest)* | Kayra | Docstrings added to all AI/ML functions and classes |
 
 ### DESD Project Branches
 
