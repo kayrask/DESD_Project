@@ -1,0 +1,191 @@
+{
+  "model_version": "efficientnet-b0-v1",
+  "accuracy": 0.978563283922463,
+  "auc_roc": 0.9997,
+  "per_class": {
+    "apple_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9917582417582418,
+      "recall": 0.989041095890411,
+      "f1-score": 0.9903978052126201,
+      "support": 365.0
+    },
+    "apple_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9751693002257337,
+      "recall": 0.9840546697038725,
+      "f1-score": 0.9795918367346939,
+      "support": 439.0
+    },
+    "banana_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9933333333333333,
+      "recall": 0.9933333333333333,
+      "f1-score": 0.9933333333333333,
+      "support": 300.0
+    },
+    "banana_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9882352941176471,
+      "recall": 1.0,
+      "f1-score": 0.9940828402366864,
+      "support": 420.0
+    },
+    "bellpepper_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9270833333333334,
+      "recall": 0.978021978021978,
+      "f1-score": 0.9518716577540107,
+      "support": 91.0
+    },
+    "bellpepper_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.875,
+      "recall": 0.875,
+      "f1-score": 0.875,
+      "support": 88.0
+    },
+    "carrot_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9361702127659575,
+      "recall": 0.946236559139785,
+      "f1-score": 0.9411764705882354,
+      "support": 93.0
+    },
+    "carrot_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9302325581395349,
+      "recall": 0.9195402298850575,
+      "f1-score": 0.9248554913294798,
+      "support": 87.0
+    },
+    "cucumber_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9680851063829787,
+      "recall": 1.0,
+      "f1-score": 0.9837837837837838,
+      "support": 91.0
+    },
+    "cucumber_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9746835443037974,
+      "recall": 0.875,
+      "f1-score": 0.9221556886227545,
+      "support": 88.0
+    },
+    "grape_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9375,
+      "recall": 1.0,
+      "f1-score": 0.967741935483871,
+      "support": 30.0
+    },
+    "grape_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 1.0,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9655172413793104,
+      "support": 30.0
+    },
+    "guava_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 30.0
+    },
+    "guava_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 1.0,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9655172413793104,
+      "support": 30.0
+    },
+    "jujube_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.90625,
+      "recall": 0.9666666666666667,
+      "f1-score": 0.9354838709677419,
+      "support": 30.0
+    },
+    "jujube_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9354838709677419,
+      "recall": 0.9666666666666667,
+      "f1-score": 0.9508196721311476,
+      "support": 30.0
+    },
+    "mango_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9889705882352942,
+      "recall": 0.992619926199262,
+      "f1-score": 0.990791896869245,
+      "support": 271.0
+    },
+    "mango_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9880952380952381,
+      "recall": 0.9851632047477745,
+      "f1-score": 0.986627043090639,
+      "support": 337.0
+    },
+    "orange_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 1.0,
+      "recall": 0.9871382636655949,
+      "f1-score": 0.9935275080906149,
+      "support": 311.0
+    },
+    "orange_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9939024390243902,
+      "recall": 0.9969418960244648,
+      "f1-score": 0.9954198473282444,
+      "support": 327.0
+    },
+    "pomegranate_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 1.0,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9655172413793104,
+      "support": 30.0
+    },
+    "pomegranate_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.967741935483871,
+      "recall": 1.0,
+      "f1-score": 0.9836065573770492,
+      "support": 30.0
+    },
+    "potato_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9772727272727273,
+      "recall": 0.9347826086956522,
+      "f1-score": 0.9555555555555557,
+      "support": 92.0
+    },
+    "potato_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.8850574712643678,
+      "recall": 0.8850574712643678,
+      "f1-score": 0.8850574712643678,
+      "support": 87.0
+    },
+    "strawberry_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 240.0
+    },
+    "strawberry_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.991701244813278,
+      "recall": 1.0,
+      "f1-score": 0.9958333333333333,
+      "support": 239.0
+    },
+    "tomato_healthy_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9468085106382979,
+      "recall": 0.9888888888888889,
+      "f1-score": 0.9673913043478262,
+      "support": 90.0
+    },
+    "tomato_rotten_fruit_and_vegetable_diseases_dataset": {
+      "precision": 0.9759036144578314,
+      "recall": 0.9101123595505618,
+      "f1-score": 0.9418604651162792,
+      "support": 89.0
+    },
+    "accuracy": 0.978563283922463,
+    "macro avg": {
+      "precision": 0.9662299487361998,
+      "recall": 0.9633666363694406,
+      "f1-score": 0.9643756104531944,
+      "support": 4385.0
+    },
+    "weighted avg": {
+      "precision": 0.9787422620972867,
+      "recall": 0.978563283922463,
+      "f1-score": 0.9784849362487227,
+      "support": 4385.0
+    }
+  },
+  "dataset": "Fruit & Vegetable Disease (Healthy vs Rotten)",
+  "test_samples": 4385,
+  "updated_at": "2026-04-24"
+}

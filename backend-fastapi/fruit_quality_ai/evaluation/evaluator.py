@@ -15,11 +15,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
     confusion_matrix,
     ConfusionMatrixDisplay,
+    roc_auc_score,
 )
 import matplotlib.pyplot as plt
 
@@ -51,17 +53,27 @@ def evaluate(
 
     all_preds: List[int] = []
     all_labels: List[int] = []
+    all_probs: List[List[float]] = []
 
     with torch.no_grad():
         for images, labels in test_loader:
             images = images.to(device)
             outputs = model(images)
+            probs = F.softmax(outputs, dim=1).cpu().numpy()
             preds = outputs.argmax(dim=1).cpu().tolist()
             all_preds.extend(preds)
             all_labels.extend(labels.tolist())
+            all_probs.extend(probs.tolist())
 
     # ── Metrics ────────────────────────────────────────────────────────────────
     accuracy = accuracy_score(all_labels, all_preds)
+    try:
+        auc_roc = roc_auc_score(
+            all_labels, all_probs,
+            multi_class="ovr", average="macro"
+        )
+    except Exception:
+        auc_roc = None
     report_dict = classification_report(
         all_labels, all_preds,
         target_names=class_names,
@@ -74,7 +86,8 @@ def evaluate(
         zero_division=0,
     )
 
-    print(f"\n[Evaluation] Test Accuracy: {accuracy:.4f}\n")
+    auc_str = f"{auc_roc:.4f}" if auc_roc is not None else "N/A"
+    print(f"\n[Evaluation] Test Accuracy: {accuracy:.4f}  AUC-ROC (OvR macro): {auc_str}\n")
     print(report_str)
 
     # ── Confusion matrix ───────────────────────────────────────────────────────
@@ -89,6 +102,7 @@ def evaluate(
     summary = {
         "model_version": "efficientnet-b0-v1",
         "accuracy": accuracy,
+        "auc_roc": round(auc_roc, 4) if auc_roc is not None else None,
         "per_class": report_dict,
         "dataset": "Fruit & Vegetable Disease (Healthy vs Rotten)",
         "test_samples": len(all_labels),
