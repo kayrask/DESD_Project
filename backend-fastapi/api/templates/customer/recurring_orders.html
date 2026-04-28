@@ -8,19 +8,59 @@
       <h2 class="fw-bold mb-1">Recurring Orders</h2>
       <p class="text-muted mb-0">Set up automatic repeat orders from your current cart</p>
     </div>
-    <div class="d-flex gap-2">
-      <a href="{% url 'recurring_order_notifications' %}" class="btn btn-outline-secondary btn-sm position-relative">
-        <i class="bi bi-bell me-1"></i>Notifications
-        {% if pending_notification_count %}
-        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-              style="font-size:.6rem;">{{ pending_notification_count }}</span>
-        {% endif %}
-      </a>
-      <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Dashboard
-      </a>
+    <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Dashboard
+    </a>
+  </div>
+
+  <!-- Pending notifications requiring action -->
+  {% if pending_notifications %}
+  <div class="mb-4">
+    <h5 class="fw-bold mb-3">
+      <i class="bi bi-exclamation-circle text-warning me-2"></i>Action Required
+      <span class="badge bg-danger ms-2">{{ pending_notification_count }}</span>
+    </h5>
+    <div class="d-flex flex-column gap-3">
+      {% for n in pending_notifications %}
+      <div class="card border-0 shadow-sm border-start border-warning border-3">
+        <div class="card-body p-4">
+          <div class="mb-2">
+            {% if n.notification_type == 'price_changed' %}
+              <span class="badge bg-warning text-dark mb-2"><i class="bi bi-tag me-1"></i>Price Changed</span>
+            {% elif n.notification_type == 'out_of_stock' %}
+              <span class="badge bg-danger mb-2"><i class="bi bi-x-circle me-1"></i>Out of Stock</span>
+            {% else %}
+              <span class="badge bg-warning text-dark mb-2"><i class="bi bi-exclamation-circle me-1"></i>Quantity Unavailable</span>
+            {% endif %}
+            <p class="mb-1">{{ n.message }}</p>
+            <small class="text-muted">{{ n.created_at|date:"d M Y H:i" }} &middot; Recurring order #{{ n.recurring_order.id }}</small>
+          </div>
+          <div class="d-flex gap-2 mt-3">
+            <form method="post" action="{% url 'recurring_order_approve' n.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="approve">
+              <button type="submit" class="btn btn-success btn-sm">
+                <i class="bi bi-check-circle me-1"></i>
+                {% if n.notification_type == 'price_changed' %}Yes, continue at new price
+                {% elif n.notification_type == 'out_of_stock' %}Resume when back in stock
+                {% else %}Yes, continue
+                {% endif %}
+              </button>
+            </form>
+            <form method="post" action="{% url 'recurring_order_approve' n.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="reject">
+              <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-pause-circle me-1"></i>Keep paused
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
     </div>
   </div>
+  {% endif %}
 
   <!-- Create recurring order from cart -->
   <div class="card border-0 shadow-sm mb-5">

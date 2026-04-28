@@ -1766,14 +1766,20 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
 
     def get(self, request):
         orders = RecurringOrder.objects.filter(customer=request.user)
-        pending_count = RecurringOrderNotification.objects.filter(
+        pending_notifications = RecurringOrderNotification.objects.filter(
             recurring_order__customer=request.user,
             requires_action=True,
+        ).select_related("recurring_order")
+        # Mark non-action notifications as read when page is visited
+        RecurringOrderNotification.objects.filter(
+            recurring_order__customer=request.user,
+            requires_action=False,
             is_read=False,
-        ).count()
+        ).update(is_read=True)
         return render(request, self.template_name, {
             "recurring_orders": orders,
-            "pending_notification_count": pending_count,
+            "pending_notifications": pending_notifications,
+            "pending_notification_count": pending_notifications.count(),
         })
 
     def post(self, request):
