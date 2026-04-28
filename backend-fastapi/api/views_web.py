@@ -239,6 +239,31 @@ class MarketplaceView(ListView):
         ctx["organic_filter"] = self.request.GET.get("organic", "")
         ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
 
+        # ── Producer search results (shown when query matches a producer name / org) ──
+        q = self.request.GET.get("q", "").strip()
+        matching_producers = []
+        if q:
+            producer_qs = User.objects.filter(
+                role="producer",
+                status="active",
+            ).filter(
+                Q(full_name__icontains=q) | Q(organization_name__icontains=q)
+            )[:6]
+            for p in producer_qs:
+                product_count = Product.objects.filter(
+                    producer=p, status__in=("Available", "In Season")
+                ).count()
+                reviews = Review.objects.filter(product__producer=p)
+                review_count = reviews.count()
+                avg = round(sum(r.rating for r in reviews) / review_count, 1) if review_count else None
+                matching_producers.append({
+                    "producer": p,
+                    "product_count": product_count,
+                    "review_count": review_count,
+                    "avg_rating": avg,
+                })
+        ctx["matching_producers"] = matching_producers
+
         ctx["recommendations"] = []
         ctx["rec_model_version"] = ""
 
@@ -470,6 +495,42 @@ class ProductDetailView(View):
             messages.success(request, "Review submitted. Thank you!")
             return redirect("product_detail", pk=pk)
         return render(request, self.template_name, self._context(request, pk, form=form))
+
+
+class ProducerProfileView(View):
+    """Public storefront for a producer — shows all their active products and stats."""
+
+    template_name = "producer_profile.html"
+
+    def get(self, request, pk):
+        producer = get_object_or_404(User, pk=pk, role="producer", status="active")
+        base_qs = Product.objects.filter(producer=producer, status__in=("Available", "In Season"))
+
+        # All categories for the pills (unfiltered)
+        categories = sorted({p.category for p in base_qs if p.category})
+        total_products = base_qs.count()
+
+        # Apply optional category filter within this producer's page
+        selected_category = request.GET.get("category", "").strip()
+        products = base_qs.filter(category=selected_category) if selected_category else base_qs
+        products = products.order_by("name")
+
+        all_reviews = Review.objects.filter(product__producer=producer)
+        total_reviews = all_reviews.count()
+        avg_rating = None
+        if total_reviews > 0:
+            avg_rating = round(sum(r.rating for r in all_reviews) / total_reviews, 1)
+
+        return render(request, self.template_name, {
+            "producer": producer,
+            "products": products,
+            "total_products": total_products,
+            "categories": categories,
+            "selected_category": selected_category,
+            "total_reviews": total_reviews,
+            "avg_rating": avg_rating,
+            "star_range": range(1, 6),
+        })
 
 
 class CartView(CustomerRequiredMixin, TemplateView):
