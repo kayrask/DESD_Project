@@ -248,11 +248,37 @@ DAY_CHOICES = [
 
 
 class RecurringOrder(models.Model):
+    """A scheduled repeat order placed automatically on a recurring basis."""
+
+    STATUS_ACTIVE = "active"
+    STATUS_PAUSED = "paused"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_COMPLETED = "completed"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_PAUSED, "Paused — awaiting approval"),
+        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
+
+    PAUSE_PRICE = "price_changed"
+    PAUSE_STOCK = "out_of_stock"
+    PAUSE_QTY = "quantity_unavailable"
+    PAUSE_REASON_CHOICES = [
+        (PAUSE_PRICE, "Price changed"),
+        (PAUSE_STOCK, "Out of stock"),
+        (PAUSE_QTY, "Quantity unavailable"),
+    ]
+
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recurring_orders")
     items = models.JSONField(help_text='[{"product_id": 1, "name": "...", "quantity": 2, "price": 1.50}]')
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default="weekly")
     delivery_day = models.IntegerField(choices=DAY_CHOICES, default=2)
+    # status replaces the old boolean is_active — kept for backwards compat
     is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    pause_reason = models.CharField(max_length=30, choices=PAUSE_REASON_CHOICES, blank=True, default="")
+    end_date = models.DateField(null=True, blank=True, help_text="Recurring order will stop after this date")
     next_order_date = models.DateField()
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -262,6 +288,40 @@ class RecurringOrder(models.Model):
 
     def __str__(self):
         return f"Recurring order for {self.customer.full_name} ({self.get_recurrence_display()})"
+
+
+class RecurringOrderNotification(models.Model):
+    """In-app notification for a recurring order event that may require customer action."""
+
+    TYPE_PRICE = "price_changed"
+    TYPE_STOCK = "out_of_stock"
+    TYPE_QTY = "quantity_unavailable"
+    TYPE_PLACED = "order_placed"
+    TYPE_CHOICES = [
+        (TYPE_PRICE, "Price changed"),
+        (TYPE_STOCK, "Out of stock"),
+        (TYPE_QTY, "Quantity unavailable"),
+        (TYPE_PLACED, "Order placed"),
+    ]
+
+    ACTION_APPROVED = "approved"
+    ACTION_REJECTED = "rejected"
+
+    recurring_order = models.ForeignKey(
+        RecurringOrder, on_delete=models.CASCADE, related_name="notifications"
+    )
+    notification_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    requires_action = models.BooleanField(default=True)
+    action_taken = models.CharField(max_length=20, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.notification_type} notification for order #{self.recurring_order_id}"
 
 
 SEASON_CHOICES = [

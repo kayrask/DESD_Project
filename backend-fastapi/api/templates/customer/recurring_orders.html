@@ -8,9 +8,18 @@
       <h2 class="fw-bold mb-1">Recurring Orders</h2>
       <p class="text-muted mb-0">Set up automatic repeat orders from your current cart</p>
     </div>
-    <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i>Dashboard
-    </a>
+    <div class="d-flex gap-2">
+      <a href="{% url 'recurring_order_notifications' %}" class="btn btn-outline-secondary btn-sm position-relative">
+        <i class="bi bi-bell me-1"></i>Notifications
+        {% if pending_notification_count %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size:.6rem;">{{ pending_notification_count }}</span>
+        {% endif %}
+      </a>
+      <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard
+      </a>
+    </div>
   </div>
 
   <!-- Create recurring order from cart -->
@@ -22,14 +31,14 @@
       <form method="post">
         {% csrf_token %}
         <div class="row g-3">
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">Recurrence</label>
             <select name="recurrence" class="form-select">
               <option value="weekly">Weekly</option>
               <option value="fortnightly">Fortnightly</option>
             </select>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">Preferred Delivery Day</label>
             <select name="delivery_day" class="form-select">
               <option value="0">Monday</option>
@@ -41,7 +50,15 @@
               <option value="6">Sunday</option>
             </select>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">
+              End Date <span class="text-danger">*</span>
+            </label>
+            <input type="date" name="end_date" class="form-control" required
+                   min="{{ today|date:'Y-m-d' }}" placeholder="When should this stop?">
+            <div class="form-text">Required — recurring order stops after this date.</div>
+          </div>
+          <div class="col-md-3">
             <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal">(optional)</span></label>
             <textarea name="notes" class="form-control" rows="1" placeholder="Any special instructions…"></textarea>
           </div>
@@ -67,7 +84,8 @@
             <th>Items</th>
             <th>Recurrence</th>
             <th>Delivery Day</th>
-            <th>Next Order Date</th>
+            <th>Next Order</th>
+            <th>Ends</th>
             <th>Status</th>
             <th class="text-end">Actions</th>
           </tr>
@@ -86,14 +104,28 @@
             <td class="align-middle">{{ ro.get_delivery_day_display }}</td>
             <td class="align-middle">{{ ro.next_order_date|date:"d M Y" }}</td>
             <td class="align-middle">
-              {% if ro.is_active %}
-              <span class="badge bg-success">Active</span>
+              {% if ro.end_date %}{{ ro.end_date|date:"d M Y" }}{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="align-middle">
+              {% if ro.status == 'active' %}
+                <span class="badge bg-success">Active</span>
+              {% elif ro.status == 'paused' %}
+                <span class="badge bg-warning text-dark">
+                  <i class="bi bi-exclamation-circle me-1"></i>Paused — {{ ro.get_pause_reason_display }}
+                </span>
+              {% elif ro.status == 'completed' %}
+                <span class="badge bg-secondary">Completed</span>
               {% else %}
-              <span class="badge bg-secondary">Cancelled</span>
+                <span class="badge bg-secondary">Cancelled</span>
               {% endif %}
             </td>
             <td class="align-middle text-end">
-              {% if ro.is_active %}
+              {% if ro.status == 'paused' %}
+                <a href="{% url 'recurring_order_notifications' %}" class="btn btn-sm btn-warning me-1">
+                  <i class="bi bi-exclamation-circle me-1"></i>Review
+                </a>
+              {% endif %}
+              {% if ro.status == 'active' or ro.status == 'paused' %}
               <form method="post" action="{% url 'recurring_order_cancel' ro.pk %}" style="display:inline">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-sm btn-outline-danger"

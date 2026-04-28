@@ -144,11 +144,15 @@
         {% if user.is_authenticated %}
           {% if user.role == "customer" %}
             <div class="dropdown">
-              <a href="#" class="user-chip dropdown-toggle text-decoration-none"
+              <a href="#" class="user-chip dropdown-toggle text-decoration-none position-relative"
                  data-bs-toggle="dropdown" aria-expanded="false" style="cursor:pointer;">
                 <i class="bi bi-person-fill me-1"></i>{{ user.full_name }} &middot; {{ user.role }}
+                {% if recurring_notification_count %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                      style="font-size:.6rem;">{{ recurring_notification_count }}</span>
+                {% endif %}
               </a>
-              <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-1" style="min-width:180px;border-radius:10px;">
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-1" style="min-width:200px;border-radius:10px;">
                 <li>
                   <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{% url 'customer_dashboard' %}">
                     <i class="bi bi-speedometer2 text-success"></i> My Dashboard
@@ -157,6 +161,14 @@
                 <li>
                   <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{% url 'cart' %}">
                     <i class="bi bi-cart2 text-success"></i> My Cart
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{% url 'recurring_order_notifications' %}">
+                    <i class="bi bi-arrow-repeat text-success"></i> Recurring Orders
+                    {% if recurring_notification_count %}
+                    <span class="badge bg-danger ms-auto">{{ recurring_notification_count }}</span>
+                    {% endif %}
                   </a>
                 </li>
               </ul>

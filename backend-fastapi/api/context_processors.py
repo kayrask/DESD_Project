@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.utils import timezone
+from django.db.models import Q
 
 
 def cart_context(request):
@@ -35,3 +36,19 @@ def session_context(request):
 
     warn = remaining < 300  # warn when fewer than 5 minutes remain
     return {"session_expires_in_seconds": remaining, "session_warn": warn}
+
+
+def recurring_order_notifications_context(request):
+    """Inject pending recurring order notification count for the navbar badge."""
+    if not request.user.is_authenticated or getattr(request.user, "role", None) != "customer":
+        return {"recurring_notification_count": 0}
+    try:
+        from api.models import RecurringOrderNotification
+        count = RecurringOrderNotification.objects.filter(
+            recurring_order__customer=request.user,
+            requires_action=True,
+            is_read=False,
+        ).count()
+    except Exception:
+        count = 0
+    return {"recurring_notification_count": count}

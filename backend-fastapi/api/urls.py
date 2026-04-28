@@ -76,6 +76,8 @@ web_patterns = [
     # Customer recurring orders
     path("customer/recurring-orders/", views_web.RecurringOrdersView.as_view(), name="recurring_orders"),
     path("customer/recurring-orders/<int:pk>/cancel/", views_web.CancelRecurringOrderView.as_view(), name="recurring_order_cancel"),
+    path("customer/recurring-orders/notifications/", views_web.RecurringOrderNotificationsView.as_view(), name="recurring_order_notifications"),
+    path("customer/recurring-orders/notifications/<int:pk>/approve/", views_web.RecurringOrderApproveView.as_view(), name="recurring_order_approve"),
 
     # Admin panel (note: /admin/ is taken by Django admin)
     path("admin-panel/", views_web.AdminDashboardView.as_view(), name="admin_dashboard"),

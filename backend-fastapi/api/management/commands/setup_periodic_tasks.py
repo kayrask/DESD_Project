@@ -58,4 +58,13 @@ class Command(BaseCommand):
             },
         )
 
+        PeriodicTask.objects.update_or_create(
+            name="Fire recurring orders daily",
+            defaults={
+                "interval": schedule_daily,
+                "task": "api.tasks.fire_recurring_orders",
+                "enabled": True,
+            },
+        )
+
         self.stdout.write(self.style.SUCCESS("Periodic tasks registered."))
