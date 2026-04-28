@@ -258,12 +258,16 @@ def fire_recurring_orders():
             stored_price = float(item.get("price", 0))
             current_price = float(product.price)
             if abs(current_price - stored_price) > 0.001:
-                issue_type = RecurringOrder.PAUSE_PRICE
-                issue_item_name = item.get("name", product.name)
-                issue_product = product
-                break
+                if ro.on_price_change == RecurringOrder.PREF_NOTIFY:
+                    issue_type = RecurringOrder.PAUSE_PRICE
+                    issue_item_name = item.get("name", product.name)
+                    issue_product = product
+                    break
+                else:
+                    # Auto-continue — update stored price in-place
+                    item["price"] = current_price
 
-            # Out of stock check
+            # Out of stock check — always pause, can't auto-continue
             if product.status == "Out of Stock" or product.stock < 1:
                 issue_type = RecurringOrder.PAUSE_STOCK
                 issue_item_name = item.get("name", product.name)
@@ -271,10 +275,12 @@ def fire_recurring_orders():
 
             # Quantity check
             if product.stock < int(item.get("quantity", 1)):
-                issue_type = RecurringOrder.PAUSE_QTY
-                issue_item_name = item.get("name", product.name)
-                issue_product = product
-                break
+                if ro.on_quantity_change == RecurringOrder.PREF_NOTIFY:
+                    issue_type = RecurringOrder.PAUSE_QTY
+                    issue_item_name = item.get("name", product.name)
+                    issue_product = product
+                    break
+                # else auto-continue with whatever stock is available
 
         # ── Issue found → pause and notify ───────────────────────────────────
         if issue_type:

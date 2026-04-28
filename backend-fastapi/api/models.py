@@ -270,6 +270,13 @@ class RecurringOrder(models.Model):
         (PAUSE_QTY, "Quantity unavailable"),
     ]
 
+    PREF_AUTO = "auto_continue"
+    PREF_NOTIFY = "pause_notify"
+    PREF_CHOICES = [
+        (PREF_AUTO, "Yes — continue automatically"),
+        (PREF_NOTIFY, "No — pause and notify me"),
+    ]
+
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recurring_orders")
     items = models.JSONField(help_text='[{"product_id": 1, "name": "...", "quantity": 2, "price": 1.50}]')
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default="weekly")
@@ -278,6 +285,14 @@ class RecurringOrder(models.Model):
     is_active = models.BooleanField(default=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     pause_reason = models.CharField(max_length=30, choices=PAUSE_REASON_CHOICES, blank=True, default="")
+    on_price_change = models.CharField(
+        max_length=20, choices=PREF_CHOICES, default=PREF_NOTIFY,
+        help_text="What to do if a product price changes before the order fires",
+    )
+    on_quantity_change = models.CharField(
+        max_length=20, choices=PREF_CHOICES, default=PREF_NOTIFY,
+        help_text="What to do if the requested quantity is not fully available",
+    )
     end_date = models.DateField(null=True, blank=True, help_text="Recurring order will stop after this date")
     next_order_date = models.DateField()
     notes = models.TextField(blank=True, default="")

@@ -103,6 +103,49 @@
             <textarea name="notes" class="form-control" rows="1" placeholder="Any special instructions…"></textarea>
           </div>
         </div>
+
+        <!-- Preference questions — required -->
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">
+            <div class="card border bg-light p-3">
+              <p class="fw-semibold mb-2">
+                If a product price changes, do you still want to continue? <span class="text-danger">*</span>
+              </p>
+              <div class="d-flex gap-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="on_price_change"
+                         id="price_auto" value="auto_continue" required>
+                  <label class="form-check-label" for="price_auto">Yes — update price automatically</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="on_price_change"
+                         id="price_notify" value="pause_notify" required>
+                  <label class="form-check-label" for="price_notify">No — pause and notify me</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card border bg-light p-3">
+              <p class="fw-semibold mb-2">
+                If the quantity you want isn't fully available, do you still want to continue? <span class="text-danger">*</span>
+              </p>
+              <div class="d-flex gap-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="on_quantity_change"
+                         id="qty_auto" value="auto_continue" required>
+                  <label class="form-check-label" for="qty_auto">Yes — place with available stock</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="on_quantity_change"
+                         id="qty_notify" value="pause_notify" required>
+                  <label class="form-check-label" for="qty_notify">No — pause and notify me</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="mt-3">
           <button type="submit" class="btn btn-brand">
             <i class="bi bi-arrow-repeat me-1"></i>Create Recurring Order

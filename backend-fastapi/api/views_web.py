@@ -1793,9 +1793,16 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
         delivery_day = int(request.POST.get("delivery_day", 2))
         notes = request.POST.get("notes", "")
         end_date_str = request.POST.get("end_date", "").strip()
+        on_price_change = request.POST.get("on_price_change", "")
+        on_quantity_change = request.POST.get("on_quantity_change", "")
 
         if not end_date_str:
             messages.error(request, "An end date is required for recurring orders.")
+            return redirect("recurring_orders")
+
+        valid_prefs = {RecurringOrder.PREF_AUTO, RecurringOrder.PREF_NOTIFY}
+        if on_price_change not in valid_prefs or on_quantity_change not in valid_prefs:
+            messages.error(request, "Please answer both preference questions before continuing.")
             return redirect("recurring_orders")
 
         try:
@@ -1818,6 +1825,8 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
             delivery_day=delivery_day,
             is_active=True,
             status=RecurringOrder.STATUS_ACTIVE,
+            on_price_change=on_price_change,
+            on_quantity_change=on_quantity_change,
             end_date=end_date,
             next_order_date=next_date,
             notes=notes,
