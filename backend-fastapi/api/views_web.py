@@ -51,6 +51,7 @@ from api.models import (
     QualityOverride,
     Recipe,
     RecurringOrder,
+    RecurringOrderNotification,
     Review,
     User,
 )
@@ -1765,7 +1766,21 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
 
     def get(self, request):
         orders = RecurringOrder.objects.filter(customer=request.user)
-        return render(request, self.template_name, {"recurring_orders": orders})
+        pending_notifications = RecurringOrderNotification.objects.filter(
+            recurring_order__customer=request.user,
+            requires_action=True,
+        ).select_related("recurring_order")
+        # Mark non-action notifications as read when page is visited
+        RecurringOrderNotification.objects.filter(
+            recurring_order__customer=request.user,
+            requires_action=False,
+            is_read=False,
+        ).update(is_read=True)
+        return render(request, self.template_name, {
+            "recurring_orders": orders,
+            "pending_notifications": pending_notifications,
+            "pending_notification_count": pending_notifications.count(),
+        })
 
     def post(self, request):
         """Create a recurring order from current cart."""
@@ -1773,10 +1788,33 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
         if not cart:
             messages.error(request, "Your cart is empty.")
             return redirect("recurring_orders")
+
         recurrence = request.POST.get("recurrence", "weekly")
         delivery_day = int(request.POST.get("delivery_day", 2))
         notes = request.POST.get("notes", "")
-        # Calculate next order date (next occurrence of delivery_day)
+        end_date_str = request.POST.get("end_date", "").strip()
+        on_price_change = request.POST.get("on_price_change", "")
+        on_quantity_change = request.POST.get("on_quantity_change", "")
+
+        if not end_date_str:
+            messages.error(request, "An end date is required for recurring orders.")
+            return redirect("recurring_orders")
+
+        valid_prefs = {RecurringOrder.PREF_AUTO, RecurringOrder.PREF_NOTIFY}
+        if on_price_change not in valid_prefs or on_quantity_change not in valid_prefs:
+            messages.error(request, "Please answer both preference questions before continuing.")
+            return redirect("recurring_orders")
+
+        try:
+            end_date = date.fromisoformat(end_date_str)
+        except ValueError:
+            messages.error(request, "Invalid end date format.")
+            return redirect("recurring_orders")
+
+        if end_date <= date.today():
+            messages.error(request, "End date must be in the future.")
+            return redirect("recurring_orders")
+
         today = date.today()
         days_ahead = (delivery_day - today.weekday()) % 7 or 7
         next_date = today + timedelta(days=days_ahead)
@@ -1786,6 +1824,10 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
             recurrence=recurrence,
             delivery_day=delivery_day,
             is_active=True,
+            status=RecurringOrder.STATUS_ACTIVE,
+            on_price_change=on_price_change,
+            on_quantity_change=on_quantity_change,
+            end_date=end_date,
             next_order_date=next_date,
             notes=notes,
         )
@@ -1794,11 +1836,78 @@ class RecurringOrdersView(CustomerRequiredMixin, View):
 
 
 class CancelRecurringOrderView(CustomerRequiredMixin, View):
+    """Cancel a recurring order permanently."""
+
     def post(self, request, pk):
         ro = get_object_or_404(RecurringOrder, pk=pk, customer=request.user)
         ro.is_active = False
-        ro.save(update_fields=["is_active"])
+        ro.status = RecurringOrder.STATUS_CANCELLED
+        ro.save(update_fields=["is_active", "status"])
         messages.success(request, "Recurring order cancelled.")
+        return redirect("recurring_orders")
+
+
+class RecurringOrderNotificationsView(CustomerRequiredMixin, View):
+    """List all notifications for the logged-in customer's recurring orders."""
+
+    template_name = "customer/recurring_notifications.html"
+
+    def get(self, request):
+        notifications = RecurringOrderNotification.objects.filter(
+            recurring_order__customer=request.user,
+        ).select_related("recurring_order")
+        # Mark all as read when the page is opened
+        RecurringOrderNotification.objects.filter(
+            recurring_order__customer=request.user,
+            is_read=False,
+        ).update(is_read=True)
+        return render(request, self.template_name, {"notifications": notifications})
+
+
+class RecurringOrderApproveView(CustomerRequiredMixin, View):
+    """Handle customer approval or rejection of a paused recurring order notification."""
+
+    def post(self, request, pk):
+        notification = get_object_or_404(
+            RecurringOrderNotification,
+            pk=pk,
+            recurring_order__customer=request.user,
+            requires_action=True,
+        )
+        action = request.POST.get("action")
+        ro = notification.recurring_order
+
+        if action == "approve":
+            # If price changed, update stored prices to current market price
+            if notification.notification_type == RecurringOrderNotification.TYPE_PRICE:
+                updated_items = []
+                product_ids = [int(i["product_id"]) for i in ro.items]
+                products_map = {p.id: p for p in Product.objects.filter(pk__in=product_ids)}
+                for item in ro.items:
+                    product = products_map.get(int(item["product_id"]))
+                    if product:
+                        item = dict(item)
+                        item["price"] = float(product.price)
+                    updated_items.append(item)
+                ro.items = updated_items
+
+            ro.status = RecurringOrder.STATUS_ACTIVE
+            ro.pause_reason = ""
+            ro.is_active = True
+            ro.save(update_fields=["status", "pause_reason", "is_active", "items"])
+            notification.action_taken = RecurringOrderNotification.ACTION_APPROVED
+            notification.requires_action = False
+            notification.is_read = True
+            notification.save()
+            messages.success(request, "Recurring order resumed.")
+        else:
+            # Rejected — keep paused, mark notification handled
+            notification.action_taken = RecurringOrderNotification.ACTION_REJECTED
+            notification.requires_action = False
+            notification.is_read = True
+            notification.save()
+            messages.info(request, "Recurring order remains paused. Cancel it if you no longer want it.")
+
         return redirect("recurring_orders")
 
 

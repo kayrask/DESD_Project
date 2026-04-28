@@ -62,6 +62,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "api.context_processors.cart_context",
                 "api.context_processors.session_context",
+                "api.context_processors.recurring_order_notifications_context",
             ],
         },
     },

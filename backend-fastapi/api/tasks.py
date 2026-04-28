@@ -192,3 +192,252 @@ def send_reorder_reminders():
         emails_sent += 1
 
     return f"Reorder reminders sent to {emails_sent} customer(s)"
+
+
+@shared_task
+def fire_recurring_orders():
+    """
+    Process all active recurring orders whose next_order_date is today or overdue.
+
+    For each due order:
+    - If past end_date: mark completed.
+    - If price changed, out of stock, or quantity unavailable: pause the order,
+      create a RecurringOrderNotification, and email the customer.
+    - If all checks pass: place the order (CheckoutOrder + vendor Orders + OrderItems),
+      decrement stock, and advance next_order_date.
+
+    Runs daily via Celery Beat.
+    """
+    from datetime import date, timedelta
+    from decimal import Decimal
+    from collections import defaultdict
+
+    from django.core.mail import send_mail
+    from django.utils import timezone
+
+    from api.models import (
+        RecurringOrder, RecurringOrderNotification,
+        Product, CheckoutOrder, Order, OrderItem, CommissionReport,
+    )
+
+    _COMMISSION_RATE = Decimal("0.05")
+    today = date.today()
+
+    due = RecurringOrder.objects.filter(
+        status=RecurringOrder.STATUS_ACTIVE,
+        next_order_date__lte=today,
+    ).select_related("customer")
+
+    placed = 0
+    paused = 0
+    completed = 0
+
+    for ro in due:
+        # ── Past end date → mark completed ───────────────────────────────────
+        if ro.end_date and today > ro.end_date:
+            ro.status = RecurringOrder.STATUS_COMPLETED
+            ro.is_active = False
+            ro.save(update_fields=["status", "is_active"])
+            completed += 1
+            continue
+
+        # ── Check each item for issues ────────────────────────────────────────
+        issue_type = None
+        issue_item_name = ""
+        issue_product = None
+
+        for item in ro.items:
+            try:
+                product = Product.objects.get(pk=item["product_id"])
+            except Product.DoesNotExist:
+                issue_type = RecurringOrder.PAUSE_STOCK
+                issue_item_name = item.get("name", "item")
+                break
+
+            # Price change check
+            stored_price = float(item.get("price", 0))
+            current_price = float(product.price)
+            if abs(current_price - stored_price) > 0.001:
+                if ro.on_price_change == RecurringOrder.PREF_NOTIFY:
+                    issue_type = RecurringOrder.PAUSE_PRICE
+                    issue_item_name = item.get("name", product.name)
+                    issue_product = product
+                    break
+                else:
+                    # Auto-continue — update stored price in-place
+                    item["price"] = current_price
+
+            # Out of stock check — always pause, can't auto-continue
+            if product.status == "Out of Stock" or product.stock < 1:
+                issue_type = RecurringOrder.PAUSE_STOCK
+                issue_item_name = item.get("name", product.name)
+                break
+
+            # Quantity check
+            if product.stock < int(item.get("quantity", 1)):
+                if ro.on_quantity_change == RecurringOrder.PREF_NOTIFY:
+                    issue_type = RecurringOrder.PAUSE_QTY
+                    issue_item_name = item.get("name", product.name)
+                    issue_product = product
+                    break
+                # else auto-continue with whatever stock is available
+
+        # ── Issue found → pause and notify ───────────────────────────────────
+        if issue_type:
+            ro.status = RecurringOrder.STATUS_PAUSED
+            ro.pause_reason = issue_type
+            ro.save(update_fields=["status", "pause_reason"])
+
+            if issue_type == RecurringOrder.PAUSE_PRICE:
+                old = item.get("price", 0)
+                new = float(issue_product.price)
+                msg = (
+                    f"The price of {issue_item_name} has changed from "
+                    f"£{old:.2f} to £{new:.2f}. "
+                    f"Please confirm whether you'd like to continue at the new price."
+                )
+            elif issue_type == RecurringOrder.PAUSE_STOCK:
+                msg = (
+                    f"{issue_item_name} is currently out of stock. "
+                    f"Your recurring order has been paused until you approve it."
+                )
+            else:
+                avail = issue_product.stock if issue_product else 0
+                msg = (
+                    f"The requested quantity of {issue_item_name} is not fully available "
+                    f"(only {avail} in stock). "
+                    f"Please approve or cancel your recurring order."
+                )
+
+            RecurringOrderNotification.objects.create(
+                recurring_order=ro,
+                notification_type=issue_type,
+                message=msg,
+                requires_action=True,
+            )
+            send_mail(
+                subject="Your recurring order needs attention — DESD",
+                message=(
+                    f"Hi {ro.customer.full_name},\n\n{msg}\n\n"
+                    f"Log in to review: http://localhost/customer/recurring-orders/\n\n"
+                    f"— DESD Marketplace"
+                ),
+                from_email="noreply@desd.local",
+                recipient_list=[ro.customer.email],
+                fail_silently=True,
+            )
+            paused += 1
+            continue
+
+        # ── All checks pass → place the order ────────────────────────────────
+        try:
+            checkout_order = CheckoutOrder.objects.create(
+                full_name=ro.customer.full_name,
+                email=ro.customer.email,
+                address="Recurring order — address on file",
+                city="",
+                postal_code="",
+                payment_method="recurring",
+                delivery_date=ro.next_order_date,
+                special_instructions=ro.notes or "",
+                customer=ro.customer,
+                status="pending",
+            )
+
+            # Group items by producer
+            product_ids = [int(i["product_id"]) for i in ro.items]
+            products_map = {p.id: p for p in Product.objects.filter(pk__in=product_ids)}
+
+            grouped = defaultdict(list)
+            gross_total = Decimal("0.00")
+            for item in ro.items:
+                product = products_map.get(int(item["product_id"]))
+                if not product:
+                    continue
+                qty = int(item["quantity"])
+                grouped[product.producer_id].append((product, qty))
+                gross_total += Decimal(str(product.price)) * qty
+
+            base_order_id = f"RO-{ro.id}-{checkout_order.id}"
+            is_multi = len(grouped) > 1
+
+            for producer_id, lines in grouped.items():
+                producer = lines[0][0].producer
+                vendor_id = base_order_id if not is_multi else f"{base_order_id}-{producer_id}"
+                subtotal = sum(Decimal(str(p.price)) * qty for p, qty in lines)
+                commission = (subtotal * _COMMISSION_RATE).quantize(Decimal("0.01"))
+
+                vendor_order = Order.objects.create(
+                    order_id=vendor_id,
+                    customer_name=ro.customer.full_name,
+                    delivery_date=ro.next_order_date,
+                    status="Pending",
+                    producer=producer,
+                    expires_at=timezone.now() + timedelta(hours=48),
+                    commission=commission,
+                )
+                for product, qty in lines:
+                    OrderItem.objects.create(
+                        order=vendor_order,
+                        product=product,
+                        quantity=qty,
+                        unit_price=product.price,
+                    )
+
+            # Decrement stock
+            for item in ro.items:
+                product = products_map.get(int(item["product_id"]))
+                if not product:
+                    continue
+                product.stock = max(0, product.stock - int(item["quantity"]))
+                if product.stock == 0:
+                    product.status = "Out of Stock"
+                product.save(update_fields=["stock", "status"])
+
+            # Update commission report
+            report_date = today
+            commission_total = (gross_total * _COMMISSION_RATE).quantize(Decimal("0.01"))
+            report, _ = CommissionReport.objects.get_or_create(
+                report_date=report_date,
+                defaults={"total_orders": 0, "gross_amount": Decimal("0.00"), "commission_amount": Decimal("0.00")},
+            )
+            report.total_orders += 1
+            report.gross_amount = (Decimal(str(report.gross_amount)) + gross_total).quantize(Decimal("0.01"))
+            report.commission_amount = (Decimal(str(report.commission_amount)) + commission_total).quantize(Decimal("0.01"))
+            report.save()
+
+            # Notify customer — order placed successfully
+            RecurringOrderNotification.objects.create(
+                recurring_order=ro,
+                notification_type=RecurringOrderNotification.TYPE_PLACED,
+                message=f"Your recurring order was automatically placed (ref: {base_order_id}).",
+                requires_action=False,
+            )
+            send_mail(
+                subject="Recurring order placed — DESD",
+                message=(
+                    f"Hi {ro.customer.full_name},\n\n"
+                    f"Your recurring order has been automatically placed (ref: {base_order_id}).\n\n"
+                    f"— DESD Marketplace"
+                ),
+                from_email="noreply@desd.local",
+                recipient_list=[ro.customer.email],
+                fail_silently=True,
+            )
+
+            # Advance next_order_date
+            delta = timedelta(weeks=1) if ro.recurrence == "weekly" else timedelta(weeks=2)
+            next_date = ro.next_order_date + delta
+            if ro.end_date and next_date > ro.end_date:
+                ro.status = RecurringOrder.STATUS_COMPLETED
+                ro.is_active = False
+            ro.next_order_date = next_date
+            ro.save(update_fields=["next_order_date", "status", "is_active"])
+            placed += 1
+
+        except Exception as exc:
+            # Don't let one bad order stop the rest
+            import logging
+            logging.getLogger(__name__).exception("Failed to place recurring order #%s: %s", ro.id, exc)
+
+    return f"Recurring orders: {placed} placed, {paused} paused, {completed} completed"
