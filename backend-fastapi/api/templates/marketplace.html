@@ -6,6 +6,8 @@
   .rec-card { border-radius: 12px; border: 1.5px solid #bbf7d0; background: linear-gradient(135deg, #f0fdf4, #dcfce7); padding: 1.1rem; transition: transform .15s, box-shadow .15s; }
   .rec-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(22,163,74,.15); }
   .rec-score { font-size: .7rem; font-weight: 700; color: var(--brand); background: rgba(22,163,74,.12); border-radius: 20px; padding: .2em .6em; }
+  .producer-card { transition: transform .15s, box-shadow .15s; }
+  .producer-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(22,163,74,.15) !important; }
 </style>
 {% endblock %}
 
@@ -59,6 +61,59 @@
     </div>
     {% endif %}
   </form>
+
+  <!-- Producer search results -->
+  {% if matching_producers %}
+  <div class="mb-4">
+    <h6 class="fw-semibold text-muted mb-3">
+      <i class="bi bi-person-badge me-1"></i>Producers matching "{{ q }}"
+    </h6>
+    <div class="row g-3">
+      {% for entry in matching_producers %}
+      {% with p=entry.producer %}
+      <div class="col-md-4 col-lg-3">
+        <a href="{% url 'producer_profile' p.id %}" class="text-decoration-none">
+          <div class="card border-0 shadow-sm h-100 producer-card">
+            <div class="card-body d-flex align-items-center gap-3 p-3">
+              <!-- Avatar -->
+              <div class="rounded-circle bg-success d-flex align-items-center justify-content-center flex-shrink-0"
+                   style="width:48px;height:48px;">
+                <span class="fw-bold text-white" style="font-size:1.2rem;">
+                  {{ p.full_name|slice:":1"|upper }}
+                </span>
+              </div>
+              <div class="flex-grow-1 overflow-hidden">
+                <div class="fw-bold text-dark text-truncate">
+                  {% if p.organization_name %}{{ p.organization_name }}{% else %}{{ p.full_name }}{% endif %}
+                </div>
+                {% if p.organization_name %}
+                <div class="text-muted small text-truncate">{{ p.full_name }}</div>
+                {% endif %}
+                <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                  <span class="text-muted small">
+                    <i class="bi bi-box-seam me-1"></i>{{ entry.product_count }} product{{ entry.product_count|pluralize }}
+                  </span>
+                  {% if entry.avg_rating %}
+                  <span class="text-warning small fw-semibold">
+                    <i class="bi bi-star-fill me-1"></i>{{ entry.avg_rating }}
+                  </span>
+                  {% endif %}
+                  {% if p.postal_code %}
+                  <span class="text-muted small">
+                    <i class="bi bi-geo-alt me-1"></i>{{ p.postal_code }}
+                  </span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   <!-- AI recommendations — hidden when filters are active -->
   {% if recommendations and not q and not selected_category and not organic_filter and not allergen_free_filter %}
@@ -152,7 +207,10 @@
           <p class="text-muted small mb-2" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ product.description }}</p>
           {% endif %}
           <p class="text-muted small mb-1">
-            <i class="bi bi-person-badge me-1"></i>{{ product.producer.full_name|default:product.producer.email }}
+            <i class="bi bi-person-badge me-1"></i>
+            <a href="{% url 'producer_profile' product.producer.id %}" class="text-muted text-decoration-none hover-underline" style="position:relative;z-index:2;">
+              {{ product.producer.full_name|default:product.producer.email }}
+            </a>
           </p>
           <p class="text-muted small stock-info mb-1">
             {% if product.stock <= 0 %}

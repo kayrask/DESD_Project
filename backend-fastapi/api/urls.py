@@ -51,6 +51,7 @@ web_patterns = [
     path("products/suggest/", views_web.product_suggest, name="product_suggest"),
     path("search/", views_web.ProductListView.as_view(), name="search"),
     path("products/<int:pk>/", views_web.ProductDetailView.as_view(), name="product_detail"),
+    path("producers/<int:pk>/", views_web.ProducerProfileView.as_view(), name="producer_profile"),
     path("cart/", views_web.CartView.as_view(), name="cart"),
     path("cart/add/<int:product_id>/", views_web.AddToCartView.as_view(), name="cart_add"),
     path("cart/remove/<int:product_id>/", views_web.RemoveFromCartView.as_view(), name="cart_remove"),

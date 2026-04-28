@@ -62,7 +62,12 @@
           {% endif %}
 
           <p class="text-muted mb-1"><strong>Status:</strong> {{ product.status }}</p>
-          <p class="text-muted mb-1"><strong>Sold by:</strong> {{ product.producer.full_name }}</p>
+          <p class="text-muted mb-1">
+            <strong>Sold by:</strong>
+            <a href="{% url 'producer_profile' product.producer.id %}" class="text-decoration-none">
+              {{ product.producer.full_name }}
+            </a>
+          </p>
           {% if product.harvest_date %}
           <p class="text-muted mb-1"><strong>Harvested:</strong> {{ product.harvest_date|date:"d M Y" }}</p>
           {% endif %}
