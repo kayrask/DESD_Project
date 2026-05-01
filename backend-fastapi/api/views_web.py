@@ -46,6 +46,7 @@ from api.models import (
     FarmStory,
     Order,
     OrderItem,
+    PaymentSettlement,
     Product,
     QualityAssessment,
     QualityOverride,
@@ -1145,6 +1146,7 @@ class ProducerPaymentsView(ProducerRequiredMixin, View):
     _commission_rate = Decimal("0.05")
 
     def _build_payment_data(self, producer):
+        # All-time delivered gross for the summary cards
         delivered_items = OrderItem.objects.filter(
             order__producer=producer,
             order__status="Delivered",
@@ -1153,7 +1155,7 @@ class ProducerPaymentsView(ProducerRequiredMixin, View):
 
         pending_items = OrderItem.objects.filter(
             order__producer=producer,
-        ).exclude(order__status="Delivered").select_related("order")
+        ).exclude(order__status__in=["Delivered", "Cancelled"]).select_related("order")
         pending_gross = sum(float(i.unit_price) * i.quantity for i in pending_items)
 
         commission = round(delivered_gross * float(self._commission_rate), 2)
@@ -1178,6 +1180,28 @@ class ProducerPaymentsView(ProducerRequiredMixin, View):
 
         pending_orders = [o for o in orders if o["status"] == "Pending"]
 
+        # Weekly settlements history
+        settlements = list(
+            PaymentSettlement.objects.filter(producer=producer)
+            .values(
+                "reference", "week_start", "week_end",
+                "gross_amount", "commission_amount", "net_amount",
+                "order_count", "status", "created_at",
+            )
+            .order_by("-week_start")
+        )
+
+        # Tax year running total (calendar year Jan–Dec)
+        current_year = date.today().year
+        tax_year_net = round(
+            sum(float(s["net_amount"]) for s in settlements if s["week_start"].year == current_year),
+            2,
+        )
+        tax_year_gross = round(
+            sum(float(s["gross_amount"]) for s in settlements if s["week_start"].year == current_year),
+            2,
+        )
+
         return {
             "summary": {
                 "this_week": round(delivered_gross, 2),
@@ -1187,13 +1211,75 @@ class ProducerPaymentsView(ProducerRequiredMixin, View):
             },
             "orders": orders,
             "pending_orders": pending_orders,
+            "settlements": settlements,
+            "tax_year": current_year,
+            "tax_year_net": tax_year_net,
+            "tax_year_gross": tax_year_gross,
         }
+
+    def _settlement_csv(self, producer, settlement_ref):
+        """Return a CSV HttpResponse for a single settlement's order breakdown."""
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{settlement_ref}.csv"'
+        writer = csv.writer(response)
+
+        try:
+            settlement = PaymentSettlement.objects.get(reference=settlement_ref, producer=producer)
+        except PaymentSettlement.DoesNotExist:
+            writer.writerow(["Settlement not found"])
+            return response
+
+        writer.writerow([f"Payment Settlement Report — {settlement.reference}"])
+        writer.writerow([f"Week: {settlement.week_start}  to  {settlement.week_end}"])
+        writer.writerow([f"Status: {settlement.status}"])
+        writer.writerow([])
+        writer.writerow(["Order ID", "Customer", "Delivery Date", "Product", "Qty", "Unit Price (£)", "Line Total (£)", "Commission (£)", "Net (£)"])
+
+        week_orders = Order.objects.filter(
+            producer=producer,
+            status="Delivered",
+            delivery_date__gte=settlement.week_start,
+            delivery_date__lte=settlement.week_end,
+        ).prefetch_related("items__product")
+
+        for o in week_orders:
+            items = list(o.items.all())
+            order_gross = sum(float(i.unit_price) * i.quantity for i in items)
+            order_comm = round(order_gross * float(self._commission_rate), 2)
+            order_net = round(order_gross * (1 - float(self._commission_rate)), 2)
+            for idx, item in enumerate(items):
+                line_total = round(float(item.unit_price) * item.quantity, 2)
+                writer.writerow([
+                    o.order_id if idx == 0 else "",
+                    o.customer_name if idx == 0 else "",
+                    (o.delivery_date or "") if idx == 0 else "",
+                    item.product.name,
+                    item.quantity,
+                    f"{item.unit_price:.2f}",
+                    f"{line_total:.2f}",
+                    f"{order_comm:.2f}" if idx == 0 else "",
+                    f"{order_net:.2f}" if idx == 0 else "",
+                ])
+
+        writer.writerow([])
+        writer.writerow([
+            "", "", "", "SETTLEMENT TOTAL",
+            f"{settlement.gross_amount:.2f}",
+            f"{settlement.commission_amount:.2f}",
+            f"{settlement.net_amount:.2f}",
+        ])
+        return response
 
     def get(self, request):
         producer = request.user
-        data = self._build_payment_data(producer)
 
         if request.GET.get("export") == "csv":
+            settlement_ref = request.GET.get("settlement")
+            if settlement_ref:
+                return self._settlement_csv(producer, settlement_ref)
+
+            # Full payment history CSV
+            data = self._build_payment_data(producer)
             response = HttpResponse(content_type="text/csv")
             response["Content-Disposition"] = 'attachment; filename="payment_report.csv"'
             writer = csv.writer(response)
@@ -1213,10 +1299,15 @@ class ProducerPaymentsView(ProducerRequiredMixin, View):
             writer.writerow(["", "", "", "TOTAL", f"{s['this_week']:.2f}", f"{s['commission']:.2f}", f"{s['net_earned']:.2f}"])
             return response
 
+        data = self._build_payment_data(producer)
         return render(request, self.template_name, {
             "payments": data["summary"],
             "pending_orders": data["pending_orders"],
             "all_orders": data["orders"],
+            "settlements": data["settlements"],
+            "tax_year": data["tax_year"],
+            "tax_year_net": data["tax_year_net"],
+            "tax_year_gross": data["tax_year_gross"],
         })
 
 

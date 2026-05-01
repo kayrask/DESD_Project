@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from api import views, views_web
 
@@ -97,4 +97,10 @@ web_patterns = [
     path("403/", views_web.view_403, name="forbidden"),
 ]
 
-urlpatterns = api_patterns + web_patterns
+# Catch-all — must be last so it only fires when nothing above matched.
+# Works in both DEBUG=True and DEBUG=False (handler404 alone only fires in prod).
+_catch_all = [
+    re_path(r"^.*$", views_web.view_404, name="not_found"),
+]
+
+urlpatterns = api_patterns + web_patterns + _catch_all

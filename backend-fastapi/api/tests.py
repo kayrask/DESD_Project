@@ -11,7 +11,7 @@ from django.urls import reverse
 
 from api.models import (
     CartReservation, CheckoutOrder, CommissionReport, FarmStory, Order, OrderItem,
-    Product, QualityAssessment, Recipe, RecurringOrder, User,
+    PaymentSettlement, Product, QualityAssessment, Recipe, RecurringOrder, User,
 )
 from app.core.security import issue_token
 
@@ -467,21 +467,26 @@ class RecurringOrdersTest(TestCase):
         }]
         session.save()
 
-    def test_create_recurring_order_from_cart(self):
-        response = self.client.post(reverse("recurring_orders"), {
+    def _recurring_post_data(self, **overrides):
+        """Minimum valid POST data for creating a recurring order."""
+        data = {
             "recurrence": "weekly",
             "delivery_day": 2,
             "notes": "Leave at door",
-        })
+            "end_date": (date.today() + timedelta(days=30)).isoformat(),
+            "on_price_change": "pause_notify",
+            "on_quantity_change": "auto_continue",
+        }
+        data.update(overrides)
+        return data
+
+    def test_create_recurring_order_from_cart(self):
+        response = self.client.post(reverse("recurring_orders"), self._recurring_post_data())
         self.assertRedirects(response, reverse("recurring_orders"))
         self.assertEqual(RecurringOrder.objects.filter(customer=self.customer).count(), 1)
 
     def test_recurring_order_is_active_by_default(self):
-        self.client.post(reverse("recurring_orders"), {
-            "recurrence": "fortnightly",
-            "delivery_day": 3,
-            "notes": "",
-        })
+        self.client.post(reverse("recurring_orders"), self._recurring_post_data(recurrence="fortnightly", delivery_day=3, notes=""))
         ro = RecurringOrder.objects.get(customer=self.customer)
         self.assertTrue(ro.is_active)
 
@@ -516,11 +521,7 @@ class RecurringOrdersTest(TestCase):
         session = self.client.session
         session["cart"] = []
         session.save()
-        response = self.client.post(reverse("recurring_orders"), {
-            "recurrence": "weekly",
-            "delivery_day": 2,
-            "notes": "",
-        })
+        response = self.client.post(reverse("recurring_orders"), self._recurring_post_data(notes=""))
         self.assertEqual(RecurringOrder.objects.filter(customer=self.customer).count(), 0)
 
 
@@ -2984,3 +2985,400 @@ class NewModelMetricsBridgeTest(TestCase):
             if backup is not None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(backup)
+
+
+# ── TC-012: Weekly payment settlements ───────────────────────────────────────
+
+def _prev_week_dates():
+    """Return (week_start, week_end) for the Mon–Sun week before today."""
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    week_end = this_monday - timedelta(days=1)
+    week_start = week_end - timedelta(days=6)
+    return week_start, week_end
+
+
+def _make_settlement(producer, week_start, week_end, gross="100.00", commission="5.00", net="95.00", order_count=2, status="Pending Bank Transfer"):
+    week_num = week_start.isocalendar()[1]
+    ref = f"SETTLE-{week_start.year}-W{week_num:02d}-{producer.id}"
+    return PaymentSettlement.objects.create(
+        producer=producer,
+        reference=ref,
+        week_start=week_start,
+        week_end=week_end,
+        gross_amount=Decimal(gross),
+        commission_amount=Decimal(commission),
+        net_amount=Decimal(net),
+        order_count=order_count,
+        status=status,
+    )
+
+
+def _make_delivered_order(producer, delivery_date, items=None):
+    """Create a Delivered Order with one OrderItem for testing settlements."""
+    o = Order.objects.create(
+        order_id=f"TEST-{producer.id}-{delivery_date}",
+        customer_name="Test Customer",
+        delivery_date=delivery_date,
+        status="Delivered",
+        producer=producer,
+        commission=Decimal("0.00"),
+    )
+    product = _make_product(producer, name=f"Prod-{delivery_date}", price="20.00")
+    if items is None:
+        items = [(product, 2)]
+    for prod, qty in items:
+        OrderItem.objects.create(order=o, product=prod, quantity=qty, unit_price=prod.price)
+    return o
+
+
+class PaymentSettlementModelTest(TestCase):
+
+    def setUp(self):
+        self.producer = _make_producer("settle_producer@test.com")
+        self.week_start, self.week_end = _prev_week_dates()
+
+    def test_create_settlement_stores_all_fields(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end,
+                             gross="200.00", commission="10.00", net="190.00", order_count=4)
+        s.refresh_from_db()
+        self.assertEqual(s.gross_amount, Decimal("200.00"))
+        self.assertEqual(s.commission_amount, Decimal("10.00"))
+        self.assertEqual(s.net_amount, Decimal("190.00"))
+        self.assertEqual(s.order_count, 4)
+        self.assertEqual(s.week_start, self.week_start)
+        self.assertEqual(s.week_end, self.week_end)
+        self.assertEqual(s.producer, self.producer)
+
+    def test_default_status_is_pending_bank_transfer(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end)
+        self.assertEqual(s.status, "Pending Bank Transfer")
+        self.assertEqual(s.status, PaymentSettlement.STATUS_PENDING)
+
+    def test_processed_status_is_valid(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end, status="Processed")
+        self.assertEqual(s.status, PaymentSettlement.STATUS_PROCESSED)
+
+    def test_str_contains_reference_and_status(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end)
+        self.assertIn(s.reference, str(s))
+        self.assertIn(s.status, str(s))
+
+    def test_reference_follows_expected_format(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end)
+        week_num = self.week_start.isocalendar()[1]
+        expected = f"SETTLE-{self.week_start.year}-W{week_num:02d}-{self.producer.id}"
+        self.assertEqual(s.reference, expected)
+
+    def test_unique_together_blocks_duplicate_settlement(self):
+        from django.db import IntegrityError
+        _make_settlement(self.producer, self.week_start, self.week_end)
+        with self.assertRaises(IntegrityError):
+            PaymentSettlement.objects.create(
+                producer=self.producer,
+                reference="SETTLE-DUPLICATE",
+                week_start=self.week_start,
+                week_end=self.week_end,
+                gross_amount=Decimal("50.00"),
+                commission_amount=Decimal("2.50"),
+                net_amount=Decimal("47.50"),
+                order_count=1,
+            )
+
+    def test_ordering_newest_first(self):
+        week_start_2, week_end_2 = self.week_start - timedelta(weeks=1), self.week_end - timedelta(weeks=1)
+        s_old = _make_settlement(self.producer, week_start_2, week_end_2)
+        s_new = _make_settlement(self.producer, self.week_start, self.week_end)
+        all_s = list(PaymentSettlement.objects.filter(producer=self.producer))
+        self.assertEqual(all_s[0], s_new)
+        self.assertEqual(all_s[1], s_old)
+
+
+class ProducerPaymentsViewTest(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.producer = _make_producer("pay_producer@test.com")
+        self.customer = _make_customer("pay_customer@test.com")
+        self.week_start, self.week_end = _prev_week_dates()
+
+    def test_page_loads_200_for_producer(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_unauthenticated_user_redirected(self):
+        r = self.client.get(reverse("producer_payments"))
+        self.assertEqual(r.status_code, 302)
+
+    def test_customer_cannot_access_payments_page(self):
+        self.client.login(username="pay_customer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertNotEqual(r.status_code, 200)
+
+    def test_context_contains_all_required_keys(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        for key in ("payments", "pending_orders", "all_orders", "settlements", "tax_year", "tax_year_net", "tax_year_gross"):
+            self.assertIn(key, r.context, msg=f"Missing context key: {key}")
+
+    def test_settlements_list_empty_when_none_exist(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertEqual(r.context["settlements"], [])
+
+    def test_settlement_appears_in_context(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end,
+                             gross="120.00", commission="6.00", net="114.00", order_count=3)
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        refs = [row["reference"] for row in r.context["settlements"]]
+        self.assertIn(s.reference, refs)
+
+    def test_tax_year_net_sums_current_year_settlements_only(self):
+        # Current year settlement
+        _make_settlement(self.producer, self.week_start, self.week_end,
+                         gross="200.00", commission="10.00", net="190.00")
+        # Old year settlement — should be excluded from tax year total
+        old_start = date(2024, 1, 7)
+        old_end = date(2024, 1, 13)
+        _make_settlement(self.producer, old_start, old_end,
+                         gross="500.00", commission="25.00", net="475.00")
+
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertEqual(r.context["tax_year"], date.today().year)
+        self.assertEqual(r.context["tax_year_net"], 190.0)
+        self.assertEqual(r.context["tax_year_gross"], 200.0)
+
+    def test_tax_year_zero_when_no_settlements(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertEqual(r.context["tax_year_net"], 0.0)
+        self.assertEqual(r.context["tax_year_gross"], 0.0)
+
+    def test_settlement_status_processed_displays_badge(self):
+        _make_settlement(self.producer, self.week_start, self.week_end, status="Processed")
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertContains(r, "Processed")
+
+    def test_settlement_status_pending_displays_badge(self):
+        _make_settlement(self.producer, self.week_start, self.week_end, status="Pending Bank Transfer")
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertContains(r, "Pending Bank Transfer")
+
+    def test_settlement_reference_appears_in_page(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end)
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertContains(r, s.reference)
+
+    def test_full_csv_export_returns_csv_content_type(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments") + "?export=csv")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        self.assertIn("payment_report.csv", r["Content-Disposition"])
+
+    def test_full_csv_export_contains_headers(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments") + "?export=csv")
+        content = r.content.decode()
+        self.assertIn("Order ID", content)
+        self.assertIn("Commission", content)
+        self.assertIn("Net", content)
+
+    def test_settlement_csv_export_returns_csv(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end,
+                             gross="80.00", commission="4.00", net="76.00")
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        url = reverse("producer_payments") + f"?export=csv&settlement={s.reference}"
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        self.assertIn(s.reference, r["Content-Disposition"])
+
+    def test_settlement_csv_contains_settlement_metadata(self):
+        s = _make_settlement(self.producer, self.week_start, self.week_end,
+                             gross="80.00", commission="4.00", net="76.00")
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        url = reverse("producer_payments") + f"?export=csv&settlement={s.reference}"
+        r = self.client.get(url)
+        content = r.content.decode()
+        self.assertIn(s.reference, content)
+        self.assertIn(str(self.week_start), content)
+        self.assertIn("SETTLEMENT TOTAL", content)
+
+    def test_settlement_csv_includes_product_line_items(self):
+        """TC-012: report must include product items sold, not just order totals."""
+        product = _make_product(self.producer, name="Organic Carrot", price="3.00")
+        order = Order.objects.create(
+            order_id="CSV-ITEM-TEST",
+            customer_name="Jane Doe",
+            delivery_date=self.week_start,
+            status="Delivered",
+            producer=self.producer,
+            commission=Decimal("0.00"),
+        )
+        OrderItem.objects.create(order=order, product=product, quantity=4, unit_price=product.price)
+        s = _make_settlement(self.producer, self.week_start, self.week_end,
+                             gross="12.00", commission="0.60", net="11.40", order_count=1)
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        url = reverse("producer_payments") + f"?export=csv&settlement={s.reference}"
+        r = self.client.get(url)
+        content = r.content.decode()
+        self.assertIn("Organic Carrot", content)
+        self.assertIn("3.00", content)
+        self.assertIn("4", content)
+        self.assertIn("Jane Doe", content)
+        self.assertIn("Product", content)
+        self.assertIn("Qty", content)
+
+    def test_settlement_csv_not_found_returns_graceful_response(self):
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        url = reverse("producer_payments") + "?export=csv&settlement=SETTLE-DOES-NOT-EXIST"
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        self.assertIn("Settlement not found", r.content.decode())
+
+    def test_settlement_csv_cannot_access_other_producers_settlement(self):
+        other_producer = _make_producer("other_pay@test.com")
+        other_start, other_end = _prev_week_dates()
+        s = _make_settlement(other_producer, other_start, other_end)
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        url = reverse("producer_payments") + f"?export=csv&settlement={s.reference}"
+        r = self.client.get(url)
+        # Should return "Settlement not found" — can't access another producer's data
+        self.assertIn("Settlement not found", r.content.decode())
+
+    def test_gross_earned_reflects_delivered_orders(self):
+        _make_delivered_order(self.producer, date.today() - timedelta(days=10))
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        # Order has 2 x £20 = £40 gross; net = £38
+        self.assertEqual(r.context["payments"]["this_week"], 40.0)
+        self.assertAlmostEqual(r.context["payments"]["net_earned"], 38.0, places=2)
+
+    def test_pending_gross_excludes_cancelled_orders(self):
+        product = _make_product(self.producer, name="PendProd", price="10.00")
+        cancelled = Order.objects.create(
+            order_id="CANCEL-TEST-1",
+            customer_name="Test",
+            delivery_date=date.today() + timedelta(days=5),
+            status="Cancelled",
+            producer=self.producer,
+            commission=Decimal("0.00"),
+        )
+        OrderItem.objects.create(order=cancelled, product=product, quantity=2, unit_price=product.price)
+        self.client.login(username="pay_producer@test.com", password="Test1234")
+        r = self.client.get(reverse("producer_payments"))
+        self.assertEqual(r.context["payments"]["pending"], 0.0)
+
+
+class ProcessWeeklySettlementsTaskTest(TestCase):
+
+    def setUp(self):
+        self.producer = _make_producer("task_producer@test.com")
+        self.week_start, self.week_end = _prev_week_dates()
+
+    def test_no_delivered_orders_creates_no_settlement(self):
+        from api.tasks import process_weekly_settlements
+        result = process_weekly_settlements()
+        self.assertEqual(PaymentSettlement.objects.count(), 0)
+        self.assertIn("0 new records", result)
+
+    def test_delivered_order_in_prev_week_creates_settlement(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        result = process_weekly_settlements()
+        self.assertEqual(PaymentSettlement.objects.filter(producer=self.producer).count(), 1)
+        self.assertIn("1 new records", result)
+
+    def test_settlement_commission_is_5_percent(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        s = PaymentSettlement.objects.get(producer=self.producer)
+        self.assertAlmostEqual(float(s.commission_amount), float(s.gross_amount) * 0.05, places=2)
+
+    def test_settlement_net_is_95_percent(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        s = PaymentSettlement.objects.get(producer=self.producer)
+        expected_net = round(float(s.gross_amount) * 0.95, 2)
+        self.assertAlmostEqual(float(s.net_amount), expected_net, places=2)
+
+    def test_settlement_gross_equals_sum_of_order_items(self):
+        from api.tasks import process_weekly_settlements
+        # 2 items x £20 = £40 gross
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        s = PaymentSettlement.objects.get(producer=self.producer)
+        self.assertEqual(s.gross_amount, Decimal("40.00"))
+        self.assertEqual(s.commission_amount, Decimal("2.00"))
+        self.assertEqual(s.net_amount, Decimal("38.00"))
+
+    def test_task_is_idempotent(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        process_weekly_settlements()
+        self.assertEqual(PaymentSettlement.objects.filter(producer=self.producer).count(), 1)
+
+    def test_pending_orders_not_included_in_settlement(self):
+        from api.tasks import process_weekly_settlements
+        product = _make_product(self.producer, name="PendProd2", price="50.00")
+        Order.objects.create(
+            order_id="PEND-TEST-1",
+            customer_name="Test",
+            delivery_date=self.week_start,
+            status="Pending",
+            producer=self.producer,
+            commission=Decimal("0.00"),
+        )
+        process_weekly_settlements()
+        self.assertEqual(PaymentSettlement.objects.count(), 0)
+
+    def test_orders_outside_prev_week_not_included(self):
+        from api.tasks import process_weekly_settlements
+        # Delivered order from 3 weeks ago — outside the settlement window
+        old_date = self.week_start - timedelta(weeks=2)
+        _make_delivered_order(self.producer, old_date)
+        process_weekly_settlements()
+        self.assertEqual(PaymentSettlement.objects.count(), 0)
+
+    def test_settlement_status_defaults_to_pending_bank_transfer(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        s = PaymentSettlement.objects.get(producer=self.producer)
+        self.assertEqual(s.status, "Pending Bank Transfer")
+
+    def test_reference_follows_correct_format(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        s = PaymentSettlement.objects.get(producer=self.producer)
+        week_num = self.week_start.isocalendar()[1]
+        expected_ref = f"SETTLE-{self.week_start.year}-W{week_num:02d}-{self.producer.id}"
+        self.assertEqual(s.reference, expected_ref)
+
+    def test_order_count_matches_delivered_orders(self):
+        from api.tasks import process_weekly_settlements
+        _make_delivered_order(self.producer, self.week_start)
+        _make_delivered_order(self.producer, self.week_end)
+        process_weekly_settlements()
+        s = PaymentSettlement.objects.get(producer=self.producer)
+        self.assertEqual(s.order_count, 2)
+
+    def test_inactive_producer_skipped(self):
+        from api.tasks import process_weekly_settlements
+        self.producer.is_active = False
+        self.producer.save()
+        _make_delivered_order(self.producer, self.week_start)
+        process_weekly_settlements()
+        self.assertEqual(PaymentSettlement.objects.count(), 0)

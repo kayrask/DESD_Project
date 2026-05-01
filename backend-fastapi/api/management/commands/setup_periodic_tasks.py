@@ -67,4 +67,13 @@ class Command(BaseCommand):
             },
         )
 
+        PeriodicTask.objects.update_or_create(
+            name="Process weekly payment settlements",
+            defaults={
+                "interval": schedule_weekly,
+                "task": "api.tasks.process_weekly_settlements",
+                "enabled": True,
+            },
+        )
+
         self.stdout.write(self.style.SUCCESS("Periodic tasks registered."))

@@ -442,3 +442,40 @@ class ModelEvaluation(models.Model):
 
     def __str__(self):
         return f"{self.version} acc={self.accuracy:.3f} @ {self.evaluated_at:%Y-%m-%d}"
+
+
+class PaymentSettlement(models.Model):
+    """Weekly payment settlement for a producer.
+
+    Created every Monday morning by the process_weekly_settlements Celery task.
+    Covers all delivered orders from the previous Mon–Sun week.
+    95% of gross is paid to the producer; 5% is the platform commission.
+    """
+    STATUS_PENDING = "Pending Bank Transfer"
+    STATUS_PROCESSED = "Processed"
+    STATUS_CHOICES = [
+        ("Pending Bank Transfer", "Pending Bank Transfer"),
+        ("Processed", "Processed"),
+    ]
+
+    producer = models.ForeignKey(
+        "User", on_delete=models.CASCADE, related_name="settlements"
+    )
+    reference = models.CharField(max_length=60, unique=True)
+    week_start = models.DateField()
+    week_end = models.DateField()
+    gross_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    commission_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    order_count = models.IntegerField(default=0)
+    status = models.CharField(
+        max_length=30, choices=STATUS_CHOICES, default="Pending Bank Transfer"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-week_start"]
+        unique_together = [("producer", "week_start")]
+
+    def __str__(self):
+        return f"{self.reference} ({self.status})"
