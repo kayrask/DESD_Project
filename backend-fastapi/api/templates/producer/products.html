@@ -56,11 +56,6 @@
                 {% if form.stock.errors %}<div class="text-danger small">{{ form.stock.errors }}</div>{% endif %}
               </div>
               <div class="col-md-2">
-                <label class="form-label fw-semibold">Status</label>
-                {{ form.status }}
-                {% if form.status.errors %}<div class="text-danger small">{{ form.status.errors }}</div>{% endif %}
-              </div>
-              <div class="col-md-2">
                 <label class="form-label fw-semibold">Discount %
                   <span class="text-muted fw-normal" style="font-size:.8rem">(0–50)</span>
                 </label>
@@ -149,9 +144,17 @@
                   {% endif %}
                 </td>
                 <td class="align-middle status-cell">
-                  <span class="badge {% if product.status == 'Available' %}badge-available{% elif product.status == 'Out of Stock' %}badge-out-of-stock{% else %}badge-unavailable{% endif %}">
-                    {{ product.status }}
-                  </span>
+                  {% if product.status == 'Pending Approval' %}
+                  <span class="badge bg-warning text-dark">Pending Approval</span>
+                  {% elif product.status == 'Rejected' %}
+                  <span class="badge bg-danger">Rejected</span>
+                  {% elif product.status == 'Available' %}
+                  <span class="badge badge-available">Available</span>
+                  {% elif product.status == 'Out of Stock' %}
+                  <span class="badge badge-out-of-stock">Out of Stock</span>
+                  {% else %}
+                  <span class="badge badge-unavailable">{{ product.status }}</span>
+                  {% endif %}
                 </td>
                 <td class="align-middle text-end">
                   <a href="{% url 'producer_product_edit' product.pk %}" class="btn btn-sm btn-outline-primary">

@@ -63,6 +63,8 @@ class Product(models.Model):
         ("In Season", "In Season"),
         ("Out of Stock", "Out of Stock"),
         ("Unavailable", "Unavailable"),
+        ("Pending Approval", "Pending Approval"),
+        ("Rejected", "Rejected"),
     ]
 
     name = models.CharField(max_length=200)
@@ -479,3 +481,18 @@ class PaymentSettlement(models.Model):
 
     def __str__(self):
         return f"{self.reference} ({self.status})"
+
+
+class AdminOTP(models.Model):
+    """One-time password for admin two-factor login. Expires after 5 minutes."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otps")
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"OTP for {self.user.email} ({'used' if self.is_used else 'active'})"

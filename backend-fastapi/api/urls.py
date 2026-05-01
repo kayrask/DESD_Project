@@ -43,6 +43,7 @@ web_patterns = [
 
     # Authentication
     path("login/", views_web.LoginPageView.as_view(), name="login"),
+    path("login/otp/", views_web.AdminOTPVerifyView.as_view(), name="admin_otp_verify"),
     path("logout/", views_web.LogoutView.as_view(), name="logout"),
     path("register/", views_web.RegisterPageView.as_view(), name="register"),
 
@@ -84,6 +85,7 @@ web_patterns = [
 
     # Admin panel (note: /admin/ is taken by Django admin)
     path("admin-panel/", views_web.AdminDashboardView.as_view(), name="admin_dashboard"),
+    path("admin-panel/products/", views_web.AdminProductApprovalView.as_view(), name="admin_product_approval"),
     path("admin-panel/reports/", views_web.AdminReportsView.as_view(), name="admin_reports"),
     path("admin-panel/users/", views_web.AdminUsersView.as_view(), name="admin_users"),
     path("admin-panel/database/", views_web.AdminDatabaseView.as_view(), name="admin_database"),

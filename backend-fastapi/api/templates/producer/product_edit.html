@@ -42,9 +42,21 @@
                 {% if form.stock.errors %}<div class="text-danger small">{{ form.stock.errors }}</div>{% endif %}
               </div>
               <div class="col-md-6">
-                <label class="form-label fw-semibold">Status / Season</label>
-                {{ form.status }}
-                {% if form.status.errors %}<div class="text-danger small">{{ form.status.errors }}</div>{% endif %}
+                <label class="form-label fw-semibold">Current Status</label>
+                <div class="form-control-plaintext">
+                  {% if product.status == 'Pending Approval' %}
+                  <span class="badge bg-warning text-dark">Pending Approval</span>
+                  {% elif product.status == 'Rejected' %}
+                  <span class="badge bg-danger">Rejected</span>
+                  {% elif product.status == 'Available' %}
+                  <span class="badge badge-available">Available</span>
+                  {% elif product.status == 'Out of Stock' %}
+                  <span class="badge badge-out-of-stock">Out of Stock</span>
+                  {% else %}
+                  <span class="badge badge-unavailable">{{ product.status }}</span>
+                  {% endif %}
+                </div>
+                <div class="form-text">Saving changes will resubmit this product for admin approval.</div>
               </div>
               <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>

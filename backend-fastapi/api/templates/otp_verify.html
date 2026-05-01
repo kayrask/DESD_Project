@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Verify Login – DESD Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+  .auth-wrap { min-height: calc(100vh - 130px); display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; }
+  .auth-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); padding: 2.5rem; width: 100%; max-width: 420px; }
+  .auth-logo { width: 44px; height: 44px; background: var(--brand); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.2rem; margin: 0 auto 1.25rem; }
+  .auth-card h3 { font-weight: 800; font-size: 1.5rem; letter-spacing: -.02em; text-align: center; margin-bottom: .25rem; }
+  .auth-sub { color: var(--muted); font-size: .875rem; text-align: center; margin-bottom: 2rem; }
+  .btn-submit { background: var(--brand); color: #fff; font-weight: 700; border: none; border-radius: 10px; padding: .7rem; width: 100%; font-size: .95rem; transition: all .2s; cursor: pointer; }
+  .btn-submit:hover { background: var(--brand-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(22,163,74,.3); }
+  .otp-input { font-size: 1.6rem; font-weight: 700; letter-spacing: .4em; text-align: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+  <div style="width:100%;max-width:420px">
+    <div class="auth-card">
+      <div class="auth-logo"><i class="bi bi-shield-lock-fill"></i></div>
+      <h3>Two-step verification</h3>
+      <p class="auth-sub">A 6-digit code has been sent to your admin email address. It expires in 5 minutes.</p>
+
+      {% if messages %}
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} py-2 mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-circle-fill"></i>{{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Verification Code</label>
+          <input type="text" name="code" class="form-control otp-input"
+                 maxlength="6" inputmode="numeric" pattern="[0-9]{6}"
+                 placeholder="000000" autofocus autocomplete="one-time-code">
+        </div>
+        <button type="submit" class="btn-submit">
+          <i class="bi bi-arrow-right-circle me-2"></i>Verify &amp; Sign In
+        </button>
+      </form>
+
+      <div class="text-center mt-4">
+        <a href="{% url 'login' %}" class="text-muted small">
+          <i class="bi bi-arrow-left me-1"></i>Back to login
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
