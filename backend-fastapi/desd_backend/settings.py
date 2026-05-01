@@ -71,16 +71,24 @@ TEMPLATES = [
 WSGI_APPLICATION = "desd_backend.wsgi.application"
 ASGI_APPLICATION = "desd_backend.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "desd"),
-        "USER": os.getenv("DB_USER", "desd_user"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "desd_password"),
-        "HOST": os.getenv("DB_HOST", "db"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+if TESTING:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME", "desd"),
+            "USER": os.getenv("DB_USER", "desd_user"),
+            "PASSWORD": os.getenv("DB_PASSWORD", "desd_password"),
+            "HOST": os.getenv("DB_HOST", "db"),
+            "PORT": os.getenv("DB_PORT", "5432"),
+        }
+    }
 
 AUTH_USER_MODEL = "api.User"
 

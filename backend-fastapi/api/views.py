@@ -472,6 +472,26 @@ def dashboards_customer(request):
         return _error_response(exc.error, exc.message, exc.status_code)
 
 
+@api_view(["GET"])
+def products_list(request):
+    products = Product.objects.all().order_by("name")
+    category = str(request.GET.get("category", "")).strip()
+    if category:
+        products = products.filter(category=category)
+    serializer = ProductSerializer(products, many=True)
+    return Response({"items": serializer.data})
+
+
+@api_view(["GET"])
+def product_detail(request, product_id: int):
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return _error_response("not_found", "Product not found.", status.HTTP_404_NOT_FOUND)
+    serializer = ProductSerializer(product)
+    return Response(serializer.data)
+
+
 # ── Orders ────────────────────────────────────────────────────────────────────
 
 def _checkout_error(code: str, message: str, details: dict, http_status: int) -> Response:

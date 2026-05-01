@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Launch Docker App",
+			"type": "shell",
+			"command": "docker compose up -d db redis backend",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Retry Docker App",
+			"type": "shell",
+			"command": "docker compose up -d db redis backend",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Launch Full App",
+			"type": "shell",
+			"command": "docker compose up -d web celery_worker celery_beat && docker compose ps && powershell -NoProfile -Command \"try { $r = Invoke-WebRequest -Uri 'http://localhost' -UseBasicParsing -TimeoutSec 10; Write-Output $r.StatusCode } catch { Write-Output \\\"ERROR:$($_.Exception.Message)\\\" }\"",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Launch Full App Retry",
+			"type": "shell",
+			"command": "powershell -NoProfile -Command \"docker compose up -d web celery_worker celery_beat; docker compose ps; try { $r = Invoke-WebRequest -Uri 'http://localhost' -UseBasicParsing -TimeoutSec 10; Write-Output $r.StatusCode } catch { Write-Output \\\"ERROR:$($_.Exception.Message)\\\" }\"",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Git Status Short",
+			"type": "shell",
+			"command": "powershell -NoProfile -Command \"Set-Location 'C:\\Users\\Matt\\Desktop\\daesd\\DESD_Project'; git status --short\"",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

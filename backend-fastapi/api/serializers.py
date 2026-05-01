@@ -42,11 +42,40 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     producer_email = serializers.EmailField(source="producer.email", read_only=True)
+    discounted_price = serializers.SerializerMethodField()
+    effective_discount_percentage = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
-        fields = ["id", "name", "category", "price", "stock", "status", "producer_id", "producer_email"]
-        read_only_fields = ["id", "producer_id", "producer_email"]
+        fields = [
+            "id",
+            "name",
+            "category",
+            "description",
+            "price",
+            "discounted_price",
+            "effective_discount_percentage",
+            "stock",
+            "status",
+            "producer_id",
+            "producer_email",
+            "allergens",
+            "is_organic",
+            "discount_percentage",
+            "ai_discount_percentage",
+            "ai_discount_active",
+            "harvest_date",
+            "season_start",
+            "season_end",
+            "low_stock_threshold",
+        ]
+        read_only_fields = ["id", "producer_id", "producer_email", "discounted_price", "effective_discount_percentage"]
+
+    def get_discounted_price(self, obj):
+        return obj.discounted_price
+
+    def get_effective_discount_percentage(self, obj):
+        return obj.effective_discount_percentage
 
     def validate_price(self, value):
         if value < 0:

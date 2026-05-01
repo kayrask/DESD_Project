@@ -82,7 +82,7 @@
       {% if products %}
       <div class="card border-0 shadow-sm">
         <div class="card-body p-0">
-          <table class="table table-hover mb-0">
+          <table class="table table-hover mb-0" data-producer-products="true">
             <thead class="table-light">
               <tr>
                 <th>Name</th>
@@ -99,10 +99,10 @@
             </thead>
             <tbody>
               {% for product in products %}
-              <tr>
+              <tr data-product-id="{{ product.pk }}">
                 <td class="align-middle fw-semibold">{{ product.name }}</td>
                 <td class="align-middle">{{ product.category }}</td>
-                <td class="align-middle text-end">
+                <td class="align-middle text-end price-cell">
                   {% if product.discounted_price %}
                   <div class="fw-semibold text-danger">£{{ product.discounted_price }}</div>
                   <div class="small text-muted text-decoration-line-through">£{{ product.price }}</div>
@@ -134,7 +134,7 @@
                   <span class="text-muted small">No discount</span>
                   {% endif %}
                 </td>
-                <td class="align-middle text-center">
+                <td class="align-middle text-center stock-cell" data-stock="{{ product.stock }}">
                   <span class="{% if product.stock == 0 %}text-danger fw-bold{% elif product.stock < 10 %}text-warning fw-bold{% else %}text-success{% endif %}">
                     {{ product.stock }}
                   </span>
@@ -148,7 +148,7 @@
                   <span class="text-muted small">—</span>
                   {% endif %}
                 </td>
-                <td class="align-middle">
+                <td class="align-middle status-cell">
                   <span class="badge {% if product.status == 'Available' %}badge-available{% elif product.status == 'Out of Stock' %}badge-out-of-stock{% else %}badge-unavailable{% endif %}">
                     {{ product.status }}
                   </span>
@@ -157,6 +157,9 @@
                   <a href="{% url 'producer_product_edit' product.pk %}" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-pencil"></i> Edit
                   </a>
+                  <button type="button" class="btn btn-sm btn-outline-success ms-2 quick-stock-edit" data-product-id="{{ product.pk }}">
+                    <i class="bi bi-pencil-square"></i> Stock
+                  </button>
                 </td>
               </tr>
               {% endfor %}
@@ -173,4 +176,121 @@
     </div>
   </div>
 </div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const table = document.querySelector('table[data-producer-products]');
+  if (!table) return;
+
+  function getCsrfToken() {
+    return document.cookie.split(';').map(c => c.trim())
+      .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+  }
+
+  table.addEventListener('click', function (event) {
+    const button = event.target.closest('.quick-stock-edit');
+    if (!button) return;
+    const row = button.closest('tr');
+    if (!row || row.classList.contains('stock-editing')) return;
+    startInlineStockEdit(row);
+  });
+
+  function startInlineStockEdit(row) {
+    const productId = row.dataset.productId;
+    const stockCell = row.querySelector('.stock-cell');
+    const statusCell = row.querySelector('.status-cell');
+    const currentStock = stockCell ? stockCell.dataset.stock : null;
+    const stockValue = currentStock !== null ? parseInt(currentStock, 10) : 0;
+
+    row.classList.add('stock-editing');
+    const originalStockHtml = stockCell.innerHTML;
+
+    stockCell.innerHTML = `
+      <div class="d-flex justify-content-center align-items-center gap-2">
+        <input type="number" class="form-control form-control-sm stock-edit-input" min="0" value="${stockValue}" style="width:85px;" />
+        <button type="button" class="btn btn-sm btn-brand stock-save-btn">Save</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary stock-cancel-btn">Cancel</button>
+      </div>
+      <div class="stock-edit-feedback text-danger small mt-1"></div>
+    `;
+
+    const saveBtn = row.querySelector('.stock-save-btn');
+    const cancelBtn = row.querySelector('.stock-cancel-btn');
+    const input = row.querySelector('.stock-edit-input');
+    const feedback = row.querySelector('.stock-edit-feedback');
+
+    cancelBtn.addEventListener('click', function () {
+      row.classList.remove('stock-editing');
+      stockCell.innerHTML = originalStockHtml;
+    });
+
+    saveBtn.addEventListener('click', function () {
+      const newStock = parseInt(input.value, 10);
+      if (Number.isNaN(newStock) || newStock < 0) {
+        feedback.textContent = 'Please enter a valid non-negative stock value.';
+        return;
+      }
+      feedback.textContent = '';
+      saveBtn.disabled = true;
+      cancelBtn.disabled = true;
+      patchProductStock(productId, newStock)
+        .then(data => {
+          if (!data || !data.data) {
+            throw new Error('Invalid response');
+          }
+          updateRowAfterPatch(row, data.data);
+          row.classList.remove('stock-editing');
+        })
+        .catch(err => {
+          feedback.textContent = err.message || 'Unable to update stock.';
+        })
+        .finally(() => {
+          saveBtn.disabled = false;
+          cancelBtn.disabled = false;
+        });
+    });
+  }
+
+  function patchProductStock(productId, stock) {
+    return fetch(`/producer/products/${productId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ stock }),
+    })
+    .then(response => response.json().then(data => ({ status: response.status, data })))
+    .then(payload => {
+      if (payload.status >= 400) {
+        throw new Error(payload.data?.message || 'Update failed.');
+      }
+      return payload.data;
+    });
+  }
+
+  function updateRowAfterPatch(row, product) {
+    const stockCell = row.querySelector('.stock-cell');
+    const statusCell = row.querySelector('.status-cell');
+    const priceCell = row.querySelector('.price-cell');
+
+    if (stockCell) {
+      stockCell.dataset.stock = product.stock;
+      stockCell.innerHTML = `<span class="${product.stock === 0 ? 'text-danger fw-bold' : (product.stock < 10 ? 'text-warning fw-bold' : 'text-success')}">${product.stock}</span>`;
+    }
+    if (statusCell) {
+      const statusClass = product.status === 'Available' ? 'badge-available' : product.status === 'Out of Stock' ? 'badge-out-of-stock' : 'badge-unavailable';
+      statusCell.innerHTML = `<span class="badge ${statusClass}">${product.status}</span>`;
+    }
+    if (priceCell && product.discounted_price !== null) {
+      priceCell.innerHTML = product.discounted_price !== null
+        ? `<div class="fw-semibold text-danger">£${product.discounted_price}</div><div class="small text-muted text-decoration-line-through">£${product.price}</div>`
+        : `£${product.price}`;
+    }
+  }
+})();
+</script>
 {% endblock %}

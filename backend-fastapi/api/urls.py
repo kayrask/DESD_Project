@@ -23,6 +23,8 @@ api_patterns = [
     path("dashboards/admin/users", views.dashboards_admin_users),
     path("dashboards/admin/database", views.dashboards_admin_database),
     path("dashboards/customer", views.dashboards_customer),
+    path("api/products", views.products_list),
+    path("api/products/<int:product_id>", views.product_detail),
     path("orders/", views.orders_create),
     path("orders/<int:order_id>", views.orders_get),
     path("ai/recommendations", views.ai_recommendations),
