@@ -441,3 +441,71 @@ def fire_recurring_orders():
             logging.getLogger(__name__).exception("Failed to place recurring order #%s: %s", ro.id, exc)
 
     return f"Recurring orders: {placed} placed, {paused} paused, {completed} completed"
+
+
+@shared_task
+def process_weekly_settlements():
+    """
+    Create weekly PaymentSettlement records for all producers.
+
+    Runs every Monday morning. Covers delivered orders whose delivery_date
+    falls within the previous Mon–Sun week. Each settlement records the gross
+    sales, 5% platform commission, and 95% net payout. Idempotent — uses
+    get_or_create so re-running on the same day is safe.
+    """
+    from datetime import date, timedelta
+    from decimal import Decimal
+    from api.models import Order, User, PaymentSettlement
+
+    _COMMISSION_RATE = Decimal("0.05")
+    today = date.today()
+
+    # Determine the previous Mon–Sun week
+    days_since_monday = today.weekday()          # 0=Mon … 6=Sun
+    this_monday = today - timedelta(days=days_since_monday)
+    week_end = this_monday - timedelta(days=1)   # Previous Sunday
+    week_start = week_end - timedelta(days=6)    # Previous Monday
+
+    producers = User.objects.filter(role="producer", is_active=True)
+    created_count = 0
+
+    for producer in producers:
+        delivered_orders = Order.objects.filter(
+            producer=producer,
+            status="Delivered",
+            delivery_date__gte=week_start,
+            delivery_date__lte=week_end,
+        ).prefetch_related("items")
+
+        if not delivered_orders.exists():
+            continue
+
+        gross = Decimal("0.00")
+        for order in delivered_orders:
+            for item in order.items.all():
+                gross += Decimal(str(item.unit_price)) * item.quantity
+        gross = gross.quantize(Decimal("0.01"))
+        commission = (gross * _COMMISSION_RATE).quantize(Decimal("0.01"))
+        net = (gross - commission).quantize(Decimal("0.01"))
+        order_count = delivered_orders.count()
+
+        week_num = week_start.isocalendar()[1]
+        reference = f"SETTLE-{week_start.year}-W{week_num:02d}-{producer.id}"
+
+        _, created = PaymentSettlement.objects.get_or_create(
+            producer=producer,
+            week_start=week_start,
+            defaults={
+                "reference": reference,
+                "week_end": week_end,
+                "gross_amount": gross,
+                "commission_amount": commission,
+                "net_amount": net,
+                "order_count": order_count,
+                "status": PaymentSettlement.STATUS_PENDING,
+            },
+        )
+        if created:
+            created_count += 1
+
+    return f"Weekly settlements processed: {created_count} new records"
