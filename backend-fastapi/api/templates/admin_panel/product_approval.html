@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Product Approvals – DESD Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0" style="min-height:calc(100vh - 61px)">
+  <div class="row g-0 h-100">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <span class="sidebar-label">Admin Panel</span>
+      <a href="{% url 'admin_dashboard' %}"><i class="bi bi-shield-fill"></i> Dashboard</a>
+      <a href="{% url 'admin_product_approval' %}" class="active"><i class="bi bi-check2-square"></i> Product Approvals</a>
+      <a href="{% url 'admin_reports' %}"><i class="bi bi-bar-chart-fill"></i> Reports</a>
+      <a href="{% url 'admin_users' %}"><i class="bi bi-people-fill"></i> Users</a>
+      <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
+      <span class="sidebar-label">AI</span>
+      <a href="{% url 'admin_ai_monitoring' %}"><i class="bi bi-stars"></i> AI Monitoring</a>
+      <span class="sidebar-label">Django</span>
+      <a href="/admin/" target="_blank"><i class="bi bi-gear-fill"></i> Django Admin</a>
+    </div>
+
+    <!-- Main -->
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header">
+        <h3>Product Approvals</h3>
+        <p>Review products submitted by producers before they go live in the marketplace.</p>
+      </div>
+
+      {% if messages %}
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if pending_products %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Producer</th>
+                <th class="text-end">Price</th>
+                <th class="text-center">Stock</th>
+                <th>Allergens</th>
+                <th class="text-center">Organic</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for product in pending_products %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ product.name }}</div>
+                  {% if product.description %}
+                  <div class="small text-muted" style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ product.description }}</div>
+                  {% endif %}
+                </td>
+                <td>{{ product.category }}</td>
+                <td>
+                  <div class="fw-semibold">{{ product.producer.full_name }}</div>
+                  <div class="small text-muted">{{ product.producer.email }}</div>
+                </td>
+                <td class="text-end">£{{ product.price }}</td>
+                <td class="text-center">{{ product.stock }}</td>
+                <td>
+                  {% if product.allergens %}
+                  <span class="badge bg-light text-dark border">{{ product.allergens }}</span>
+                  {% else %}
+                  <span class="text-muted small">None</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if product.is_organic %}
+                  <i class="bi bi-leaf text-success" title="Organic"></i>
+                  {% else %}
+                  <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <!-- Approve button -->
+                  <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="product_id" value="{{ product.pk }}">
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit" class="btn btn-sm btn-success">
+                      <i class="bi bi-check-lg me-1"></i>Approve
+                    </button>
+                  </form>
+                  <!-- Reject button triggers modal -->
+                  <button type="button" class="btn btn-sm btn-outline-danger ms-1"
+                          data-bs-toggle="modal"
+                          data-bs-target="#rejectModal{{ product.pk }}">
+                    <i class="bi bi-x-lg me-1"></i>Reject
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Reject modal for each product -->
+              <div class="modal fade" id="rejectModal{{ product.pk }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Reject: {{ product.name }}</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="post">
+                      {% csrf_token %}
+                      <input type="hidden" name="product_id" value="{{ product.pk }}">
+                      <input type="hidden" name="action" value="reject">
+                      <div class="modal-body">
+                        <label class="form-label fw-semibold" for="reason{{ product.pk }}">Reason for rejection <span class="text-muted fw-normal">(optional – sent to producer by email)</span></label>
+                        <textarea id="reason{{ product.pk }}" name="reject_reason" class="form-control" rows="3"
+                                  placeholder="e.g. Missing allergen information, price too high, description unclear…"></textarea>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">
+                          <i class="bi bi-x-lg me-1"></i>Confirm Rejection
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-check2-circle fs-1 text-success"></i>
+        <p class="mt-3 fw-semibold">No products awaiting approval.</p>
+        <p class="small">New submissions from producers will appear here.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

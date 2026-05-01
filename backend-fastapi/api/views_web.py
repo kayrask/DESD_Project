@@ -11,12 +11,14 @@ from decimal import Decimal
 import csv
 import logging
 import pathlib
+import random
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
+from django.core.mail import send_mail
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -40,6 +42,7 @@ from api.forms import (
     ReviewForm,
 )
 from api.models import (
+    AdminOTP,
     CartReservation,
     CheckoutOrder,
     CommissionReport,
@@ -193,6 +196,11 @@ class AdminRequiredMixin(_RoleMixin):
     _required_role = "admin"
 
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+COMMON_ALLERGENS = ["Milk", "Eggs", "Gluten", "Nuts", "Soy", "Sesame", "Shellfish", "Fish"]
+
+
 # ── Public views ──────────────────────────────────────────────────────────────
 
 class HomeView(TemplateView):
@@ -212,6 +220,10 @@ class MarketplaceView(ListView):
         category = self.request.GET.get("category", "").strip()
         organic = self.request.GET.get("organic", "")
         allergen_free = self.request.GET.get("allergen_free", "")
+        exclude_allergens = [
+            a for a in self.request.GET.getlist("exclude_allergens")
+            if a in COMMON_ALLERGENS
+        ]
         if q:
             qs = qs.filter(
                 Q(name__icontains=q) |
@@ -224,6 +236,8 @@ class MarketplaceView(ListView):
             qs = qs.filter(is_organic=True)
         if allergen_free:
             qs = qs.filter(Q(allergens="") | Q(allergens__isnull=True))
+        for allergen in exclude_allergens:
+            qs = qs.exclude(allergens__icontains=allergen)
         return qs.order_by("name")
 
     def get_context_data(self, **kwargs):
@@ -239,6 +253,11 @@ class MarketplaceView(ListView):
         ctx["selected_category"] = self.request.GET.get("category", "")
         ctx["organic_filter"] = self.request.GET.get("organic", "")
         ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
+        ctx["allergen_options"] = COMMON_ALLERGENS
+        ctx["selected_allergens"] = [
+            a for a in self.request.GET.getlist("exclude_allergens")
+            if a in COMMON_ALLERGENS
+        ]
 
         # ── Producer search results (shown when query matches a producer name / org) ──
         q = self.request.GET.get("q", "").strip()
@@ -336,12 +355,27 @@ class LoginPageView(View):
                 password=form.cleaned_data["password"],
             )
             if user is not None:
-                login(request, user)
-                messages.success(request, f"Welcome back, {user.full_name}!")
                 next_url = request.GET.get("next", "/")
-                # Guard against open-redirect: only allow relative paths.
                 if not next_url.startswith("/"):
                     next_url = "/"
+                if user.role == "admin":
+                    code = f"{random.randint(0, 999999):06d}"
+                    AdminOTP.objects.create(
+                        user=user,
+                        code=code,
+                        expires_at=timezone.now() + timedelta(minutes=5),
+                    )
+                    send_mail(
+                        "Your DESD Admin Login Code",
+                        f"Your one-time login code is: {code}\n\nThis code expires in 5 minutes.\nDo not share it with anyone.",
+                        "noreply@desd.local",
+                        [user.email],
+                        fail_silently=True,
+                    )
+                    request.session["otp_user_id"] = user.pk
+                    return redirect(f"/login/otp/?next={next_url}")
+                login(request, user)
+                messages.success(request, f"Welcome back, {user.full_name}!")
                 return redirect(next_url)
             form.add_error(None, "Invalid email or password.")
         return render(request, self.template_name, {"form": form})
@@ -352,6 +386,41 @@ class LogoutView(View):
         logout(request)
         messages.info(request, "You have been logged out.")
         return redirect("/login/")
+
+
+class AdminOTPVerifyView(View):
+    template_name = "otp_verify.html"
+
+    def get(self, request):
+        if "otp_user_id" not in request.session:
+            return redirect("/login/")
+        return render(request, self.template_name, {})
+
+    def post(self, request):
+        user_id = request.session.get("otp_user_id")
+        if not user_id:
+            return redirect("/login/")
+        code = request.POST.get("code", "").strip()
+        try:
+            otp = AdminOTP.objects.get(
+                user_id=user_id,
+                code=code,
+                is_used=False,
+                expires_at__gt=timezone.now(),
+            )
+        except AdminOTP.DoesNotExist:
+            messages.error(request, "Invalid or expired code. Please try again.")
+            return render(request, self.template_name, {})
+        otp.is_used = True
+        otp.save()
+        del request.session["otp_user_id"]
+        user = User.objects.get(pk=user_id)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        messages.success(request, f"Welcome back, {user.full_name}!")
+        next_url = request.GET.get("next", "/")
+        if not next_url.startswith("/"):
+            next_url = "/"
+        return redirect(next_url)
 
 
 class RegisterPageView(View):
@@ -1013,7 +1082,7 @@ class ProducerProductsView(ProducerRequiredMixin, View):
 
         data = form.cleaned_data
         stock = data["stock"]
-        status = data["status"] if stock > 0 else "Out of Stock"
+        status = "Pending Approval" if stock > 0 else "Out of Stock"
 
         Product.objects.create(
             name=data["name"],
@@ -1029,7 +1098,7 @@ class ProducerProductsView(ProducerRequiredMixin, View):
             ai_discount_active=False,
             producer=request.user,
         )
-        messages.success(request, "Product created successfully.")
+        messages.success(request, "Product submitted for admin approval.")
         return redirect("/producer/products/")
 
 
@@ -1050,14 +1119,14 @@ class ProducerProductEditView(ProducerRequiredMixin, View):
             updated = form.save(commit=False)
             if updated.stock == 0:
                 updated.status = "Out of Stock"
-            elif updated.status == "Out of Stock" and updated.stock > 0:
-                updated.status = "Available"
+            else:
+                updated.status = "Pending Approval"
             # low_stock_threshold is optional in the form; keep the existing value if blank
             if form.cleaned_data.get("low_stock_threshold") is None:
                 updated.low_stock_threshold = product.low_stock_threshold
             updated.save()
             _broadcast_stock_update(updated)
-            messages.success(request, "Product updated.")
+            messages.success(request, "Product updated and resubmitted for admin approval.")
             return redirect("/producer/products/")
         return render(request, self.template_name, {"form": form, "product": product})
 
@@ -1328,6 +1397,7 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
             "open_flags": QualityAssessment.objects.filter(
                 model_confidence__lt=0.60,
             ).count(),
+            "pending_products": Product.objects.filter(status="Pending Approval").count(),
         }
         return ctx
 
@@ -1445,6 +1515,65 @@ class AdminDatabaseView(AdminRequiredMixin, TemplateView):
             ).order_by("id")
         ]
         return ctx
+
+
+class AdminProductApprovalView(AdminRequiredMixin, View):
+    template_name = "admin_panel/product_approval.html"
+
+    def get(self, request):
+        pending = Product.objects.filter(
+            status="Pending Approval"
+        ).select_related("producer").order_by("name")
+        return render(request, self.template_name, {"pending_products": pending})
+
+    def post(self, request):
+        product_id = request.POST.get("product_id", "")
+        action = request.POST.get("action", "")
+        reject_reason = request.POST.get("reject_reason", "").strip()
+
+        if not str(product_id).isdigit():
+            messages.error(request, "Invalid product.")
+            return redirect("/admin-panel/products/")
+
+        product = get_object_or_404(Product, pk=int(product_id), status="Pending Approval")
+
+        if action == "approve":
+            product.status = "Available" if product.stock > 0 else "Out of Stock"
+            product.save()
+            send_mail(
+                "Your product has been approved – DESD",
+                (
+                    f"Hi {product.producer.full_name},\n\n"
+                    f"Your product '{product.name}' has been approved and is now live on the marketplace.\n\n"
+                    "The DESD Team"
+                ),
+                "noreply@desd.local",
+                [product.producer.email],
+                fail_silently=True,
+            )
+            messages.success(request, f"'{product.name}' approved and is now live.")
+        elif action == "reject":
+            product.status = "Rejected"
+            product.save()
+            body = (
+                f"Hi {product.producer.full_name},\n\n"
+                f"Your product '{product.name}' was not approved and will not appear in the marketplace."
+            )
+            if reject_reason:
+                body += f"\n\nReason: {reject_reason}"
+            body += "\n\nPlease update the product and resubmit.\n\nThe DESD Team"
+            send_mail(
+                "Your product requires changes – DESD",
+                body,
+                "noreply@desd.local",
+                [product.producer.email],
+                fail_silently=True,
+            )
+            messages.warning(request, f"'{product.name}' rejected.")
+        else:
+            messages.error(request, "Unknown action.")
+
+        return redirect("/admin-panel/products/")
 
 
 # ── AI views ──────────────────────────────────────────────────────────────────
