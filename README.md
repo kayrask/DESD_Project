@@ -42,7 +42,8 @@ All pull requests are labelled by module for easy filtering:
 | `feature/pep8-compliance` | Kayra | PEP 8 compliance for all ML/AI Python modules |
 | `feature/nazli-auc-roc-evaluation` | Nazlican | AUC-ROC added to EfficientNet-B0 evaluator |
 | `feature/docs-docstrings-readme-v2` | Kayra | Docstrings added to all AI/ML functions and classes |
-| `feature/repo-restructure` *(latest)* | Kayra | `advanced-ai/` and `desd/` folder separation, PR labels |
+| `feature/repo-restructure` | Kayra | `advanced-ai/` and `desd/` folder separation, PR labels |
+| `feature/nazli-product-approval-otp-allergens` *(latest)* | Nazlican | Product approval workflow, admin OTP 2FA, allergen filter |
 
 ### DESD Project Branches
 

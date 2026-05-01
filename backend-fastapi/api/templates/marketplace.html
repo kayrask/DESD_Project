@@ -52,10 +52,26 @@
         </label>
       </div>
     </div>
+    <div class="col-12">
+      <div style="font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem">
+        <i class="bi bi-exclamation-triangle text-warning me-1"></i>Exclude allergens
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for allergen in allergen_options %}
+        <div class="form-check form-check-inline m-0">
+          <input class="form-check-input" type="checkbox"
+                 name="exclude_allergens" value="{{ allergen }}"
+                 id="allergen-{{ allergen|lower }}"
+                 {% if allergen in selected_allergens %}checked{% endif %}>
+          <label class="form-check-label small" for="allergen-{{ allergen|lower }}">{{ allergen }}</label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
     <div class="col-md-2">
       <button type="submit" class="btn btn-brand w-100">Filter</button>
     </div>
-    {% if q or selected_category or organic_filter or allergen_free_filter %}
+    {% if q or selected_category or organic_filter or allergen_free_filter or selected_allergens %}
     <div class="col-md-1">
       <a href="{% url 'marketplace' %}" class="btn btn-outline-secondary w-100">Clear</a>
     </div>
@@ -116,7 +132,7 @@
   {% endif %}
 
   <!-- AI recommendations — hidden when filters are active -->
-  {% if recommendations and not q and not selected_category and not organic_filter and not allergen_free_filter %}
+  {% if recommendations and not q and not selected_category and not organic_filter and not allergen_free_filter and not selected_allergens %}
   <div class="mb-5">
     <div class="d-flex align-items-center gap-2 mb-3">
       <span style="background:#fef3c7;color:#d97706;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center">

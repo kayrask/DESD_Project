@@ -111,7 +111,7 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = [
-            "name", "category", "description", "price", "stock", "status",
+            "name", "category", "description", "price", "stock",
             "allergens", "is_organic", "discount_percentage",
             "harvest_date", "season_start", "season_end", "low_stock_threshold",
         ]
@@ -121,7 +121,6 @@ class ProductForm(forms.ModelForm):
             "description": forms.Textarea(attrs={**_field_class, "rows": 3, "placeholder": "Describe your product..."}),
             "price": forms.NumberInput(attrs={**_field_class, "step": "0.01", "min": "0"}),
             "stock": forms.NumberInput(attrs={**_field_class, "min": "0"}),
-            "status": forms.Select(attrs=_select_class),
             "allergens": forms.TextInput(attrs={**_field_class, "placeholder": "e.g. Milk, Eggs, Gluten (leave blank if none)"}),
             "is_organic": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "discount_percentage": forms.NumberInput(attrs={**_field_class, "min": "0", "max": "50", "placeholder": "0"}),
