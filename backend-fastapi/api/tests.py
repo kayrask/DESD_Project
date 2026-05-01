@@ -1184,6 +1184,13 @@ class ProducerProductManagementTest(TestCase):
         })
         self.assertEqual(Product.objects.count(), count_before)
 
+    def test_producer_products_page_loads_with_inline_stock_editor(self):
+        _make_product(self.producer, name="Inline Stock Herb", price="1.50", stock=12)
+        response = self.client.get(reverse("producer_products"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-producer-products="true"')
+        self.assertContains(response, 'quick-stock-edit')
+
     def test_edit_product_page_loads(self):
         p = _make_product(self.producer)
         response = self.client.get(reverse("producer_product_edit", args=[p.pk]))
@@ -1723,6 +1730,42 @@ class APIProducerEndpointsTest(TestCase):
             HTTP_AUTHORIZATION=f"Bearer {self.token}",
         )
         self.assertEqual(response.status_code, 403)
+
+
+class APIPublicProductsTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.producer = _make_producer("api_pub_prod@test.com")
+        self.other_producer = _make_producer("api_pub_prod2@test.com")
+        self.apple = _make_product(self.producer, name="Apple", price="1.50", stock=20)
+        self.carrot = _make_product(self.other_producer, name="Carrot", price="0.90", stock=15)
+        self.carrot.category = "Vegetable"
+        self.carrot.save()
+
+    def test_products_list_returns_items(self):
+        response = self.client.get("/api/products", content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("items", data)
+        names = [item["name"] for item in data["items"]]
+        self.assertIn("Apple", names)
+        self.assertIn("Carrot", names)
+
+    def test_products_list_filters_by_category(self):
+        response = self.client.get("/api/products?category=Fruit", content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        items = response.json().get("items", [])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["category"], "Fruit")
+
+    def test_product_detail_returns_full_product(self):
+        response = self.client.get(f"/api/products/{self.apple.id}", content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["name"], "Apple")
+        self.assertEqual(data["category"], "Fruit")
+        self.assertEqual(data["producer_id"], self.producer.id)
+        self.assertEqual(data["stock"], 20)
 
 
 class APIAdminEndpointsTest(TestCase):
