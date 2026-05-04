@@ -48,6 +48,8 @@ class User(AbstractUser):
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default="individual")
     organization_name = models.CharField(max_length=200, blank=True, default="")
 
+    email_verified = models.BooleanField(default=True)
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name", "role"]
 
@@ -496,3 +498,28 @@ class AdminOTP(models.Model):
 
     def __str__(self):
         return f"OTP for {self.user.email} ({'used' if self.is_used else 'active'})"
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_reset_tokens")
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"PasswordResetToken for {self.user.email} ({'used' if self.used else 'active'})"
+
+
+class EmailVerificationToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="email_verification_tokens")
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"EmailVerificationToken for {self.user.email}"

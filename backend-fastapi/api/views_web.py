@@ -12,13 +12,14 @@ import csv
 import logging
 import pathlib
 import random
+import secrets
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
-from django.core.mail import send_mail
+from api.email_utils import send_email
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -46,9 +47,11 @@ from api.models import (
     CartReservation,
     CheckoutOrder,
     CommissionReport,
+    EmailVerificationToken,
     FarmStory,
     Order,
     OrderItem,
+    PasswordResetToken,
     PaymentSettlement,
     Product,
     QualityAssessment,
@@ -135,6 +138,23 @@ def _broadcast_order_status(order):
         pass
     except Exception:
         logger.exception("broadcast_order_status failed for %s", order.order_id)
+
+
+def _broadcast_new_order_to_producer(order):
+    """Notify producer WebSocket connections about a new incoming order."""
+    from asgiref.sync import async_to_sync
+    layer = _get_channel_layer()
+    if layer is None:
+        return
+    group = f"user_{order.producer_id}"
+    try:
+        async_to_sync(layer.group_send)(group, {
+            "type": "new_order",
+            "order_id": order.order_id,
+            "customer_name": order.customer_name or "",
+        })
+    except Exception:
+        logger.exception("_broadcast_new_order_to_producer failed for %s", order.order_id)
 
 
 def _broadcast_stock_update(product):
@@ -238,6 +258,18 @@ class MarketplaceView(ListView):
             qs = qs.filter(Q(allergens="") | Q(allergens__isnull=True))
         for allergen in exclude_allergens:
             qs = qs.exclude(allergens__icontains=allergen)
+        min_price = self.request.GET.get("min_price", "").strip()
+        max_price = self.request.GET.get("max_price", "").strip()
+        if min_price:
+            try:
+                qs = qs.filter(price__gte=Decimal(min_price))
+            except Exception:
+                pass
+        if max_price:
+            try:
+                qs = qs.filter(price__lte=Decimal(max_price))
+            except Exception:
+                pass
         return qs.order_by("name")
 
     def get_context_data(self, **kwargs):
@@ -258,6 +290,8 @@ class MarketplaceView(ListView):
             a for a in self.request.GET.getlist("exclude_allergens")
             if a in COMMON_ALLERGENS
         ]
+        ctx["min_price"] = self.request.GET.get("min_price", "")
+        ctx["max_price"] = self.request.GET.get("max_price", "")
 
         # ── Producer search results (shown when query matches a producer name / org) ──
         q = self.request.GET.get("q", "").strip()
@@ -355,6 +389,20 @@ class LoginPageView(View):
                 password=form.cleaned_data["password"],
             )
             if user is not None:
+                if user.status == "suspended":
+                    form.add_error(
+                        None,
+                        "Your account is pending admin approval. "
+                        "You will be notified by email once it is activated.",
+                    )
+                    return render(request, self.template_name, {"form": form})
+                db_user = User.objects.filter(pk=user.pk).first()
+                if db_user and not db_user.email_verified:
+                    form.add_error(
+                        None,
+                        "Please verify your email first. Check your inbox for a verification link.",
+                    )
+                    return render(request, self.template_name, {"form": form})
                 next_url = request.GET.get("next", "/")
                 if not next_url.startswith("/"):
                     next_url = "/"
@@ -365,12 +413,10 @@ class LoginPageView(View):
                         code=code,
                         expires_at=timezone.now() + timedelta(minutes=5),
                     )
-                    send_mail(
+                    send_email(
+                        user.email,
                         "Your DESD Admin Login Code",
                         f"Your one-time login code is: {code}\n\nThis code expires in 5 minutes.\nDo not share it with anyone.",
-                        "noreply@desd.local",
-                        [user.email],
-                        fail_silently=True,
                     )
                     request.session["otp_user_id"] = user.pk
                     return redirect(f"/login/otp/?next={next_url}")
@@ -441,20 +487,158 @@ class RegisterPageView(View):
             role = form.cleaned_data["role"]
             account_type = form.cleaned_data.get("account_type") or "individual"
             organization_name = form.cleaned_data.get("organization_name", "")
-            if role != "customer":
+            if role not in ("customer", "producer"):
                 account_type = "individual"
                 organization_name = ""
-            User.objects.create_user(
+            needs_approval = account_type in ("community_group", "restaurant")
+            new_user = User.objects.create_user(
                 email=email,
                 password=form.cleaned_data["password"],
                 full_name=form.cleaned_data["full_name"],
                 role=role,
                 account_type=account_type,
                 organization_name=organization_name,
+                status="suspended" if needs_approval else "active",
             )
-            messages.success(request, "Account created! You can now log in.")
-            return redirect("/login/")
+            # Mark email as unverified and create a verification token
+            new_user.email_verified = False
+            new_user.save()
+            verification_token = secrets.token_urlsafe(32)
+            EmailVerificationToken.objects.create(user=new_user, token=verification_token)
+            verify_link = f"{request.scheme}://{request.get_host()}/verify-email/{verification_token}/"
+            try:
+                send_email(
+                    new_user.email,
+                    "Verify your DESD Marketplace email",
+                    (
+                        f"Hi {new_user.full_name or new_user.email},\n\n"
+                        "Please verify your email address by clicking the link below:\n\n"
+                        f"{verify_link}\n\n"
+                        "This link does not expire.\n\n"
+                        "Thanks,\nThe DESD Marketplace Team"
+                    ),
+                )
+            except Exception:
+                logger.exception("Failed to send verification email to %s", new_user.email)
+            if needs_approval:
+                messages.info(
+                    request,
+                    "Your account has been submitted for admin approval. "
+                    "Please also check your email to verify your address.",
+                )
+            else:
+                messages.info(
+                    request,
+                    "Account created! Please check your email to verify your address before logging in.",
+                )
+            return redirect("/email-verify-pending/")
         return render(request, self.template_name, {"form": form})
+
+
+class EmailVerifyPendingView(View):
+    """Shown immediately after registration — tells the user to check their email."""
+    template_name = "email_verify_pending.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {})
+
+
+class VerifyEmailView(View):
+    """Processes the email verification link."""
+
+    def get(self, request, token):
+        try:
+            ev_token = EmailVerificationToken.objects.select_related("user").get(token=token)
+        except EmailVerificationToken.DoesNotExist:
+            messages.error(request, "Verification link is invalid or has already been used.")
+            return redirect("/login/")
+        user = ev_token.user
+        user.email_verified = True
+        user.save()
+        ev_token.delete()
+        messages.success(request, "Email verified! You can now log in.")
+        return redirect("/login/")
+
+
+class ForgotPasswordView(View):
+    template_name = "forgot_password.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {})
+
+    def post(self, request):
+        email = request.POST.get("email", "").strip().lower()
+        # Always show the same message to avoid revealing whether an account exists
+        try:
+            user = User.objects.get(email__iexact=email)
+            token = secrets.token_urlsafe(32)
+            PasswordResetToken.objects.create(user=user, token=token)
+            reset_link = f"{request.scheme}://{request.get_host()}/reset-password/{token}/"
+            send_email(
+                user.email,
+                "Reset your DESD Marketplace password",
+                (
+                    f"Hi {user.full_name or user.email},\n\n"
+                    "We received a request to reset your password.\n\n"
+                    "Click the link below to choose a new password:\n\n"
+                    f"{reset_link}\n\n"
+                    "This link expires in 1 hour. If you did not request a reset, ignore this email.\n\n"
+                    "Thanks,\nThe DESD Marketplace Team"
+                ),
+            )
+        except User.DoesNotExist:
+            pass  # Do not reveal whether the email exists
+        except Exception:
+            logger.exception("Failed to send password reset email to %s", email)
+        messages.success(
+            request,
+            "If that email is registered, you will receive a password reset link shortly.",
+        )
+        return redirect("/forgot-password/")
+
+
+class PasswordResetConfirmView(View):
+    template_name = "password_reset_confirm.html"
+
+    def _get_valid_token(self, token_str):
+        """Return the PasswordResetToken if valid and unexpired, else None."""
+        try:
+            token = PasswordResetToken.objects.select_related("user").get(
+                token=token_str, used=False
+            )
+        except PasswordResetToken.DoesNotExist:
+            return None
+        if token.created_at < timezone.now() - timedelta(hours=1):
+            return None
+        return token
+
+    def get(self, request, token):
+        token_obj = self._get_valid_token(token)
+        if token_obj is None:
+            messages.error(request, "This password reset link is invalid or has expired.")
+            return render(request, self.template_name, {"token": token, "invalid": True})
+        return render(request, self.template_name, {"token": token, "invalid": False})
+
+    def post(self, request, token):
+        token_obj = self._get_valid_token(token)
+        if token_obj is None:
+            messages.error(request, "This password reset link is invalid or has expired.")
+            return render(request, self.template_name, {"token": token, "invalid": True})
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+        if len(new_password) < 8:
+            messages.error(request, "Password must be at least 8 characters.")
+            return render(request, self.template_name, {"token": token, "invalid": False})
+        if new_password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, self.template_name, {"token": token, "invalid": False})
+        user = token_obj.user
+        user.set_password(new_password)
+        user.save()
+        token_obj.used = True
+        token_obj.save()
+        messages.success(request, "Password reset successfully. You can now log in.")
+        return redirect("/login/")
 
 
 # ── Customer views ────────────────────────────────────────────────────────────
@@ -929,6 +1113,11 @@ class CheckoutView(CustomerRequiredMixin, View):
                         unit_price=product.price,
                     )
                 created_vendor_orders.append(vendor_order.order_id)
+                # Notify the producer via WebSocket that a new order has arrived
+                try:
+                    _broadcast_new_order_to_producer(vendor_order)
+                except Exception:
+                    logger.exception("Failed to broadcast new order to producer for %s", vendor_order.order_id)
 
             # Decrement stock and broadcast real-time updates.
             for item in cart:
@@ -968,6 +1157,29 @@ class CheckoutView(CustomerRequiredMixin, View):
             request.session["last_order_vendor_ids"] = created_vendor_orders
             request.session["cart"] = []
             _clear_reservations(_ensure_session_key(request))
+
+            # Send order confirmation email to customer
+            try:
+                customer = request.user
+                item_lines = "\n".join(
+                    f"  - {i['name']} x{i['quantity']} @ £{float(i['price']):.2f}"
+                    for i in cart
+                )
+                send_email(
+                    customer.email,
+                    f"Order Confirmation – {base_order_id}",
+                    (
+                        f"Hi {customer.full_name or customer.email},\n\n"
+                        f"Thank you for your order! Here is a summary:\n\n"
+                        f"Order ID: {base_order_id}\n"
+                        f"Total: £{float(gross_total.quantize(Decimal('0.01'))):.2f}\n\n"
+                        f"Items:\n{item_lines}\n\n"
+                        "You can track your order status from your dashboard.\n\n"
+                        "Thanks,\nThe DESD Marketplace Team"
+                    ),
+                )
+            except Exception:
+                logger.exception("Failed to send checkout confirmation email for order %s", base_order_id)
 
             messages.success(request, "Order placed successfully!")
             return redirect(f"/orders/{checkout_order.id}/confirmation/")
@@ -1202,6 +1414,28 @@ class ProducerOrderStatusUpdateView(ProducerRequiredMixin, View):
         order.status = new_status.capitalize()
         order.save()
 
+        # Email the customer about the status change
+        try:
+            parts = order.order_id.split("-")
+            checkout_id = int(parts[1])
+            co = CheckoutOrder.objects.filter(id=checkout_id).select_related("customer").first()
+            if co and co.customer and co.customer.email:
+                customer = co.customer
+                customer_name = customer.full_name or customer.email
+                send_email(
+                    customer.email,
+                    f"Your order {order.order_id} is now {order.status}",
+                    (
+                        f"Hi {customer_name},\n\n"
+                        f"Your order {order.order_id} from {order.producer.full_name} "
+                        f"has been updated to: {order.status}.\n\n"
+                        "Log in to your DESD account to view the full details.\n\n"
+                        "Thanks,\nThe DESD Marketplace Team"
+                    ),
+                )
+        except Exception:
+            logger.exception("Failed to send order status email for %s", order.order_id)
+
         # Push real-time notification to customer
         _broadcast_order_status(order)
 
@@ -1398,6 +1632,10 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
                 model_confidence__lt=0.60,
             ).count(),
             "pending_products": Product.objects.filter(status="Pending Approval").count(),
+            "pending_users": User.objects.filter(
+                status="suspended",
+                account_type__in=["community_group", "restaurant"],
+            ).count(),
         }
         return ctx
 
@@ -1540,16 +1778,14 @@ class AdminProductApprovalView(AdminRequiredMixin, View):
         if action == "approve":
             product.status = "Available" if product.stock > 0 else "Out of Stock"
             product.save()
-            send_mail(
+            send_email(
+                product.producer.email,
                 "Your product has been approved – DESD",
                 (
                     f"Hi {product.producer.full_name},\n\n"
                     f"Your product '{product.name}' has been approved and is now live on the marketplace.\n\n"
                     "The DESD Team"
                 ),
-                "noreply@desd.local",
-                [product.producer.email],
-                fail_silently=True,
             )
             messages.success(request, f"'{product.name}' approved and is now live.")
         elif action == "reject":
@@ -1562,18 +1798,115 @@ class AdminProductApprovalView(AdminRequiredMixin, View):
             if reject_reason:
                 body += f"\n\nReason: {reject_reason}"
             body += "\n\nPlease update the product and resubmit.\n\nThe DESD Team"
-            send_mail(
+            send_email(
+                product.producer.email,
                 "Your product requires changes – DESD",
                 body,
-                "noreply@desd.local",
-                [product.producer.email],
-                fail_silently=True,
             )
             messages.warning(request, f"'{product.name}' rejected.")
         else:
             messages.error(request, "Unknown action.")
 
         return redirect("/admin-panel/products/")
+
+
+class AdminUserApprovalView(AdminRequiredMixin, View):
+    template_name = "admin_panel/user_approval.html"
+
+    def get(self, request):
+        pending = User.objects.filter(
+            status="suspended",
+            account_type__in=["community_group", "restaurant"],
+        ).order_by("date_joined")
+        return render(request, self.template_name, {"pending_users": pending})
+
+    def post(self, request):
+        user_id = request.POST.get("user_id", "")
+        action = request.POST.get("action", "")
+        reject_reason = request.POST.get("reject_reason", "").strip()
+
+        if not str(user_id).isdigit():
+            messages.error(request, "Invalid user.")
+            return redirect("/admin-panel/users/approval/")
+
+        user = get_object_or_404(
+            User, pk=int(user_id), status="suspended",
+            account_type__in=["community_group", "restaurant"],
+        )
+
+        if action == "approve":
+            user.status = "active"
+            user.save()
+            send_email(
+                user.email,
+                "Your DESD account has been approved",
+                (
+                    f"Hi {user.full_name},\n\n"
+                    "Your account has been approved and you can now log in to the DESD marketplace.\n\n"
+                    "The DESD Team"
+                ),
+            )
+            messages.success(request, f"{user.full_name} approved and can now log in.")
+        elif action == "reject":
+            body = (
+                f"Hi {user.full_name},\n\n"
+                "Unfortunately your account application has not been approved."
+            )
+            if reject_reason:
+                body += f"\n\nReason: {reject_reason}"
+            body += "\n\nThe DESD Team"
+            send_email(
+                user.email,
+                "Your DESD account application",
+                body,
+            )
+            user.delete()
+            messages.warning(request, f"{user.full_name}'s application rejected and removed.")
+        else:
+            messages.error(request, "Unknown action.")
+
+        return redirect("/admin-panel/users/approval/")
+
+
+class AdminDeleteUserView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        if user.role == "admin":
+            messages.error(request, "Admin accounts cannot be deleted.")
+            return redirect("/admin-panel/users/")
+        name = user.full_name or user.email
+        user.delete()
+        messages.success(request, f"{name}'s account has been deleted.")
+        return redirect("/admin-panel/users/")
+
+
+class DeleteAccountView(LoginRequiredMixin, View):
+    def post(self, request):
+        user = request.user
+        if user.role == "admin":
+            messages.error(request, "Admin accounts cannot be deleted.")
+            return redirect("/")
+        logout(request)
+        user.delete()
+        messages.success(request, "Your account has been deleted.")
+        return redirect("/")
+
+
+class AdminTestEmailView(AdminRequiredMixin, View):
+    def get(self, request):
+        to = request.GET.get("to", "").strip()
+        if not to:
+            from django.http import JsonResponse
+            return JsonResponse({"error": "Provide ?to=email@example.com"}, status=400)
+        from django.http import JsonResponse
+        ok = send_email(
+            to_email=to,
+            subject="DESD SendGrid Test",
+            body="This is a test email from DESD. If you received it, SendGrid is configured correctly.",
+        )
+        if ok:
+            return JsonResponse({"status": "sent", "to": to})
+        return JsonResponse({"status": "failed — check logs (SENDGRID_API_KEY may not be set or SendGrid returned an error)", "to": to}, status=500)
 
 
 # ── AI views ──────────────────────────────────────────────────────────────────

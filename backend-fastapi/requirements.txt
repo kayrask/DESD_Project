@@ -19,3 +19,4 @@ pandas==2.2.2
 scikit-learn==1.4.2
 statsmodels==0.14.2
 matplotlib==3.8.4
+sendgrid==6.11.0

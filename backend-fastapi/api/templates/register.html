@@ -88,10 +88,10 @@
   const orgGroup   = document.getElementById('org-name-group');
 
   function update() {
-    const isCustomer = roleSelect.value === 'customer';
-    acctGroup.style.display = isCustomer ? 'block' : 'none';
-    const needsOrg = isCustomer && (acctSelect.value === 'community_group' || acctSelect.value === 'restaurant');
-    orgGroup.style.display = needsOrg ? 'block' : 'none';
+    const role = roleSelect.value;
+    const isCommunityOrRestaurant = acctSelect.value === 'community_group' || acctSelect.value === 'restaurant';
+    acctGroup.style.display = (role === 'customer' || role === 'producer') ? 'block' : 'none';
+    orgGroup.style.display = isCommunityOrRestaurant ? 'block' : 'none';
   }
 
   roleSelect.addEventListener('change', update);

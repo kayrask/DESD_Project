@@ -50,6 +50,10 @@
         <button type="submit" class="btn-submit mt-1">Sign in &rarr;</button>
       </form>
 
+      <p style="text-align:center;font-size:.8rem;margin-top:.75rem">
+        <a href="{% url 'forgot_password' %}" style="color:var(--muted);text-decoration:none">Forgot password?</a>
+      </p>
+
       <div class="auth-divider"><span>new here?</span></div>
       <p style="text-align:center;font-size:.875rem;color:var(--muted);margin:0">
         <a href="{% url 'register' %}" style="color:var(--brand);font-weight:600;text-decoration:none">Create a free account</a>
@@ -62,6 +66,7 @@
         <li><strong>Producer:</strong> producer@desd.local / Password123</li>
         <li><strong>Admin:</strong> admin@desd.local / Password123</li>
         <li><strong>Customer:</strong> customer@desd.local / Password123</li>
+        <li><strong>Admin 2:</strong> desdproject.test@gmail.com / Admin1234!</li>
       </ul>
     </div>
   </div>
