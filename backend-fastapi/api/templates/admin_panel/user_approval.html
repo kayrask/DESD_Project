@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}User Approvals – DESD Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0" style="min-height:calc(100vh - 61px)">
+  <div class="row g-0 h-100">
+    <div class="col-md-2 sidebar">
+      <span class="sidebar-label">Admin Panel</span>
+      <a href="{% url 'admin_dashboard' %}"><i class="bi bi-shield-fill"></i> Dashboard</a>
+      <a href="{% url 'admin_product_approval' %}"><i class="bi bi-check2-square"></i> Product Approvals</a>
+      <a href="{% url 'admin_user_approval' %}" class="active"><i class="bi bi-person-check-fill"></i> User Approvals</a>
+      <a href="{% url 'admin_reports' %}"><i class="bi bi-bar-chart-fill"></i> Reports</a>
+      <a href="{% url 'admin_users' %}"><i class="bi bi-people-fill"></i> Users</a>
+      <a href="{% url 'admin_database' %}"><i class="bi bi-database-fill"></i> Database</a>
+      <span class="sidebar-label">AI</span>
+      <a href="{% url 'admin_ai_monitoring' %}"><i class="bi bi-stars"></i> AI Monitoring</a>
+      <span class="sidebar-label">Django</span>
+      <a href="/admin/" target="_blank"><i class="bi bi-gear-fill"></i> Django Admin</a>
+    </div>
+
+    <div class="col-md-10 p-4" style="background:var(--bg)">
+      <div class="page-header mb-4">
+        <h3>User Approvals
+          <span class="badge bg-warning text-dark fs-6 ms-2">{{ pending_users|length }}</span>
+        </h3>
+        <p class="text-muted">Community groups and restaurants waiting for account activation.</p>
+      </div>
+
+      {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+        {{ msg }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+
+      {% if pending_users %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Account Type</th>
+                <th>Organisation</th>
+                <th>Registered</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in pending_users %}
+              <tr>
+                <td class="align-middle fw-semibold">{{ u.full_name }}</td>
+                <td class="align-middle">{{ u.email }}</td>
+                <td class="align-middle">
+                  {% if u.account_type == 'community_group' %}
+                  <span class="badge bg-info text-dark">Community Group</span>
+                  {% else %}
+                  <span class="badge bg-secondary">Restaurant / Bar</span>
+                  {% endif %}
+                </td>
+                <td class="align-middle">{{ u.organization_name|default:"—" }}</td>
+                <td class="align-middle text-muted small">{{ u.date_joined|date:"d M Y" }}</td>
+                <td class="align-middle text-end">
+                  <!-- Approve -->
+                  <form method="post" action="{% url 'admin_user_approval' %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="user_id" value="{{ u.pk }}">
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit" class="btn btn-sm btn-success">
+                      <i class="bi bi-check-lg"></i> Approve
+                    </button>
+                  </form>
+                  <!-- Reject (opens modal) -->
+                  <button type="button" class="btn btn-sm btn-outline-danger ms-1"
+                          data-bs-toggle="modal" data-bs-target="#rejectModal{{ u.pk }}">
+                    <i class="bi bi-x-lg"></i> Reject
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Reject modal -->
+              <div class="modal fade" id="rejectModal{{ u.pk }}" tabindex="-1">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <form method="post" action="{% url 'admin_user_approval' %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="user_id" value="{{ u.pk }}">
+                      <input type="hidden" name="action" value="reject">
+                      <div class="modal-header">
+                        <h5 class="modal-title">Reject Application</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <p>Rejecting <strong>{{ u.full_name }}</strong> ({{ u.email }}) will delete their account and notify them by email.</p>
+                        <label class="form-label">Reason (optional — sent to applicant)</label>
+                        <textarea name="reject_reason" class="form-control" rows="3" placeholder="e.g. Incomplete information, unable to verify organisation…"></textarea>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Reject &amp; Notify</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-person-check fs-1 d-block mb-3"></i>
+        <p>No pending user applications.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

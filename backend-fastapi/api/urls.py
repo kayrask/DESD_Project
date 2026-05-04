@@ -46,6 +46,10 @@ web_patterns = [
     path("login/otp/", views_web.AdminOTPVerifyView.as_view(), name="admin_otp_verify"),
     path("logout/", views_web.LogoutView.as_view(), name="logout"),
     path("register/", views_web.RegisterPageView.as_view(), name="register"),
+    path("forgot-password/", views_web.ForgotPasswordView.as_view(), name="forgot_password"),
+    path("reset-password/<str:token>/", views_web.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    path("verify-email/<str:token>/", views_web.VerifyEmailView.as_view(), name="verify_email"),
+    path("email-verify-pending/", views_web.EmailVerifyPendingView.as_view(), name="email_verify_pending"),
 
     # Customer
     path("customer/", views_web.CustomerDashboardView.as_view(), name="customer_dashboard"),
@@ -88,6 +92,10 @@ web_patterns = [
     path("admin-panel/products/", views_web.AdminProductApprovalView.as_view(), name="admin_product_approval"),
     path("admin-panel/reports/", views_web.AdminReportsView.as_view(), name="admin_reports"),
     path("admin-panel/users/", views_web.AdminUsersView.as_view(), name="admin_users"),
+    path("admin-panel/users/approval/", views_web.AdminUserApprovalView.as_view(), name="admin_user_approval"),
+    path("admin-panel/users/<int:pk>/delete/", views_web.AdminDeleteUserView.as_view(), name="admin_delete_user"),
+    path("account/delete/", views_web.DeleteAccountView.as_view(), name="delete_account"),
+    path("admin-panel/test-email/", views_web.AdminTestEmailView.as_view(), name="admin_test_email"),
     path("admin-panel/database/", views_web.AdminDatabaseView.as_view(), name="admin_database"),
     path("admin-panel/ai-monitoring/", views_web.AdminAIMonitoringView.as_view(), name="admin_ai_monitoring"),
     path("admin-panel/ai-monitoring/upload-model/", views_web.AdminModelUploadView.as_view(), name="admin_model_upload"),

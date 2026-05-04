@@ -55,6 +55,13 @@ class UserNotificationConsumer(AsyncWebsocketConsumer):
             "status": event["status"],
         }))
 
+    async def new_order(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "new_order",
+            "order_id": event["order_id"],
+            "customer_name": event["customer_name"],
+        }))
+
 
 class StockConsumer(AsyncWebsocketConsumer):
     """
