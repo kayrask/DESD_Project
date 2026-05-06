@@ -45,6 +45,7 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=200, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     postal_code = models.CharField(max_length=20, blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default="individual")
     organization_name = models.CharField(max_length=200, blank=True, default="")
 
@@ -85,6 +86,7 @@ class Product(models.Model):
     season_start = models.DateField(null=True, blank=True, help_text="Season availability start")
     season_end = models.DateField(null=True, blank=True, help_text="Season availability end")
     low_stock_threshold = models.IntegerField(default=5, help_text="Alert when stock falls to or below this level")
+    surplus_expires_at = models.DateTimeField(null=True, blank=True, help_text="When set, surplus discount expires at this datetime")
 
     @property
     def discounted_price(self):
@@ -115,6 +117,9 @@ ORDER_STATUS_CHOICES = [
 class Order(models.Model):
     order_id = models.CharField(max_length=100, unique=True)
     customer_name = models.CharField(max_length=200)
+    customer = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendor_orders"
+    )
     delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=ORDER_STATUS_CHOICES, default="Pending")
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
