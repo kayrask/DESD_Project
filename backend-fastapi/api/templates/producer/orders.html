@@ -27,6 +27,16 @@
         <p>Sorted by delivery date &middot; use the dropdown to advance each order through its stages</p>
       </div>
 
+      <!-- Status filter bar -->
+      <div class="d-flex gap-2 mb-4 flex-wrap">
+        <a href="{% url 'producer_orders' %}" class="btn btn-sm {% if not status_filter %}btn-brand{% else %}btn-outline-secondary{% endif %}">All</a>
+        <a href="?status=pending"   class="btn btn-sm {% if status_filter == 'pending' %}btn-brand{% else %}btn-outline-secondary{% endif %}">Pending</a>
+        <a href="?status=confirmed" class="btn btn-sm {% if status_filter == 'confirmed' %}btn-brand{% else %}btn-outline-secondary{% endif %}">Confirmed</a>
+        <a href="?status=ready"     class="btn btn-sm {% if status_filter == 'ready' %}btn-brand{% else %}btn-outline-secondary{% endif %}">Ready</a>
+        <a href="?status=delivered" class="btn btn-sm {% if status_filter == 'delivered' %}btn-brand{% else %}btn-outline-secondary{% endif %}">Delivered</a>
+        <a href="?status=cancelled" class="btn btn-sm {% if status_filter == 'cancelled' %}btn-brand{% else %}btn-outline-secondary{% endif %}">Cancelled</a>
+      </div>
+
       {% if orders %}
       <div class="card">
         <div class="card-body p-0">

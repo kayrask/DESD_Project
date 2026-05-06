@@ -1,6 +1,7 @@
 import pathlib
 
 from celery import shared_task
+from django.db import models
 from django.utils import timezone
 from datetime import timedelta
 
@@ -509,3 +510,49 @@ def process_weekly_settlements():
             created_count += 1
 
     return f"Weekly settlements processed: {created_count} new records"
+
+
+@shared_task
+def send_low_stock_alerts():
+    """
+    Notify each producer by email for any product whose stock has dropped
+    at or below its low_stock_threshold. Runs daily.
+    """
+    from django.core.mail import send_mail
+    from api.models import Product
+
+    low_stock_products = (
+        Product.objects.filter(
+            stock__lte=models.F("low_stock_threshold"),
+            low_stock_threshold__gt=0,
+            status__in=["Available", "In Season"],
+        )
+        .select_related("producer")
+    )
+
+    producer_map: dict = {}
+    for product in low_stock_products:
+        producer_map.setdefault(product.producer, []).append(product)
+
+    emails_sent = 0
+    for producer, products in producer_map.items():
+        lines = "\n".join(
+            f"  • {p.name} — {p.stock} unit(s) remaining (threshold: {p.low_stock_threshold})"
+            for p in products
+        )
+        send_mail(
+            subject="[DESD] Low stock alert for your products",
+            message=(
+                f"Hello {producer.full_name},\n\n"
+                f"The following product(s) are running low on stock:\n\n"
+                f"{lines}\n\n"
+                f"Please restock soon to avoid order failures.\n\n"
+                f"— DESD Marketplace"
+            ),
+            from_email="noreply@desd.local",
+            recipient_list=[producer.email],
+            fail_silently=True,
+        )
+        emails_sent += 1
+
+    return f"Low stock alerts sent to {emails_sent} producer(s)"

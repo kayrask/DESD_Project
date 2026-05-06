@@ -90,8 +90,17 @@
                   <span class="text-muted fw-normal small">0–50%</span>
                 </label>
                 {{ form.discount_percentage }}
-                <div class="form-text">Manual surplus discount only. AI quality discount is tracked separately.</div>
+                <div class="form-text">Manual surplus discount. Set to 0 to remove deal.</div>
                 {% if form.discount_percentage.errors %}<div class="text-danger small">{{ form.discount_percentage.errors }}</div>{% endif %}
+              </div>
+              <div class="col-md-8">
+                <label class="form-label fw-semibold">
+                  Surplus Deal Expires
+                  <span class="text-muted fw-normal small">(optional — leave blank for no expiry)</span>
+                </label>
+                <input type="datetime-local" name="surplus_expires_at" class="form-control"
+                  value="{% if product.surplus_expires_at %}{{ product.surplus_expires_at|date:'Y-m-d' }}T{{ product.surplus_expires_at|time:'H:i' }}{% endif %}">
+                <div class="form-text">Deal will auto-expire and discount cleared at this date/time.</div>
               </div>
               <div class="col-12">
                 <div class="form-check">

@@ -21,12 +21,14 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from api.email_utils import send_email
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views import View
 from django.views.generic import ListView, TemplateView
 
@@ -321,6 +323,25 @@ class MarketplaceView(ListView):
                 })
         ctx["matching_producers"] = matching_producers
 
+        # Auto-clear expired surplus discounts
+        now = timezone.now()
+        Product.objects.filter(
+            surplus_expires_at__isnull=False,
+            surplus_expires_at__lte=now,
+            discount_percentage__gt=0,
+        ).update(discount_percentage=0, surplus_expires_at=None)
+
+        # Surplus Deals section: active products with a manual discount
+        ctx["surplus_deals"] = (
+            Product.objects.filter(
+                status__in=self._visible,
+                discount_percentage__gt=0,
+            )
+            .exclude(surplus_expires_at__lt=now)
+            .select_related("producer")
+            .order_by("-discount_percentage")[:8]
+        )
+
         ctx["recommendations"] = []
         ctx["rec_model_version"] = ""
 
@@ -374,16 +395,47 @@ class LegalView(TemplateView):
 class LoginPageView(View):
     template_name = "login.html"
 
+    _MAX_ATTEMPTS = 5
+    _LOCKOUT_SECONDS = 900  # 15 minutes
+
+    def _client_ip(self, request):
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+        return forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR", "unknown")
+
+    def _lockout_key(self, ip):
+        return f"login_lockout:{ip}"
+
+    def _attempts_key(self, ip):
+        return f"login_attempts:{ip}"
+
+    def _is_locked(self, ip):
+        return bool(cache.get(self._lockout_key(ip)))
+
+    def _record_failure(self, ip):
+        attempts_key = self._attempts_key(ip)
+        attempts = (cache.get(attempts_key) or 0) + 1
+        cache.set(attempts_key, attempts, self._LOCKOUT_SECONDS)
+        if attempts >= self._MAX_ATTEMPTS:
+            cache.set(self._lockout_key(ip), True, self._LOCKOUT_SECONDS)
+
+    def _clear_attempts(self, ip):
+        cache.delete(self._attempts_key(ip))
+        cache.delete(self._lockout_key(ip))
+
     def get(self, request):
         if request.user.is_authenticated:
             return redirect(request.GET.get("next", "/"))
-        # Show session-expired message only when explicitly triggered by the
-        # JS countdown timer (?expired=1), not every ?next= redirect.
         if request.GET.get("expired") == "1":
             messages.warning(request, "Your session has expired. Please log in again.")
         return render(request, self.template_name, {"form": LoginForm()})
 
     def post(self, request):
+        ip = self._client_ip(request)
+        if self._is_locked(ip):
+            form = LoginForm(request.POST)
+            form.add_error(None, "Too many failed login attempts. Please try again in 15 minutes.")
+            return render(request, self.template_name, {"form": form})
+
         form = LoginForm(request.POST)
         if form.is_valid():
             user = authenticate(
@@ -406,6 +458,8 @@ class LoginPageView(View):
                         "Please verify your email first. Check your inbox for a verification link.",
                     )
                     return render(request, self.template_name, {"form": form})
+                # Successful auth — clear brute-force counter
+                self._clear_attempts(ip)
                 next_url = request.GET.get("next", "/")
                 if not next_url.startswith("/"):
                     next_url = "/"
@@ -424,9 +478,20 @@ class LoginPageView(View):
                     request.session["otp_user_id"] = user.pk
                     return redirect(f"/login/otp/?next={next_url}")
                 login(request, user)
+                if form.cleaned_data.get("remember_me"):
+                    request.session.set_expiry(1209600)  # 14 days
+                else:
+                    request.session.set_expiry(0)  # expire on browser close
                 messages.success(request, f"Welcome back, {user.full_name}!")
                 return redirect(next_url)
-            form.add_error(None, "Invalid email or password.")
+            # Failed auth — record attempt
+            self._record_failure(ip)
+            attempts = cache.get(self._attempts_key(ip)) or 0
+            remaining = max(0, self._MAX_ATTEMPTS - attempts)
+            if remaining > 0:
+                form.add_error(None, f"Invalid email or password. {remaining} attempt(s) remaining before lockout.")
+            else:
+                form.add_error(None, "Too many failed login attempts. Please try again in 15 minutes.")
         return render(request, self.template_name, {"form": form})
 
 
@@ -501,6 +566,7 @@ class RegisterPageView(View):
                 role=role,
                 account_type=account_type,
                 organization_name=organization_name,
+                phone=form.cleaned_data.get("phone", ""),
                 status="suspended" if needs_approval else "active",
                 postal_code=form.cleaned_data.get("postal_code", ""),
             )
@@ -711,6 +777,16 @@ class ProductListView(View):
 class ProductDetailView(View):
     template_name = "customer/product_detail.html"
 
+    def _has_purchased_and_delivered(self, user, product):
+        """True only if the customer has a Delivered vendor order containing this product."""
+        if not user.is_authenticated or user.role != "customer":
+            return False
+        return Order.objects.filter(
+            customer=user,
+            status="Delivered",
+            items__product=product,
+        ).exists()
+
     def _context(self, request, pk, form=None):
         product = get_object_or_404(Product, pk=pk)
         reviews = product.reviews.select_related("customer").all()
@@ -718,8 +794,11 @@ class ProductDetailView(View):
         if reviews:
             avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1)
         existing_review = None
+        can_review = False
         if request.user.is_authenticated:
             existing_review = reviews.filter(customer=request.user).first()
+            if not existing_review:
+                can_review = self._has_purchased_and_delivered(request.user, product)
         producer_postcode = product.producer.postal_code or "BS1 4DJ"
         customer_postcode = request.user.postal_code if request.user.is_authenticated else "BS1 5JG"
         food_miles = _calc_miles(customer_postcode, producer_postcode)
@@ -729,6 +808,7 @@ class ProductDetailView(View):
             "avg_rating": avg_rating,
             "review_form": form or ReviewForm(),
             "existing_review": existing_review,
+            "can_review": can_review,
             "star_range": range(1, 6),
             "food_miles": food_miles,
         }
@@ -743,6 +823,9 @@ class ProductDetailView(View):
         existing = Review.objects.filter(product=product, customer=request.user).first()
         if existing:
             messages.warning(request, "You have already reviewed this product.")
+            return redirect("product_detail", pk=pk)
+        if not self._has_purchased_and_delivered(request.user, product):
+            messages.error(request, "You can only review products from a delivered order.")
             return redirect("product_detail", pk=pk)
         form = ReviewForm(request.POST)
         if form.is_valid():
@@ -779,6 +862,8 @@ class ProducerProfileView(View):
         if total_reviews > 0:
             avg_rating = round(sum(r.rating for r in all_reviews) / total_reviews, 1)
 
+        stories = FarmStory.objects.filter(producer=producer).order_by("-published_at")
+
         return render(request, self.template_name, {
             "producer": producer,
             "products": products,
@@ -788,6 +873,7 @@ class ProducerProfileView(View):
             "total_reviews": total_reviews,
             "avg_rating": avg_rating,
             "star_range": range(1, 6),
+            "stories": stories,
         })
 
 
@@ -1103,6 +1189,7 @@ class CheckoutView(CustomerRequiredMixin, View):
                 vendor_order = Order.objects.create(
                     order_id=vendor_order_id,
                     customer_name=checkout_order.full_name,
+                    customer=request.user,
                     delivery_date=delivery_date,
                     status="Pending",
                     producer=producer,
@@ -1337,9 +1424,21 @@ class ProducerProductEditView(ProducerRequiredMixin, View):
                 updated.status = "Out of Stock"
             else:
                 updated.status = "Pending Approval"
-            # low_stock_threshold is optional in the form; keep the existing value if blank
             if form.cleaned_data.get("low_stock_threshold") is None:
                 updated.low_stock_threshold = product.low_stock_threshold
+            # Handle surplus expiry datetime
+            raw_expiry = request.POST.get("surplus_expires_at", "").strip()
+            if raw_expiry:
+                try:
+                    parsed = parse_datetime(raw_expiry)
+                    if parsed:
+                        updated.surplus_expires_at = timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
+                    else:
+                        updated.surplus_expires_at = None
+                except Exception:
+                    updated.surplus_expires_at = None
+            else:
+                updated.surplus_expires_at = None
             updated.save()
             _broadcast_stock_update(updated)
             messages.success(request, "Product updated and resubmitted for admin approval.")
@@ -1358,18 +1457,21 @@ class ProducerOrdersView(ProducerRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        orders = Order.objects.filter(producer=self.request.user).order_by("delivery_date")
+        status_filter = self.request.GET.get("status", "").strip().lower()
+        qs = Order.objects.filter(producer=self.request.user).order_by("delivery_date")
+        if status_filter in ("pending", "confirmed", "ready", "delivered", "cancelled"):
+            qs = qs.filter(status__iexact=status_filter)
         ctx["orders"] = [
             {
                 "order_id": o.order_id,
                 "customer_name": o.customer_name,
                 "delivery_date": o.delivery_date,
                 "status": o.status,
-                # None when already Delivered — no further transitions allowed
                 "next_status": self._next_status.get(o.status.lower()),
             }
-            for o in orders
+            for o in qs
         ]
+        ctx["status_filter"] = status_filter
         return ctx
 
 
