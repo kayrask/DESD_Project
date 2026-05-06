@@ -42,6 +42,7 @@ from api.forms import (
     RegisterForm,
     ReviewForm,
 )
+from api.forms import ProductEditForm
 from api.models import (
     AdminOTP,
     CartReservation,
@@ -1327,17 +1328,27 @@ class ProducerProductEditView(ProducerRequiredMixin, View):
 
     def get(self, request, pk):
         product = self._get_product(request, pk)
-        return render(request, self.template_name, {"form": ProductForm(instance=product), "product": product})
+        # Pre-fill the edit form with the normalized status value
+        form = ProductEditForm(instance=product, initial={"status": getattr(product, "normalized_status", "unavailable")})
+        return render(request, self.template_name, {"form": form, "product": product})
 
     def post(self, request, pk):
         product = self._get_product(request, pk)
-        form = ProductForm(request.POST, instance=product)
+        form = ProductEditForm(request.POST, instance=product)
         if form.is_valid():
             updated = form.save(commit=False)
+            # Map business-facing normalized statuses to DB values
+            STATUS_MAP = {
+                "in season": "Available",
+                "out of season": "Out of Stock",
+                "unavailable": "Unavailable",
+            }
+            requested = form.cleaned_data.get("status")
+            # Enforce stock -> out of stock rule
             if updated.stock == 0:
                 updated.status = "Out of Stock"
             else:
-                updated.status = "Available"
+                updated.status = STATUS_MAP.get(requested, updated.status)
             # low_stock_threshold is optional in the form; keep the existing value if blank
             if form.cleaned_data.get("low_stock_threshold") is None:
                 updated.low_stock_threshold = product.low_stock_threshold
@@ -1767,51 +1778,11 @@ class AdminProductApprovalView(AdminRequiredMixin, View):
         pending = Product.objects.filter(
             status="Pending Approval"
         ).select_related("producer").order_by("name")
-        return render(request, self.template_name, {"pending_products": pending})
+        messages.info(request, "Product approval by admins is disabled. Producers may manage statuses directly.")
+        return render(request, self.template_name, {"pending_products": []})
 
     def post(self, request):
-        product_id = request.POST.get("product_id", "")
-        action = request.POST.get("action", "")
-        reject_reason = request.POST.get("reject_reason", "").strip()
-
-        if not str(product_id).isdigit():
-            messages.error(request, "Invalid product.")
-            return redirect("/admin-panel/products/")
-
-        product = get_object_or_404(Product, pk=int(product_id), status="Pending Approval")
-
-        if action == "approve":
-            product.status = "Available" if product.stock > 0 else "Out of Stock"
-            product.save()
-            send_email(
-                product.producer.email,
-                "Your product has been approved – DESD",
-                (
-                    f"Hi {product.producer.full_name},\n\n"
-                    f"Your product '{product.name}' has been approved and is now live on the marketplace.\n\n"
-                    "The DESD Team"
-                ),
-            )
-            messages.success(request, f"'{product.name}' approved and is now live.")
-        elif action == "reject":
-            product.status = "Rejected"
-            product.save()
-            body = (
-                f"Hi {product.producer.full_name},\n\n"
-                f"Your product '{product.name}' was not approved and will not appear in the marketplace."
-            )
-            if reject_reason:
-                body += f"\n\nReason: {reject_reason}"
-            body += "\n\nPlease update the product and resubmit.\n\nThe DESD Team"
-            send_email(
-                product.producer.email,
-                "Your product requires changes – DESD",
-                body,
-            )
-            messages.warning(request, f"'{product.name}' rejected.")
-        else:
-            messages.error(request, "Unknown action.")
-
+        messages.error(request, "Admin product approvals are disabled — no action performed.")
         return redirect("/admin-panel/products/")
 
 

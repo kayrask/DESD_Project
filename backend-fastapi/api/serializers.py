@@ -44,6 +44,7 @@ class ProductSerializer(serializers.ModelSerializer):
     producer_email = serializers.EmailField(source="producer.email", read_only=True)
     discounted_price = serializers.SerializerMethodField()
     effective_discount_percentage = serializers.SerializerMethodField()
+    normalized_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -57,6 +58,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "effective_discount_percentage",
             "stock",
             "status",
+            "normalized_status",
             "producer_id",
             "producer_email",
             "allergens",
@@ -73,6 +75,12 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_discounted_price(self, obj):
         return obj.discounted_price
+
+    def get_normalized_status(self, obj):
+        try:
+            return obj.normalized_status
+        except Exception:
+            return None
 
     def get_effective_discount_percentage(self, obj):
         return obj.effective_discount_percentage

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}AI Quality Check – DESD{% endblock %}
+{% load static %}
 
 {% block extra_head %}
 <style>
@@ -22,9 +23,9 @@
     <!-- Sidebar -->
     <div class="col-md-2 sidebar">
       <span class="sidebar-label">Producer</span>
-      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
-      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
-      <a href="{% url 'producer_orders' %}"><img src="{% static 'images/orders-logo.svg' %}" alt="Orders" class="orders-logo me-2"/> Orders</a>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-speedometer2 icon-plain me-2"></i> Dashboard</a>
+      <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam icon-plain me-2"></i> Products</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-receipt icon-plain me-2"></i> Orders</a>
       <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
       <span class="sidebar-label">AI Tools</span>
       <a href="{% url 'producer_quality_check' %}" class="active"><i class="bi bi-stars"></i> Quality Check</a>
@@ -178,8 +179,8 @@
               — now £{{ result.discounted_price }} instead of £{{ result.price }}
               {% endif %}
               <span class="d-block mt-1">
-                Surplus: {{ result.discount_percentage }}%
-                {% if result.ai_discount_percentage > 0 %} · AI: {{ result.ai_discount_percentage }}%{% endif %}
+                Manual Discount: {{ result.discount_percentage }}%
+                {% if result.ai_discount_percentage > 0 %} · Quality Check Discount(AI): {{ result.ai_discount_percentage }}%{% endif %}
               </span>
             </div>
             {% endif %}

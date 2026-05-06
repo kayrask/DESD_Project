@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}My Products – DESD{% endblock %}
+{% load static %}
 
 {% block content %}
 <div class="container-fluid p-0">
@@ -7,9 +8,9 @@
     <!-- Sidebar -->
     <div class="col-md-2 sidebar">
       <span class="sidebar-label">Producer</span>
-      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
-      <a href="{% url 'producer_products' %}" class="active"><i class="bi bi-box-seam"></i> Products</a>
-      <a href="{% url 'producer_orders' %}"><img src="{% static 'images/orders-logo.svg' %}" alt="Orders" class="orders-logo me-2"/> Orders</a>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-speedometer2 icon-plain me-2"></i> Dashboard</a>
+      <a href="{% url 'producer_products' %}" class="active"><i class="bi bi-box-seam icon-plain me-2"></i> Products</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-receipt icon-plain me-2"></i> Orders</a>
       <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
       <span class="sidebar-label">AI Tools</span>
       <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
@@ -20,7 +21,7 @@
     <div class="col-md-10 p-4" style="background:var(--bg)">
       <div class="page-header">
         <h3>My Products</h3>
-        <p>Manage your catalogue, surplus discount, and AI quality pricing from one place.</p>
+        <p>Manage your catalogue, Manual Discount, and Quality Check Discount (AI) from one place.</p>
       </div>
 
       <!-- Create product form -->
@@ -60,7 +61,7 @@
                   <span class="text-muted fw-normal" style="font-size:.8rem">(0–50)</span>
                 </label>
                 {{ form.discount_percentage }}
-                <div class="form-text">Manual surplus discount only. AI quality discount is managed separately.</div>
+                <div class="form-text">Manual Discount only. AI quality discount is managed separately.</div>
                 {% if form.discount_percentage.errors %}<div class="text-danger small">{{ form.discount_percentage.errors }}</div>{% endif %}
               </div>
             </div>
@@ -83,8 +84,8 @@
                 <th>Name</th>
                 <th>Category</th>
                 <th class="text-end">Price</th>
-                <th class="text-center">Surplus</th>
-                <th class="text-center">AI</th>
+                <th class="text-center">Manual Discount</th>
+                <th class="text-center">Quality Check Discount(AI)</th>
                 <th class="text-center">Total</th>
                 <th class="text-center">Stock</th>
                 <th class="text-center">Waste Risk</th>
@@ -144,16 +145,12 @@
                   {% endif %}
                 </td>
                 <td class="align-middle status-cell">
-                  {% if product.status == 'Pending Approval' %}
-                  <span class="badge bg-warning text-dark">Pending Approval</span>
-                  {% elif product.status == 'Rejected' %}
-                  <span class="badge bg-danger">Rejected</span>
-                  {% elif product.status == 'Available' %}
-                  <span class="badge badge-available">Available</span>
-                  {% elif product.status == 'Out of Stock' %}
-                  <span class="badge badge-out-of-stock">Out of Stock</span>
+                  {% if product.normalized_status == 'in season' %}
+                  <span class="badge badge-available">in season</span>
+                  {% elif product.normalized_status == 'out of season' %}
+                  <span class="badge badge-out-of-stock">out of season</span>
                   {% else %}
-                  <span class="badge badge-unavailable">{{ product.status }}</span>
+                  <span class="badge badge-unavailable">unavailable</span>
                   {% endif %}
                 </td>
                 <td class="align-middle text-end">
@@ -275,7 +272,7 @@
     });
   }
 
-  function updateRowAfterPatch(row, product) {
+    function updateRowAfterPatch(row, product) {
     const stockCell = row.querySelector('.stock-cell');
     const statusCell = row.querySelector('.status-cell');
     const priceCell = row.querySelector('.price-cell');
@@ -285,8 +282,11 @@
       stockCell.innerHTML = `<span class="${product.stock === 0 ? 'text-danger fw-bold' : (product.stock < 10 ? 'text-warning fw-bold' : 'text-success')}">${product.stock}</span>`;
     }
     if (statusCell) {
-      const statusClass = product.status === 'Available' ? 'badge-available' : product.status === 'Out of Stock' ? 'badge-out-of-stock' : 'badge-unavailable';
-      statusCell.innerHTML = `<span class="badge ${statusClass}">${product.status}</span>`;
+      const statusLower = (product.status || '').toString().toLowerCase();
+      const statusClass = (statusLower === 'available' || statusLower === 'in season') ? 'badge-available' : (statusLower === 'out of stock' || statusLower === 'out of season') ? 'badge-out-of-stock' : 'badge-unavailable';
+      // Prefer showing the normalized display when available
+      const displayStatus = product.normalized_status || product.status;
+      statusCell.innerHTML = `<span class="badge ${statusClass}">${displayStatus}</span>`;
     }
     if (priceCell && product.discounted_price !== null) {
       priceCell.innerHTML = product.discounted_price !== null

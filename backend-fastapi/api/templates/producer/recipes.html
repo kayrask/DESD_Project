@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Recipes & Farm Stories – DESD{% endblock %}
+{% load static %}
 
 {% block content %}
 <div class="container-fluid p-0">
@@ -8,9 +9,9 @@
     <!-- Sidebar -->
     <div class="col-md-2 sidebar">
       <span class="sidebar-label">Producer</span>
-      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a href="{% url 'producer_dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
       <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
-      <a href="{% url 'producer_orders' %}"><img src="{% static 'images/orders-logo.svg' %}" alt="Orders" class="orders-logo me-2"/> Orders</a>
+      <a href="{% url 'producer_orders' %}"><i class="bi bi-receipt"></i> Orders</a>
       <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
       <span class="sidebar-label">AI Tools</span>
       <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>

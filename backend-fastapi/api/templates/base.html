@@ -50,7 +50,12 @@
     .sidebar a { display: flex; align-items: center; gap: 0.6rem; color: rgba(255,255,255,.65); text-decoration: none; padding: 0.55rem 0.75rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; transition: all 0.15s; margin-bottom: 2px; }
     .sidebar a:hover { background: var(--sidebar-hover); color: #fff; }
     .sidebar a.active { background: var(--brand); color: #fff; }
-    .orders-logo { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
+    .sidebar-logo, .orders-logo { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
+    /* Hide any legacy image logos inside the sidebar to prefer icon fonts */
+    .sidebar img { display: none !important; }
+    /* Icon styling to match Payments: slightly larger white glyph on transparent background */
+    .sidebar a .icon-ghost, .sidebar a .bi.icon-ghost { font-size: 22px; color: #fff; display: inline-block; vertical-align: middle; margin-right: 0.5rem; background: transparent; border-radius: 0; padding: 0; line-height: 1; }
+    .sidebar a .icon-ghost { width: auto; height: auto; }
 
     /* Cards & stats */
     .card { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; box-shadow: var(--shadow); }

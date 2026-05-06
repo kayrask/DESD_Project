@@ -148,6 +148,27 @@ class ProductForm(forms.ModelForm):
         return discount
 
 
+class ProductEditForm(ProductForm):
+    """Form used when editing an existing product in the producer UI.
+
+    Exposes a normalized `status` choice to the producer (business-facing
+    labels: 'in season', 'out of season', 'unavailable'). The view maps
+    these to the underlying DB status values.
+    """
+    STATUS_CHOICES = [
+        ("in season", "in season"),
+        ("out of season", "out of season"),
+        ("unavailable", "unavailable"),
+    ]
+
+    status = forms.ChoiceField(
+        choices=STATUS_CHOICES,
+        required=True,
+        widget=forms.Select(attrs=_select_class),
+        label="Status",
+    )
+
+
 class ReviewForm(forms.ModelForm):
     class Meta:
         model = Review

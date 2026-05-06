@@ -8,7 +8,6 @@ from rest_framework.response import Response
 
 from api.models import CheckoutOrder, CommissionReport, Order, OrderItem, Product, User
 from api.serializers import (
-    AdminDatabaseSerializer,
     AdminReportsResponseSerializer,
     AdminSummarySerializer,
     AdminUsersResponseSerializer,
@@ -27,6 +26,13 @@ from api.serializers import (
 from app.core.security import ApiAuthError, issue_token, require_role, revoke_token, user_from_token
 from app.repositories.auth_repo import find_user_by_email, verify_password
 from app.services.ai_service import recommend_products
+
+# Map business-facing normalized statuses to database values
+STATUS_MAP = {
+    "in season": "In Season",
+    "out of season": "Out of Stock",
+    "unavailable": "Unavailable",
+}
 
 
 def _error_response(error: str, message: str, code: int) -> Response:
@@ -219,16 +225,27 @@ def producer_products_update(request, product_id: int):
         product = Product.objects.get(id=product_id)
         if product.producer_id != producer.id:
             return _error_response("forbidden", "You can only edit your own products.", status.HTTP_403_FORBIDDEN)
-        valid_statuses = {choice[0] for choice in Product.PRODUCT_STATUS_CHOICES}
+        valid_statuses_db = {choice[0] for choice in Product.PRODUCT_STATUS_CHOICES}
+        valid_statuses = valid_statuses_db.union(STATUS_MAP.keys())
         for field in ("name", "category", "status"):
             if field in request.data:
                 value = str(request.data[field]).strip()
-                if field == "status" and value and value not in valid_statuses:
-                    return _error_response(
-                        "validation_error",
-                        f"Invalid status '{value}'.",
-                        status.HTTP_400_BAD_REQUEST,
-                    )
+                if field == "status" and value:
+                    if value in STATUS_MAP:
+                        mapped = STATUS_MAP[value]
+                        if mapped not in valid_statuses_db:
+                            return _error_response(
+                                "validation_error",
+                                f"Invalid status '{value}'.",
+                                status.HTTP_400_BAD_REQUEST,
+                            )
+                        value = mapped
+                    elif value not in valid_statuses_db:
+                        return _error_response(
+                            "validation_error",
+                            f"Invalid status '{value}'.",
+                            status.HTTP_400_BAD_REQUEST,
+                        )
                 setattr(product, field, value)
         if "price" in request.data:
             price = round(float(request.data["price"]), 2)

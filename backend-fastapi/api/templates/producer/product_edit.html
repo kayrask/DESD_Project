@@ -44,19 +44,20 @@
               <div class="col-md-6">
                 <label class="form-label fw-semibold">Current Status</label>
                 <div class="form-control-plaintext">
-                  {% if product.status == 'Pending Approval' %}
-                  <span class="badge bg-warning text-dark">Pending Approval</span>
-                  {% elif product.status == 'Rejected' %}
-                  <span class="badge bg-danger">Rejected</span>
-                  {% elif product.status == 'Available' %}
-                  <span class="badge badge-available">Available</span>
-                  {% elif product.status == 'Out of Stock' %}
-                  <span class="badge badge-out-of-stock">Out of Stock</span>
+                  {% if product.normalized_status == 'in season' %}
+                  <span class="badge badge-available">in season</span>
+                  {% elif product.normalized_status == 'out of season' %}
+                  <span class="badge badge-out-of-stock">out of season</span>
                   {% else %}
-                  <span class="badge badge-unavailable">{{ product.status }}</span>
+                  <span class="badge badge-unavailable">unavailable</span>
                   {% endif %}
                 </div>
-                <div class="form-text">Saving changes will resubmit this product for admin approval.</div>
+                <div class="form-text">Saving changes updates the product immediately; admin approval is not required.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Set Status</label>
+                {{ form.status }}
+                <div class="form-text">Choose: in season, out of season, or unavailable. Note: stock=0 will force out of season.</div>
               </div>
               <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>
@@ -73,11 +74,11 @@
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold">
-                  Surplus Discount (%)
+                  Manual Discount (%)
                   <span class="text-muted fw-normal small">0–50%</span>
                 </label>
                 {{ form.discount_percentage }}
-                <div class="form-text">Manual surplus discount only. AI quality discount is tracked separately.</div>
+                <div class="form-text">Manual discount only. AI quality discount is tracked separately.</div>
                 {% if form.discount_percentage.errors %}<div class="text-danger small">{{ form.discount_percentage.errors }}</div>{% endif %}
               </div>
               <div class="col-12">
