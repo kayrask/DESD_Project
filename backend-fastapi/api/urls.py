@@ -94,6 +94,7 @@ web_patterns = [
     path("admin-panel/users/", views_web.AdminUsersView.as_view(), name="admin_users"),
     path("admin-panel/users/approval/", views_web.AdminUserApprovalView.as_view(), name="admin_user_approval"),
     path("admin-panel/users/<int:pk>/delete/", views_web.AdminDeleteUserView.as_view(), name="admin_delete_user"),
+    path("account/settings/", views_web.AccountSettingsView.as_view(), name="account_settings"),
     path("account/delete/", views_web.DeleteAccountView.as_view(), name="delete_account"),
     path("admin-panel/test-email/", views_web.AdminTestEmailView.as_view(), name="admin_test_email"),
     path("admin-panel/database/", views_web.AdminDatabaseView.as_view(), name="admin_database"),

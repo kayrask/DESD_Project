@@ -32,6 +32,8 @@ from django.views.generic import ListView, TemplateView
 
 from api.food_miles import calculate_food_miles as _calc_miles
 from api.forms import (
+    ALLERGEN_CHOICES,
+    AccountSettingsForm,
     CheckoutForm,
     FarmStoryForm,
     LoginForm,
@@ -218,7 +220,8 @@ class AdminRequiredMixin(_RoleMixin):
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-COMMON_ALLERGENS = ["Milk", "Eggs", "Gluten", "Nuts", "Soy", "Sesame", "Shellfish", "Fish"]
+# Allergen values must match the keys in ALLERGEN_CHOICES from forms.py
+COMMON_ALLERGENS = [value for value, _ in ALLERGEN_CHOICES]
 
 
 # ── Public views ──────────────────────────────────────────────────────────────
@@ -285,7 +288,7 @@ class MarketplaceView(ListView):
         ctx["selected_category"] = self.request.GET.get("category", "")
         ctx["organic_filter"] = self.request.GET.get("organic", "")
         ctx["allergen_free_filter"] = self.request.GET.get("allergen_free", "")
-        ctx["allergen_options"] = COMMON_ALLERGENS
+        ctx["allergen_options"] = ALLERGEN_CHOICES  # list of (value, label) tuples
         ctx["selected_allergens"] = [
             a for a in self.request.GET.getlist("exclude_allergens")
             if a in COMMON_ALLERGENS
@@ -1415,6 +1418,30 @@ class ProducerOrderStatusUpdateView(ProducerRequiredMixin, View):
         order.status = new_status.capitalize()
         order.save()
 
+        # Sync CheckoutOrder.status from all vendor Orders for this checkout.
+        # The checkout is only as advanced as the least-progressed vendor order
+        # (e.g. multi-vendor: one Delivered + one Pending → still "pending").
+        try:
+            parts = order.order_id.split("-")
+            checkout_id = int(parts[1])
+            _STATUS_RANK = {"Pending": 0, "Confirmed": 1, "Ready": 2, "Delivered": 3}
+            vendor_orders = Order.objects.filter(
+                order_id__startswith=f"CO-{checkout_id}"
+            ).exclude(status="Cancelled")
+            if vendor_orders.exists():
+                min_rank = min(
+                    _STATUS_RANK.get(vo.status.capitalize(), 0)
+                    for vo in vendor_orders
+                )
+                checkout_status = (
+                    "delivered" if min_rank >= 3
+                    else "confirmed" if min_rank >= 1
+                    else "pending"
+                )
+                CheckoutOrder.objects.filter(id=checkout_id).update(status=checkout_status)
+        except Exception:
+            logger.exception("Failed to sync CheckoutOrder status for %s", order.order_id)
+
         # Email the customer about the status change
         try:
             parts = order.order_id.split("-")
@@ -1891,6 +1918,48 @@ class DeleteAccountView(LoginRequiredMixin, View):
         user.delete()
         messages.success(request, "Your account has been deleted.")
         return redirect("/")
+
+
+class AccountSettingsView(LoginRequiredMixin, View):
+    template_name = "account_settings.html"
+
+    def _render(self, request, form):
+        return render(request, self.template_name, {"form": form})
+
+    def get(self, request):
+        user = request.user
+        form = AccountSettingsForm(
+            user=user,
+            initial={
+                "full_name": user.full_name,
+                "phone": user.phone,
+                "postal_code": user.postal_code,
+            },
+        )
+        return self._render(request, form)
+
+    def post(self, request):
+        user = request.user
+        form = AccountSettingsForm(request.POST, user=user)
+        if not form.is_valid():
+            return self._render(request, form)
+
+        user.full_name = form.cleaned_data["full_name"]
+        user.phone = form.cleaned_data.get("phone", "")
+        user.postal_code = form.cleaned_data.get("postal_code", "")
+
+        new_pw = form.cleaned_data.get("new_password")
+        if new_pw:
+            user.set_password(new_pw)
+
+        user.save()
+
+        if new_pw:
+            from django.contrib.auth import update_session_auth_hash
+            update_session_auth_hash(request, user)
+
+        messages.success(request, "Your account details have been updated.")
+        return redirect("account_settings")
 
 
 class AdminTestEmailView(AdminRequiredMixin, View):

@@ -79,11 +79,19 @@
 
           {# ── TC-015: Allergen warnings ─────────────────────────────────── #}
           {% if product.allergens %}
-          <div class="alert alert-warning d-flex align-items-start gap-2 mt-3 mb-0 py-2" role="alert">
-            <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
-            <div>
-              <strong>Allergen Information:</strong><br>
-              Contains: {{ product.allergens }}
+          <div class="alert alert-warning mt-3 mb-0 py-2" role="alert">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+              <strong>Contains allergens:</strong>
+            </div>
+            <div class="d-flex flex-wrap gap-1">
+              {% for allergen in product.allergens.split %}
+                {% with allergen_clean=allergen|cut:"," %}
+                <span class="badge bg-warning text-dark border border-warning-subtle">
+                  {{ allergen_clean }}
+                </span>
+                {% endwith %}
+              {% endfor %}
             </div>
           </div>
           {% else %}
