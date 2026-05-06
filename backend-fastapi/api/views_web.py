@@ -17,6 +17,7 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from api.email_utils import send_email
@@ -176,13 +177,52 @@ def _broadcast_stock_update(product):
         logger.exception("broadcast_stock_update failed for product %s", product.id)
 
 
+# ── Session-aware login mixin ─────────────────────────────────────────────────
+
+_SID_COOKIE = "desd_sid"          # persistent hint cookie (30 days)
+_SID_MAX_AGE = 60 * 60 * 24 * 30  # 30 days in seconds
+
+
+def _set_sid_cookie(response):
+    """Attach the long-lived auth hint cookie to a response."""
+    response.set_cookie(
+        _SID_COOKIE, "1",
+        max_age=_SID_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+        secure=not django_settings.DEBUG,
+    )
+
+
+def _delete_sid_cookie(response):
+    """Remove the auth hint cookie (called on explicit logout)."""
+    response.delete_cookie(_SID_COOKIE, samesite="Lax")
+
+
+class SessionAwareLoginMixin(LoginRequiredMixin):
+    """
+    Drop-in replacement for LoginRequiredMixin that redirects to
+    /login/?expired=1 when a session has silently timed out (detected via
+    the desd_sid hint cookie), instead of the bare /login/ redirect.
+    """
+    login_url = "/login/"
+
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            if self.request.COOKIES.get(_SID_COOKIE):
+                # Cookie present but no session → session expired
+                next_path = self.request.get_full_path()
+                return redirect(f"/login/?expired=1&next={next_path}")
+        return super().handle_no_permission()
+
+
 # ── Role-enforcement mixins ───────────────────────────────────────────────────
 
 def _is_ajax(request):
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 
-class _RoleMixin(LoginRequiredMixin, UserPassesTestMixin):
+class _RoleMixin(SessionAwareLoginMixin, UserPassesTestMixin):
     login_url = "/login/"
     _required_role: str = ""
 
@@ -476,6 +516,8 @@ class LoginPageView(View):
                         f"Your one-time login code is: {code}\n\nThis code expires in 5 minutes.\nDo not share it with anyone.",
                     )
                     request.session["otp_user_id"] = user.pk
+                    # Carry remember_me through the OTP step
+                    request.session["otp_remember_me"] = bool(form.cleaned_data.get("remember_me"))
                     return redirect(f"/login/otp/?next={next_url}")
                 login(request, user)
                 if form.cleaned_data.get("remember_me"):
@@ -483,7 +525,9 @@ class LoginPageView(View):
                 else:
                     request.session.set_expiry(0)  # expire on browser close
                 messages.success(request, f"Welcome back, {user.full_name}!")
-                return redirect(next_url)
+                response = redirect(next_url)
+                _set_sid_cookie(response)
+                return response
             # Failed auth — record attempt
             self._record_failure(ip)
             attempts = cache.get(self._attempts_key(ip)) or 0
@@ -499,7 +543,9 @@ class LogoutView(View):
     def post(self, request):
         logout(request)
         messages.info(request, "You have been logged out.")
-        return redirect("/login/")
+        response = redirect("/login/")
+        _delete_sid_cookie(response)
+        return response
 
 
 class AdminOTPVerifyView(View):
@@ -527,14 +573,21 @@ class AdminOTPVerifyView(View):
             return render(request, self.template_name, {})
         otp.is_used = True
         otp.save()
+        remember_me = request.session.pop("otp_remember_me", False)
         del request.session["otp_user_id"]
         user = User.objects.get(pk=user_id)
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        if remember_me:
+            request.session.set_expiry(1209600)  # 14 days
+        else:
+            request.session.set_expiry(0)  # expire on browser close
         messages.success(request, f"Welcome back, {user.full_name}!")
         next_url = request.GET.get("next", "/")
         if not next_url.startswith("/"):
             next_url = "/"
-        return redirect(next_url)
+        response = redirect(next_url)
+        _set_sid_cookie(response)
+        return response
 
 
 class RegisterPageView(View):
@@ -2010,7 +2063,7 @@ class AdminDeleteUserView(AdminRequiredMixin, View):
         return redirect("/admin-panel/users/")
 
 
-class DeleteAccountView(LoginRequiredMixin, View):
+class DeleteAccountView(SessionAwareLoginMixin, View):
     def post(self, request):
         user = request.user
         if user.role == "admin":
@@ -2022,7 +2075,7 @@ class DeleteAccountView(LoginRequiredMixin, View):
         return redirect("/")
 
 
-class AccountSettingsView(LoginRequiredMixin, View):
+class AccountSettingsView(SessionAwareLoginMixin, View):
     template_name = "account_settings.html"
 
     def _render(self, request, form):
