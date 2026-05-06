@@ -47,6 +47,10 @@
           {{ form.password }}
           {% if form.password.errors %}<div class="text-danger" style="font-size:.8rem;margin-top:.3rem">{{ form.password.errors }}</div>{% endif %}
         </div>
+        <div class="mb-3 form-check">
+          {{ form.remember_me }}
+          <label class="form-check-label" for="{{ form.remember_me.id_for_label }}" style="font-size:.875rem;color:var(--muted)">Remember me for 14 days</label>
+        </div>
         <button type="submit" class="btn-submit mt-1">Sign in &rarr;</button>
       </form>
 

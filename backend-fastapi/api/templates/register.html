@@ -35,6 +35,12 @@
             </div>
 
             <div class="mb-3">
+              <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold">Phone Number <span class="text-muted fw-normal small">(optional)</span></label>
+              {{ form.phone }}
+              {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3">
               <label for="{{ form.role.id_for_label }}" class="form-label fw-semibold">I am a</label>
               {{ form.role }}
               {% if form.role.errors %}<div class="text-danger small mt-1">{{ form.role.errors }}</div>{% endif %}
