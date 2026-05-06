@@ -67,9 +67,22 @@
                   Allergen Information
                   <span class="text-muted fw-normal small">(required by UK food law)</span>
                 </label>
-                {{ form.allergens }}
-                <div class="form-text">List all allergens e.g. "Milk, Eggs, Gluten". Leave blank if none.</div>
-                {% if form.allergens.errors %}<div class="text-danger small">{{ form.allergens.errors }}</div>{% endif %}
+                <div class="border rounded p-3 bg-light">
+                  <div class="row g-2">
+                    {% for checkbox in form.allergens %}
+                    <div class="col-md-4 col-sm-6">
+                      <div class="form-check d-flex align-items-center gap-2">
+                        {{ checkbox.tag }}
+                        <label class="form-check-label small" for="{{ checkbox.id_for_label }}">
+                          {{ checkbox.choice_label }}
+                        </label>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="form-text">Tick all allergens present. Leave all unchecked if none apply.</div>
+                {% if form.allergens.errors %}<div class="text-danger small mt-1">{{ form.allergens.errors }}</div>{% endif %}
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold">

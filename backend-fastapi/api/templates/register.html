@@ -71,6 +71,20 @@
               {% if form.confirm_password.errors %}<div class="text-danger small mt-1">{{ form.confirm_password.errors }}</div>{% endif %}
             </div>
 
+            <div class="mb-3">
+              <label for="{{ form.postal_code.id_for_label }}" class="form-label fw-semibold">
+                Postcode
+                <span id="postcode-required-badge" class="text-danger" style="display:none"> *</span>
+                <span id="postcode-optional-badge" class="text-muted fw-normal"> (optional)</span>
+              </label>
+              {{ form.postal_code }}
+              <div class="form-text">
+                <i class="bi bi-geo-alt me-1"></i>Used to calculate food miles.
+                <span id="postcode-producer-hint" style="display:none">Required so customers can see how far their produce travels.</span>
+              </div>
+              {% if form.postal_code.errors %}<div class="text-danger small mt-1">{{ form.postal_code.errors }}</div>{% endif %}
+            </div>
+
             <div class="d-grid mt-4">
               <button type="submit" class="btn btn-brand btn-lg">Create Account</button>
             </div>
@@ -93,11 +107,21 @@
   const acctSelect = document.getElementById('{{ form.account_type.id_for_label }}');
   const orgGroup   = document.getElementById('org-name-group');
 
+  const postcodeRequired = document.getElementById('postcode-required-badge');
+  const postcodeOptional = document.getElementById('postcode-optional-badge');
+  const postcodeHint     = document.getElementById('postcode-producer-hint');
+  const postcodeInput    = document.getElementById('{{ form.postal_code.id_for_label }}');
+
   function update() {
     const role = roleSelect.value;
     const isCommunityOrRestaurant = acctSelect.value === 'community_group' || acctSelect.value === 'restaurant';
-    acctGroup.style.display = (role === 'customer' || role === 'producer') ? 'block' : 'none';
+    acctGroup.style.display = role === 'customer' ? 'block' : 'none';
     orgGroup.style.display = isCommunityOrRestaurant ? 'block' : 'none';
+    const isProducer = role === 'producer';
+    postcodeRequired.style.display = isProducer ? 'inline' : 'none';
+    postcodeOptional.style.display = isProducer ? 'none' : 'inline';
+    postcodeHint.style.display     = isProducer ? 'inline' : 'none';
+    postcodeInput.required         = isProducer;
   }
 
   roleSelect.addEventListener('change', update);

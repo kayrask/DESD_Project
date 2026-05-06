@@ -16,7 +16,7 @@
       <span class="sidebar-label">Content</span>
       <a href="{% url 'producer_content' %}"><i class="bi bi-journal-richtext"></i> Recipes &amp; Stories</a>
       <span class="sidebar-label">Account</span>
-      <a href="#" class="text-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal"><i class="bi bi-trash"></i> Delete Account</a>
+      <a href="{% url 'account_settings' %}"><i class="bi bi-gear"></i> Account Settings</a>
     </div>
 
     <!-- Main -->
@@ -258,26 +258,4 @@ document.getElementById('forecastSelect').addEventListener('change', function ()
 })();
 </script>
 
-<!-- Delete Account Modal -->
-<div class="modal fade" id="deleteAccountModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="post" action="{% url 'delete_account' %}">
-        {% csrf_token %}
-        <div class="modal-header">
-          <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Account</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p>Are you sure you want to permanently delete your account? This cannot be undone.</p>
-          <p class="text-muted small">Your products and all associated data will be removed.</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Yes, Delete My Account</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 {% endblock %}

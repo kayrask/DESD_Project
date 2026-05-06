@@ -15,6 +15,8 @@
       <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
       <span class="sidebar-label">Content</span>
       <a href="{% url 'producer_content' %}"><i class="bi bi-journal-richtext"></i> Recipes &amp; Stories</a>
+      <span class="sidebar-label">Account</span>
+      <a href="{% url 'account_settings' %}"><i class="bi bi-gear"></i> Account Settings</a>
     </div>
 
     <div class="col-md-10 p-4" style="background:var(--bg)">
@@ -62,6 +64,29 @@
                 {{ form.discount_percentage }}
                 <div class="form-text">Manual surplus discount only. AI quality discount is managed separately.</div>
                 {% if form.discount_percentage.errors %}<div class="text-danger small">{{ form.discount_percentage.errors }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="row g-3 mt-0">
+              <div class="col-12">
+                <label class="form-label fw-semibold mb-1">
+                  Allergens
+                  <span class="text-muted fw-normal small">(UK food law — tick all that apply)</span>
+                </label>
+                <div class="border rounded p-3 bg-light">
+                  <div class="row g-2">
+                    {% for checkbox in form.allergens %}
+                    <div class="col-md-3 col-sm-6">
+                      <div class="form-check d-flex align-items-center gap-2">
+                        {{ checkbox.tag }}
+                        <label class="form-check-label small" for="{{ checkbox.id_for_label }}">
+                          {{ checkbox.choice_label }}
+                        </label>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                {% if form.allergens.errors %}<div class="text-danger small mt-1">{{ form.allergens.errors }}</div>{% endif %}
               </div>
             </div>
             <div class="mt-3">
