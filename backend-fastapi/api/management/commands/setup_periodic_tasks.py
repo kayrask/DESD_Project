@@ -76,4 +76,13 @@ class Command(BaseCommand):
             },
         )
 
+        PeriodicTask.objects.update_or_create(
+            name="Send low stock alerts to producers",
+            defaults={
+                "interval": schedule_daily,
+                "task": "api.tasks.send_low_stock_alerts",
+                "enabled": True,
+            },
+        )
+
         self.stdout.write(self.style.SUCCESS("Periodic tasks registered."))
