@@ -499,6 +499,7 @@ class RegisterPageView(View):
                 account_type=account_type,
                 organization_name=organization_name,
                 status="suspended" if needs_approval else "active",
+                postal_code=form.cleaned_data.get("postal_code", ""),
             )
             # Mark email as unverified and create a verification token
             new_user.email_verified = False

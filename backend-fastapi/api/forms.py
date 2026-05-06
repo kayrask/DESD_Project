@@ -77,6 +77,15 @@ class RegisterForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={**_field_class, "placeholder": "Organisation name"}),
     )
+    postal_code = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={**_field_class, "placeholder": "e.g. BS1 4DJ"}),
+    )
+
+    def clean_postal_code(self):
+        pc = self.cleaned_data.get("postal_code", "").strip().upper()
+        return pc
 
     def clean_password(self):
         password = self.cleaned_data.get("password", "")
