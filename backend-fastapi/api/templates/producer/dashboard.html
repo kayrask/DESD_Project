@@ -9,7 +9,7 @@
       <span class="sidebar-label">Producer</span>
       <a href="{% url 'producer_dashboard' %}" class="active"><i class="bi bi-grid-fill"></i> Dashboard</a>
       <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
-      <a href="{% url 'producer_orders' %}"><i class="bi bi-clipboard-list"></i> Orders</a>
+      <a href="{% url 'producer_orders' %}"><img src="{% static 'images/orders-logo.svg' %}" alt="Orders" class="orders-logo me-2"/> Orders</a>
       <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
       <span class="sidebar-label">AI Tools</span>
       <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>
@@ -81,7 +81,7 @@
       <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Quick Actions</div>
       <div class="d-flex gap-2 flex-wrap mb-4">
         <a href="{% url 'producer_products' %}" class="btn btn-brand"><i class="bi bi-box-seam me-1"></i> Manage Products</a>
-        <a href="{% url 'producer_orders' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-clipboard-list me-1"></i> View Orders</a>
+        <a href="{% url 'producer_orders' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><img src="{% static 'images/orders-logo.svg' %}" alt="Orders" class="orders-logo me-1"/> View Orders</a>
         <a href="{% url 'producer_payments' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-cash-stack me-1"></i> Payments</a>
         <a href="{% url 'producer_quality_check' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.875rem"><i class="bi bi-stars me-1"></i> Quality Check</a>
       </div>

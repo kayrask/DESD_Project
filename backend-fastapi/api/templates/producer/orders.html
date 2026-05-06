@@ -10,7 +10,7 @@
       <span class="sidebar-label">Producer</span>
       <a href="{% url 'producer_dashboard' %}"><i class="bi bi-grid-fill"></i> Dashboard</a>
       <a href="{% url 'producer_products' %}"><i class="bi bi-box-seam"></i> Products</a>
-      <a href="{% url 'producer_orders' %}" class="active"><i class="bi bi-clipboard-list"></i> Orders</a>
+      <a href="{% url 'producer_orders' %}" class="active"><img src="{% static 'images/orders-logo.svg' %}" alt="Orders" class="orders-logo me-2"/> Orders</a>
       <a href="{% url 'producer_payments' %}"><i class="bi bi-cash-stack"></i> Payments</a>
       <span class="sidebar-label">AI Tools</span>
       <a href="{% url 'producer_quality_check' %}"><i class="bi bi-stars"></i> Quality Check</a>

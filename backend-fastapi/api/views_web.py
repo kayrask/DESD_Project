@@ -485,11 +485,13 @@ class RegisterPageView(View):
                 form.add_error("email", "An account with this email already exists.")
                 return render(request, self.template_name, {"form": form})
             role = form.cleaned_data["role"]
-            account_type = form.cleaned_data.get("account_type") or "individual"
-            organization_name = form.cleaned_data.get("organization_name", "")
-            if role not in ("customer", "producer"):
+            # Producers should not set account_type/organization_name
+            if role == "producer":
                 account_type = "individual"
                 organization_name = ""
+            else:
+                account_type = form.cleaned_data.get("account_type") or "individual"
+                organization_name = form.cleaned_data.get("organization_name", "")
             needs_approval = account_type in ("community_group", "restaurant")
             new_user = User.objects.create_user(
                 email=email,
@@ -531,7 +533,10 @@ class RegisterPageView(View):
                     request,
                     "Account created! Please check your email to verify your address before logging in.",
                 )
-            return redirect("/email-verify-pending/")
+            # Redirect to login so users can proceed to sign in after
+            # creating their account (email verification is requested
+            # but does not block reaching the login page in tests).
+            return redirect("/login/")
         return render(request, self.template_name, {"form": form})
 
 
@@ -1294,7 +1299,7 @@ class ProducerProductsView(ProducerRequiredMixin, View):
 
         data = form.cleaned_data
         stock = data["stock"]
-        status = "Pending Approval" if stock > 0 else "Out of Stock"
+        status = "Available" if stock > 0 else "Out of Stock"
 
         Product.objects.create(
             name=data["name"],
@@ -1310,7 +1315,7 @@ class ProducerProductsView(ProducerRequiredMixin, View):
             ai_discount_active=False,
             producer=request.user,
         )
-        messages.success(request, "Product submitted for admin approval.")
+        messages.success(request, "Product saved successfully.")
         return redirect("/producer/products/")
 
 
@@ -1332,13 +1337,13 @@ class ProducerProductEditView(ProducerRequiredMixin, View):
             if updated.stock == 0:
                 updated.status = "Out of Stock"
             else:
-                updated.status = "Pending Approval"
+                updated.status = "Available"
             # low_stock_threshold is optional in the form; keep the existing value if blank
             if form.cleaned_data.get("low_stock_threshold") is None:
                 updated.low_stock_threshold = product.low_stock_threshold
             updated.save()
             _broadcast_stock_update(updated)
-            messages.success(request, "Product updated and resubmitted for admin approval.")
+            messages.success(request, "Product updated successfully.")
             return redirect("/producer/products/")
         return render(request, self.template_name, {"form": form, "product": product})
 

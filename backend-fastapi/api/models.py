@@ -79,8 +79,16 @@ class Product(models.Model):
     allergens = models.TextField(blank=True, default="", help_text="List allergens e.g. Milk, Eggs, Gluten")
     is_organic = models.BooleanField(default=False)
     discount_percentage = models.IntegerField(default=0, help_text="Manual surplus discount 0–50%")
-    ai_discount_percentage = models.IntegerField(default=0, help_text="AI quality discount 0–50%")
-    ai_discount_active = models.BooleanField(default=False, help_text="True when the current AI quality discount is active.")
+    ai_discount_percentage = models.IntegerField(
+        default=0,
+        help_text="AI quality discount 0–50%",
+        verbose_name="Quality-check discount (AI)",
+    )
+    ai_discount_active = models.BooleanField(
+        default=False,
+        help_text="True when the current AI quality discount is active.",
+        verbose_name="AI discount active",
+    )
     harvest_date = models.DateField(null=True, blank=True, help_text="Date produce was harvested")
     season_start = models.DateField(null=True, blank=True, help_text="Season availability start")
     season_end = models.DateField(null=True, blank=True, help_text="Season availability end")
@@ -101,6 +109,26 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.category})"
+
+    # Normalised status helpers — keep DB values stable but provide
+    # consistent business-facing labels requested in the spec.
+    STATUS_MAPPING = {
+        # legacy DB value -> normalized display value
+        "Available": "in season",
+        "In Season": "in season",
+        "Out of Stock": "out of season",
+        "Unavailable": "unavailable",
+        "Pending Approval": "unavailable",
+        "Rejected": "unavailable",
+    }
+
+    @property
+    def normalized_status(self):
+        """Return a stable, lower-case business status: 'in season',
+        'out of season' or 'unavailable'. This lets views/templates show
+        the requested labels without changing existing DB values.
+        """
+        return self.STATUS_MAPPING.get(self.status, "unavailable")
 
 
 ORDER_STATUS_CHOICES = [
