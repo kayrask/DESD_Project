@@ -46,6 +46,7 @@ class LoginForm(forms.Form):
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={**_field_class, "placeholder": "Password"})
     )
+    remember_me = forms.BooleanField(required=False)
 
 
 class RegisterForm(forms.Form):
@@ -55,6 +56,11 @@ class RegisterForm(forms.Form):
     )
     email = forms.EmailField(
         widget=forms.EmailInput(attrs={**_field_class, "placeholder": "Email address"})
+    )
+    phone = forms.CharField(
+        max_length=30,
+        required=False,
+        widget=forms.TextInput(attrs={**_field_class, "placeholder": "Phone number (optional)"}),
     )
     password = forms.CharField(
         min_length=8,
